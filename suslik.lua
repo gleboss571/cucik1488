@@ -64,9 +64,13 @@ end
 
 local function collectPetal(petal)
 
-    if busy then return end
-    if not petal then return end
-    if not petal.Parent then return end
+    if busy then
+        return
+    end
+
+    if not petal or not petal.Parent then
+        return
+    end
 
     local char = getCharacter()
     local hrp = getHRP()
@@ -74,6 +78,8 @@ local function collectPetal(petal)
     if not char or not hrp then
         return
     end
+
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
 
     busy = true
 
@@ -96,15 +102,20 @@ local function collectPetal(petal)
         end
     end
 
-    -- stabilize before tp
+    -- physics protection
+    if humanoid then
+        humanoid.AutoRotate = false
+        humanoid.PlatformStand = true
+    end
+
     hrp.AssemblyLinearVelocity = Vector3.zero
     hrp.AssemblyAngularVelocity = Vector3.zero
 
     -- REAL TP
-    hrp.CFrame = petal.CFrame + Vector3.new(0, 2.5, 0)
-
-    -- force touch
     pcall(function()
+
+        hrp.CFrame = petal.CFrame + Vector3.new(0,2.5,0)
+
         firetouchinterest(hrp, petal, 0)
         firetouchinterest(hrp, petal, 1)
     end)
@@ -116,14 +127,19 @@ local function collectPetal(petal)
         RunService.RenderStepped:Wait()
     end
 
-    -- return back
+    -- return
     hrp.CFrame = oldCF
 
-    -- stabilize after tp
+    -- stabilize
     hrp.AssemblyLinearVelocity = Vector3.zero
     hrp.AssemblyAngularVelocity = Vector3.zero
 
-    task.wait(0.03)
+    task.wait(0.05)
+
+    if humanoid then
+        humanoid.PlatformStand = false
+        humanoid.AutoRotate = true
+    end
 
     -- restore visibility
     for part,trans in pairs(hidden) do
