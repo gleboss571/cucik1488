@@ -15,7 +15,7 @@ local BeeMoveRemote = Events:WaitForChild("FlyingEntityMoveToPart")
 local ENABLED = false
 local busy = false
 
-local TELEPORT_DELAY = 0.15
+local TELEPORT_DELAY = 1.2
 
 print("✅ Bee Return Collector Loaded")
 
