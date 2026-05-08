@@ -17,7 +17,7 @@ local HOLD_TIME = 0.05
 
 -- максимальная дистанция до petal
 -- чтобы пчёлы не улетали далеко
-local MAX_DISTANCE = 60
+local MAX_DISTANCE = 9999999
 
 local busy = false
 
