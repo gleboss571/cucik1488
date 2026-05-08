@@ -6,22 +6,17 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
---// SETTINGS
+-- SETTINGS
 
 local ENABLED = true
 
 local PETAL_NAME = "PetalPart"
 
-local TELEPORT_INTERVAL = 0.8
-local HOLD_TIME = 0.05
-
--- максимальная дистанция до petal
--- чтобы пчёлы не улетали далеко
-local MAX_DISTANCE = 9999999
+local TELEPORT_INTERVAL = 0.4
 
 local busy = false
 
---// HELPERS
+-- HELPERS
 
 local function getCharacter()
     return LocalPlayer.Character
@@ -37,7 +32,7 @@ local function getHRP()
     return char:FindFirstChild("HumanoidRootPart")
 end
 
---// SEARCH PETAL
+-- FIND NEAREST PETAL
 
 local function getNearestPetal()
 
@@ -57,13 +52,9 @@ local function getNearestPetal()
 
             local dist = (v.Position - hrp.Position).Magnitude
 
-            -- ограничение дистанции
-            if dist <= MAX_DISTANCE then
-
-                if dist < shortest then
-                    shortest = dist
-                    nearest = v
-                end
+            if dist < shortest then
+                shortest = dist
+                nearest = v
             end
         end
     end
@@ -71,17 +62,13 @@ local function getNearestPetal()
     return nearest
 end
 
---// COLLECT
+-- COLLECT
 
 local function collectPetal(petal)
 
-    if busy then
-        return
-    end
-
-    if not petal or not petal.Parent then
-        return
-    end
+    if busy then return end
+    if not petal then return end
+    if not petal.Parent then return end
 
     local char = getCharacter()
     local hrp = getHRP()
@@ -89,8 +76,6 @@ local function collectPetal(petal)
     if not char or not hrp then
         return
     end
-
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
 
     busy = true
 
@@ -113,46 +98,30 @@ local function collectPetal(petal)
         end
     end
 
-    -- physics stabilize
-    if humanoid then
-        humanoid.AutoRotate = false
-    end
-
-    hrp.AssemblyLinearVelocity = Vector3.zero
-    hrp.AssemblyAngularVelocity = Vector3.zero
-
-    -- VERY SHORT TP
-    pcall(function()
-
-        -- маленький offset чтобы bees реагировали слабее
-        hrp.CFrame = petal.CFrame + Vector3.new(0,0.5,0)
-
-        firetouchinterest(hrp, petal, 0)
-        firetouchinterest(hrp, petal, 1)
-    end)
-
-    local start = tick()
-
-    while tick() - start < HOLD_TIME do
-        Camera.CFrame = oldCamCF
-        RunService.RenderStepped:Wait()
-    end
-
-    -- return fast
-    hrp.CFrame = oldCF
-
-    -- двойной возврат помогает bees быстрее вернуться
-    task.wait()
-
-    hrp.CFrame = oldCF
-
     -- stabilize
     hrp.AssemblyLinearVelocity = Vector3.zero
     hrp.AssemblyAngularVelocity = Vector3.zero
 
-    if humanoid then
-        humanoid.AutoRotate = true
-    end
+    -- ULTRA FAST TP
+    pcall(function()
+
+        hrp.CFrame = petal.CFrame
+
+        firetouchinterest(hrp, petal, 0)
+        firetouchinterest(hrp, petal, 1)
+
+        RunService.RenderStepped:Wait()
+
+        hrp.CFrame = oldCF
+
+        RunService.RenderStepped:Wait()
+
+        hrp.CFrame = oldCF
+    end)
+
+    -- stabilize again
+    hrp.AssemblyLinearVelocity = Vector3.zero
+    hrp.AssemblyAngularVelocity = Vector3.zero
 
     -- restore visibility
     for part,trans in pairs(hidden) do
@@ -167,7 +136,7 @@ local function collectPetal(petal)
     busy = false
 end
 
---// MAIN LOOP
+-- MAIN LOOP
 
 task.spawn(function()
 
@@ -186,7 +155,7 @@ task.spawn(function()
     end
 end)
 
---// TOGGLE
+-- TOGGLE
 
 UserInputService.InputBegan:Connect(function(input,gpe)
 
@@ -202,6 +171,5 @@ UserInputService.InputBegan:Connect(function(input,gpe)
     end
 end)
 
-print("✅ Smart Hidden Petal Collector Loaded")
+print("✅ Ultra Fast Hidden Petal Collector Loaded")
 print("R = Toggle")
-print("Max Distance:", MAX_DISTANCE)
