@@ -1,4 +1,7 @@
+-- Bee Swarm - Petal Collector + Bee Return DEBUG
+
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -6,15 +9,15 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
--- SETTINGS
+local Events = ReplicatedStorage:WaitForChild("Events")
+local BeeMoveRemote = Events:WaitForChild("FlyingEntityMoveToPart")
 
-local ENABLED = true
-
-local PETAL_NAME = "PetalPart"
-
-local TELEPORT_INTERVAL = 0.4
-
+local ENABLED = false
 local busy = false
+
+local TELEPORT_DELAY = 0.15
+
+print("✅ Bee Return Collector Loaded")
 
 -- HELPERS
 
@@ -23,6 +26,7 @@ local function getCharacter()
 end
 
 local function getHRP()
+
     local char = getCharacter()
 
     if not char then
@@ -32,7 +36,7 @@ local function getHRP()
     return char:FindFirstChild("HumanoidRootPart")
 end
 
--- FIND NEAREST PETAL
+-- FIND PETAL
 
 local function getNearestPetal()
 
@@ -48,7 +52,7 @@ local function getNearestPetal()
 
     for _,v in ipairs(particles:GetChildren()) do
 
-        if v:IsA("BasePart") and v.Name == PETAL_NAME then
+        if v:IsA("BasePart") and v.Name == "PetalPart" then
 
             local dist = (v.Position - hrp.Position).Magnitude
 
@@ -62,18 +66,64 @@ local function getNearestPetal()
     return nearest
 end
 
+-- RETURN BEES
+
+local function forceBeesBack()
+
+    local hrp = getHRP()
+
+    if not hrp then
+        return
+    end
+
+    print("🐝 Attempting to return bees...")
+
+    local success, err = pcall(function()
+
+        firesignal(
+            BeeMoveRemote.OnClientEvent,
+
+            999999,
+
+            "Workspace.GhostPlayerParts.HumanoidRootPart",
+
+            hrp.Position.X,
+            hrp.Position.Y,
+            hrp.Position.Z,
+
+            1
+        )
+    end)
+
+    if success then
+        print("✅ Bee return signal fired")
+    else
+        warn("❌ Bee return failed:", err)
+    end
+end
+
 -- COLLECT
 
 local function collectPetal(petal)
 
-    if busy then return end
-    if not petal then return end
-    if not petal.Parent then return end
+    if busy then
+        return
+    end
+
+    if not petal or not petal.Parent then
+        return
+    end
 
     local char = getCharacter()
     local hrp = getHRP()
 
     if not char or not hrp then
+        return
+    end
+
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+
+    if not humanoid then
         return
     end
 
@@ -88,55 +138,48 @@ local function collectPetal(petal)
     Camera.CameraType = Enum.CameraType.Scriptable
     Camera.CFrame = oldCamCF
 
-    -- hide character locally
-    local hidden = {}
+    -- stop physics
+    humanoid.AutoRotate = false
 
-    for _,v in ipairs(char:GetDescendants()) do
-        if v:IsA("BasePart") then
-            hidden[v] = v.LocalTransparencyModifier
-            v.LocalTransparencyModifier = 1
-        end
-    end
+    hrp.AssemblyLinearVelocity = Vector3.zero
+    hrp.AssemblyAngularVelocity = Vector3.zero
+
+    -- TP
+    hrp.CFrame = petal.CFrame + Vector3.new(0, 2, 0)
+
+    pcall(function()
+
+        firetouchinterest(hrp, petal, 0)
+        firetouchinterest(hrp, petal, 1)
+    end)
+
+    RunService.RenderStepped:Wait()
+
+    -- return
+    hrp.CFrame = oldCF
 
     -- stabilize
     hrp.AssemblyLinearVelocity = Vector3.zero
     hrp.AssemblyAngularVelocity = Vector3.zero
 
-    -- ULTRA FAST TP
-    pcall(function()
+    -- FIX FALLING
+    humanoid:ChangeState(Enum.HumanoidStateType.Running)
 
-        hrp.CFrame = petal.CFrame
+    task.wait(0.03)
 
-        firetouchinterest(hrp, petal, 0)
-        firetouchinterest(hrp, petal, 1)
+    humanoid.AutoRotate = true
 
-        RunService.RenderStepped:Wait()
+    -- return bees
+    forceBeesBack()
 
-        hrp.CFrame = oldCF
-
-        RunService.RenderStepped:Wait()
-
-        hrp.CFrame = oldCF
-    end)
-
-    -- stabilize again
-    hrp.AssemblyLinearVelocity = Vector3.zero
-    hrp.AssemblyAngularVelocity = Vector3.zero
-
-    -- restore visibility
-    for part,trans in pairs(hidden) do
-        if part then
-            part.LocalTransparencyModifier = trans
-        end
-    end
-
+    -- restore camera
     Camera.CameraType = oldCamType
     Camera.CFrame = oldCamCF
 
     busy = false
 end
 
--- MAIN LOOP
+-- LOOP
 
 task.spawn(function()
 
@@ -146,20 +189,20 @@ task.spawn(function()
 
             local petal = getNearestPetal()
 
-            if petal and petal.Parent then
+            if petal then
                 collectPetal(petal)
             end
         end
 
-        task.wait(TELEPORT_INTERVAL)
+        task.wait(TELEPORT_DELAY)
     end
 end)
 
 -- TOGGLE
 
-UserInputService.InputBegan:Connect(function(input,gpe)
+UserInputService.InputBegan:Connect(function(input,gp)
 
-    if gpe then
+    if gp then
         return
     end
 
@@ -171,5 +214,4 @@ UserInputService.InputBegan:Connect(function(input,gpe)
     end
 end)
 
-print("✅ Ultra Fast Hidden Petal Collector Loaded")
-print("R = Toggle")
+print("Press R to toggle")
