@@ -15,7 +15,7 @@ local Camera = Workspace.CurrentCamera
 -- ═══════════════════════════════
 
 local HEIGHT_ZONES = {
-    {min = 36, max = 40},
+    {min = 35, max = 40},
     {min = 85, max = 90},
     {min = 115, max = 150},
 }
@@ -45,10 +45,10 @@ local PETAL_COLORS = {
 -- Приоритет (меньше = важнее)
 local COLOR_PRIORITY = {
     ["Red Petal"] = 1,
-    ["Periwinkle Petal"] = 2,
-    ["Pink Petal"] = 3,
-    ["Scarlet Petal"] = 4,
-    ["Violet Petal"] = 5,
+    ["Periwinkle Petal"] = 3,
+    ["Pink Petal"] = 2,
+    ["Scarlet Petal"] = 5,
+    ["Violet Petal"] = 4,
     ["Merigold Petal"] = 6,
     ["Green Petal"] = 7,
     ["Yellow Petal"] = 8,
