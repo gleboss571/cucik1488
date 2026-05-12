@@ -15,16 +15,17 @@ local Camera = Workspace.CurrentCamera
 -- ═══════════════════════════════
 
 local HEIGHT_ZONES = {
-    {min = 35, max = 40},
+    {min = 36, max = 40},
     {min = 85, max = 90},
-    {min = 115, max = 150},
+    {min = 115, max = 150, interval = 1.1},
 }
 
-local TP_INTERVAL   = 4
-local SCAN_INTERVAL = 0.25
+local TP_INTERVAL   = 2
+local SCAN_INTERVAL = 0.1
 local PETAL_DELAY   = 0.7
 
-local RED_THRESHOLD = 4  -- Red Petal: собирать когда баффа нет ИЛИ <3с
+local RED_THRESHOLD = 5  -- Red Petal: повторный сбор когда осталось <4с
+local DEFAULT_THRESHOLD = 3  -- остальные: продление если осталось <2с
 
 local PETAL_COLORS = {
     ["Blue Petal"]       = Color3.fromRGB(33, 66, 249),
@@ -45,10 +46,10 @@ local PETAL_COLORS = {
 -- Приоритет (меньше = важнее)
 local COLOR_PRIORITY = {
     ["Red Petal"] = 1,
-    ["Periwinkle Petal"] = 3,
     ["Pink Petal"] = 2,
-    ["Scarlet Petal"] = 5,
+    ["Periwinkle Petal"] = 3,
     ["Violet Petal"] = 4,
+    ["Scarlet Petal"] = 5,
     ["Merigold Petal"] = 6,
     ["Green Petal"] = 7,
     ["Yellow Petal"] = 8,
@@ -60,6 +61,7 @@ local enabled = false
 local busy = false
 local cachedPetals = {}
 local redUrgentDone = false
+local redNoBuffUsed = false
 
 local function getHRP()
     local c = LP.Character
@@ -72,6 +74,15 @@ local function isInZone(y)
         if y >= z.min and y <= z.max then return true end
     end
     return false
+end
+
+local function getZoneInterval(y)
+    for _, z in ipairs(HEIGHT_ZONES) do
+        if y >= z.min and y <= z.max then
+            return z.interval or TP_INTERVAL
+        end
+    end
+    return TP_INTERVAL
 end
 
 local function getColorName(color)
@@ -163,11 +174,22 @@ local function selectTarget()
     local candidates = {}
     for colorName, data in pairs(byColor) do
         if colorName == "Red Petal" then
-            -- Red Petal: собирать ВСЕГДА
-            candidates[#candidates + 1] = data
-        elseif colorName ~= "Red Petal" then
-            -- Все остальные: собирать ВСЕГДА (без порога)
-            candidates[#candidates + 1] = data
+            local rem = buffs["Red Petal"]
+            -- 1) Если баффа нет — собрать только ОДИН раз до появления баффа
+            if not rem then
+                if not redNoBuffUsed then
+                    candidates[#candidates + 1] = data
+                end
+            -- 2) Если бафф есть и осталось меньше порога — можно обновить
+            elseif rem < RED_THRESHOLD then
+                candidates[#candidates + 1] = data
+            end
+        else
+            -- Остальные петали: если баффа нет ИЛИ осталось меньше DEFAULT_THRESHOLD → собирать
+            local rem = buffs[colorName]
+            if not rem or rem < DEFAULT_THRESHOLD then
+                candidates[#candidates + 1] = data
+            end
         end
     end
 
@@ -249,17 +271,26 @@ end
 
 task.spawn(function()
     while true do
+        local waitTime = TP_INTERVAL
         if enabled and not busy then
             local petal, colorName = selectTarget()
             if petal then
+                waitTime = getZoneInterval(petal.Position.Y)
+                -- Если Red Petal собирается без баффа — делаем это только один раз
+                if colorName == "Red Petal" then
+                    local buffs = getBuffs()
+                    if not buffs["Red Petal"] then
+                        redNoBuffUsed = true
+                    end
+                end
                 tpCollect(petal, colorName)
             end
         end
-        task.wait(TP_INTERVAL)
+        task.wait(waitTime)
     end
 end)
 
--- Urgent Red Petal — бафф ЕСТЬ и <3с → один раз, без ожидания TP_INTERVAL
+-- Urgent Red Petal — если бафф уже есть и осталось < порога, игнорирует TP_INTERVAL
 task.spawn(function()
     while true do
         if enabled and not busy then
@@ -274,12 +305,15 @@ task.spawn(function()
                 end
             end
 
-            -- Сброс когда бафф обновился
-            if redRem and redRem >= RED_THRESHOLD then
-                redUrgentDone = false
-            end
+            -- Как только бафф пропал — можно снова сделать один стартовый сбор без баффа
             if not redRem then
                 redUrgentDone = false
+            end
+
+            -- Как только бафф снова стал безопасным — разрешаем следующий urgent
+            if redRem and redRem >= RED_THRESHOLD then
+                redUrgentDone = false
+                redNoBuffUsed = false
             end
         end
         task.wait(0.3)
@@ -301,6 +335,7 @@ end)
 LP.CharacterAdded:Connect(function()
     busy = false
     redUrgentDone = false
+    redNoBuffUsed = false
 end)
 
 getgenv().PT = {
@@ -323,6 +358,12 @@ getgenv().PT = {
     Delay = function(t) PETAL_DELAY = t printStatus() end,
     Red = function(t) RED_THRESHOLD = t printStatus() end,
     Scan = function(t) SCAN_INTERVAL = t printStatus() end,
+    ZoneSpeed = function(index, t)
+        if HEIGHT_ZONES[index] then
+            HEIGHT_ZONES[index].interval = t
+            printStatus()
+        end
+    end,
 }
 
 local function printStatus()
@@ -331,13 +372,14 @@ local function printStatus()
     print("  Enabled: " .. tostring(enabled))
     print("  TP interval: " .. TP_INTERVAL .. "s")
     print("  Petal delay: " .. PETAL_DELAY .. "s")
-    print("  Red urgent: <" .. RED_THRESHOLD .. "s")
+    print("  Red Petal: 1 раз без баффа, затем urgent при <" .. RED_THRESHOLD .. "s")
+    print("  Остальные петали: если баффа нет или <" .. DEFAULT_THRESHOLD .. "s")
     print("  Scan: " .. SCAN_INTERVAL .. "s")
     print("  Zones:")
     for i, z in ipairs(HEIGHT_ZONES) do
-        print("    [" .. i .. "] Y=" .. z.min .. "-" .. z.max)
+        print("    [" .. i .. "] Y=" .. z.min .. "-" .. z.max .. " | interval=" .. (z.interval or TP_INTERVAL) .. "s")
     end
     print("═══════════════════════════")
 end
 printStatus()
-print("  R = toggle | PT.Delay() | PT.Speed() | PT.Red()")
+print("  R = toggle | PT.Delay() | PT.Speed() | PT.Red() | PT.ZoneSpeed(3, 1.2)")
