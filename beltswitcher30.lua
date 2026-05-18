@@ -15,6 +15,8 @@ local SECOND_BELT = "Coconut Belt"
 
 local SWITCH_DELAY = 0.5
 
+local LOGS = false
+
 --// STATE
 
 local switching = false
@@ -34,10 +36,12 @@ local function equipAccessory(name)
         )
     end)
 
-    if success then
-        print("[EQUIPPED]",name)
-    else
-        warn("[FAILED]",name,err)
+    if LOGS then
+        if success then
+            print("[EQUIPPED]",name)
+        else
+            warn("[FAILED]",name,err)
+        end
     end
 end
 
@@ -69,7 +73,7 @@ Events.ClientListen("PlayerAbilityEvent",function(data)
 
                     task.spawn(function()
 
-                        print("[COMBO]",value)
+                        if LOGS then print("[COMBO]",value) end
 
                         equipAccessory(FIRST_BELT)
 
@@ -87,5 +91,7 @@ Events.ClientListen("PlayerAbilityEvent",function(data)
     end
 end)
 
-print("Combo Coconut Belt Switch Loaded")
-print("Active Range:",MIN_COMBO.."-"..MAX_COMBO)
+if LOGS then
+    print("Combo Coconut Belt Switch Loaded")
+    print("Active Range:",MIN_COMBO.."-"..MAX_COMBO)
+end
