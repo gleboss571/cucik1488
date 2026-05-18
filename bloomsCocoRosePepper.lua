@@ -26,6 +26,7 @@ local PETAL_DELAY   = 0.7
 
 local RED_THRESHOLD     = 5
 local DEFAULT_THRESHOLD = 3
+local LOGS = false  -- true = логи в консоль, false = тихий режим
 
 local PETAL_COLORS = {
     ["Blue Petal"]       = Color3.fromRGB(33, 66, 249),
@@ -284,8 +285,10 @@ local function tpCollect(petal, colorName)
 
     Camera.CameraType = camType
 
-    local festiveTag = hasFestiveBlessing and " [FB]" or ""
-    print("🌸 " .. (colorName or "Petal") .. festiveTag)
+    if LOGS then
+        local festiveTag = hasFestiveBlessing and " [FB]" or ""
+        print("🌸 " .. (colorName or "Petal") .. festiveTag)
+    end
     busy = false
 end
 
@@ -349,7 +352,7 @@ UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.KeyCode == Enum.KeyCode.R then
         enabled = not enabled
-        print(enabled and "🟢 Petal ON" or "🔴 Petal OFF")
+        if LOGS then print(enabled and "🟢 Petal ON" or "🔴 Petal OFF") end
     end
 end)
 
@@ -403,6 +406,10 @@ getgenv().PT = {
             HEIGHT_ZONES[index].interval = t
             printStatus()
         end
+    end,
+    Log = function(on)
+        if on == nil then LOGS = not LOGS else LOGS = on end
+        print("Logs: " .. tostring(LOGS))
     end,
 }
 
