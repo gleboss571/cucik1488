@@ -1,4 +1,4 @@
--- Petal TP — Red Petal threshold + urgent
+-- Petal TP — Festive Blessing режим + обычный режим
 -- R = toggle
 
 local Players = game:GetService("Players")
@@ -24,8 +24,8 @@ local TP_INTERVAL   = 2
 local SCAN_INTERVAL = 0.1
 local PETAL_DELAY   = 0.7
 
-local RED_THRESHOLD = 5  -- Red Petal: повторный сбор когда осталось <4с
-local DEFAULT_THRESHOLD = 3  -- остальные: продление если осталось <2с
+local RED_THRESHOLD     = 5
+local DEFAULT_THRESHOLD = 3
 
 local PETAL_COLORS = {
     ["Blue Petal"]       = Color3.fromRGB(33, 66, 249),
@@ -43,7 +43,6 @@ local PETAL_COLORS = {
     ["Periwinkle Petal"] = Color3.fromRGB(150, 156, 236),
 }
 
--- Приоритет (меньше = важнее)
 local COLOR_PRIORITY = {
     ["Red Petal"] = 1,
     ["Pink Petal"] = 2,
@@ -55,6 +54,15 @@ local COLOR_PRIORITY = {
     ["Yellow Petal"] = 8,
 }
 
+-- Во время Festive Blessing — только эти петали
+local FESTIVE_PETALS = {
+    ["Red Petal"] = true,
+    ["Pink Petal"] = true,
+    ["Periwinkle Petal"] = true,
+    ["Violet Petal"] = true,
+    ["Scarlet Petal"] = true,
+}
+
 -- ═══════════════════════════════
 
 local enabled = false
@@ -62,6 +70,7 @@ local busy = false
 local cachedPetals = {}
 local redUrgentDone = false
 local redNoBuffUsed = false
+local hasFestiveBlessing = false
 
 local function getHRP()
     local c = LP.Character
@@ -114,7 +123,7 @@ task.spawn(function()
 end)
 
 -- ═══════════════════════════════
--- БАФФЫ
+-- БАФФЫ + FESTIVE BLESSING
 -- ═══════════════════════════════
 
 local buffCache = {}
@@ -129,20 +138,34 @@ local function getBuffs()
     if not ok or type(stats) ~= "table" then return buffCache end
 
     local found = {}
-    local function scan(data)
+    local festive = false
+
+    local function scan(data, visited)
         if type(data) ~= "table" then return end
+        if visited[data] then return end
+        visited[data] = true
+
         if data.Src and data.Start and data.Dur then
+            -- Петальные баффы
             if PETAL_COLORS[data.Src] then
                 local rem = (data.Start + data.Dur) - os.time()
                 if rem > 0 then found[data.Src] = rem end
             end
+            -- Festive Blessing
+            if data.Src == "Festive Blessing" then
+                local rem = (data.Start + data.Dur) - os.time()
+                if rem > 0 then festive = true end
+            end
         end
+
         for _, v in pairs(data) do
-            if type(v) == "table" then scan(v) end
+            if type(v) == "table" then scan(v, visited) end
         end
     end
-    scan(stats)
+    scan(stats, {})
+
     buffCache = found
+    hasFestiveBlessing = festive
     lastBuffTime = tick()
     return found
 end
@@ -173,19 +196,19 @@ local function selectTarget()
 
     local candidates = {}
     for colorName, data in pairs(byColor) do
-        if colorName == "Red Petal" then
+        -- Если Festive Blessing активен — только избранные петали
+        if hasFestiveBlessing and not FESTIVE_PETALS[colorName] then
+            -- Пропускаем петали не из списка
+        elseif colorName == "Red Petal" then
             local rem = buffs["Red Petal"]
-            -- 1) Если баффа нет — собрать только ОДИН раз до появления баффа
             if not rem then
                 if not redNoBuffUsed then
                     candidates[#candidates + 1] = data
                 end
-            -- 2) Если бафф есть и осталось меньше порога — можно обновить
             elseif rem < RED_THRESHOLD then
                 candidates[#candidates + 1] = data
             end
         else
-            -- Остальные петали: если баффа нет ИЛИ осталось меньше DEFAULT_THRESHOLD → собирать
             local rem = buffs[colorName]
             if not rem or rem < DEFAULT_THRESHOLD then
                 candidates[#candidates + 1] = data
@@ -261,12 +284,13 @@ local function tpCollect(petal, colorName)
 
     Camera.CameraType = camType
 
-    print("🌸 " .. (colorName or "Petal"))
+    local festiveTag = hasFestiveBlessing and " [FB]" or ""
+    print("🌸 " .. (colorName or "Petal") .. festiveTag)
     busy = false
 end
 
 -- ═══════════════════════════════
--- ОДИН ОСНОВНОЙ ЦИКЛ
+-- ОСНОВНОЙ ЦИКЛ
 -- ═══════════════════════════════
 
 task.spawn(function()
@@ -276,7 +300,6 @@ task.spawn(function()
             local petal, colorName = selectTarget()
             if petal then
                 waitTime = getZoneInterval(petal.Position.Y)
-                -- Если Red Petal собирается без баффа — делаем это только один раз
                 if colorName == "Red Petal" then
                     local buffs = getBuffs()
                     if not buffs["Red Petal"] then
@@ -290,7 +313,7 @@ task.spawn(function()
     end
 end)
 
--- Urgent Red Petal — если бафф уже есть и осталось < порога, игнорирует TP_INTERVAL
+-- Urgent Red Petal
 task.spawn(function()
     while true do
         if enabled and not busy then
@@ -305,12 +328,10 @@ task.spawn(function()
                 end
             end
 
-            -- Как только бафф пропал — можно снова сделать один стартовый сбор без баффа
             if not redRem then
                 redUrgentDone = false
             end
 
-            -- Как только бафф снова стал безопасным — разрешаем следующий urgent
             if redRem and redRem >= RED_THRESHOLD then
                 redUrgentDone = false
                 redNoBuffUsed = false
@@ -338,6 +359,26 @@ LP.CharacterAdded:Connect(function()
     redNoBuffUsed = false
 end)
 
+local function printStatus()
+    print("═══════════════════════════")
+    print("🌸 Petal Collector")
+    print("  Enabled: " .. tostring(enabled))
+    print("  Festive Blessing: " .. tostring(hasFestiveBlessing))
+    print("  TP interval: " .. TP_INTERVAL .. "s")
+    print("  Petal delay: " .. PETAL_DELAY .. "s")
+    print("  Red threshold: <" .. RED_THRESHOLD .. "s")
+    print("  Default threshold: <" .. DEFAULT_THRESHOLD .. "s")
+    print("  Scan: " .. SCAN_INTERVAL .. "s")
+    if hasFestiveBlessing then
+        print("  FB mode: Red, Pink, Periwinkle, Violet, Scarlet ONLY")
+    end
+    print("  Zones:")
+    for i, z in ipairs(HEIGHT_ZONES) do
+        print("    [" .. i .. "] Y=" .. z.min .. "-" .. z.max .. " | interval=" .. (z.interval or TP_INTERVAL) .. "s")
+    end
+    print("═══════════════════════════")
+end
+
 getgenv().PT = {
     Add = function(min, max)
         HEIGHT_ZONES[#HEIGHT_ZONES + 1] = {min = min, max = max}
@@ -351,12 +392,11 @@ getgenv().PT = {
         end
         printStatus()
     end,
-    List = function()
-        printStatus()
-    end,
+    List = function() printStatus() end,
     Speed = function(t) TP_INTERVAL = t printStatus() end,
     Delay = function(t) PETAL_DELAY = t printStatus() end,
     Red = function(t) RED_THRESHOLD = t printStatus() end,
+    Default = function(t) DEFAULT_THRESHOLD = t printStatus() end,
     Scan = function(t) SCAN_INTERVAL = t printStatus() end,
     ZoneSpeed = function(index, t)
         if HEIGHT_ZONES[index] then
@@ -366,20 +406,6 @@ getgenv().PT = {
     end,
 }
 
-local function printStatus()
-    print("═══════════════════════════")
-    print("🌸 Petal Collector")
-    print("  Enabled: " .. tostring(enabled))
-    print("  TP interval: " .. TP_INTERVAL .. "s")
-    print("  Petal delay: " .. PETAL_DELAY .. "s")
-    print("  Red Petal: 1 раз без баффа, затем urgent при <" .. RED_THRESHOLD .. "s")
-    print("  Остальные петали: если баффа нет или <" .. DEFAULT_THRESHOLD .. "s")
-    print("  Scan: " .. SCAN_INTERVAL .. "s")
-    print("  Zones:")
-    for i, z in ipairs(HEIGHT_ZONES) do
-        print("    [" .. i .. "] Y=" .. z.min .. "-" .. z.max .. " | interval=" .. (z.interval or TP_INTERVAL) .. "s")
-    end
-    print("═══════════════════════════")
-end
 printStatus()
-print("  R = toggle | PT.Delay() | PT.Speed() | PT.Red() | PT.ZoneSpeed(3, 1.2)")
+print("  R = toggle")
+print("  При Festive Blessing: только Red, Pink, Periwinkle, Violet, Scarlet")
