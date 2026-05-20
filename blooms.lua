@@ -13,17 +13,17 @@ local Events = ReplicatedStorage:FindFirstChild("Events")
 
 local HEIGHT_ZONES = {
     {min = 36, max = 47, minX = -403, maxX = -258, minZ = 83, maxZ = 175},   -- rose
-    {min = 49, max = 60, minX = 93, maxX = 214, minZ = 132, maxZ = 257},     -- clover
+    {min = 50, max = 60, minX = 93, maxX = 214, minZ = 132, maxZ = 257},     -- clover
     {min = 87, max = 100},                                                     -- coconut
     {min = 115, max = 150, interval = 1.2},                                    -- pepper
 }
 
-local TP_INTERVAL       = 2
+local TP_INTERVAL       = 3
 local SCAN_INTERVAL     = 0.01
-local PETAL_WAIT        = 0.08
+local PETAL_WAIT        = 0.09
 local RED_URGENT        = 4
 local REFRESH_THRESHOLD = 2
-local LOGS              = true
+local LOGS              = false
 local DEBUG_LOGS        = false
 
 local PETAL_COLORS = {
