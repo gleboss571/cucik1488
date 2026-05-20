@@ -12,12 +12,13 @@ local Camera = Workspace.CurrentCamera
 local Events = ReplicatedStorage:FindFirstChild("Events")
 
 local HEIGHT_ZONES = {
-    {min = 36, max = 40},
-    {min = 85, max = 90},
-    {min = 115, max = 150, interval = 1.2},
+    {min = 36, max = 47, minX = -403, maxX = -258, minZ = 83, maxZ = 175},   -- rose
+    {min = 49, max = 60, minX = 93, maxX = 214, minZ = 132, maxZ = 257},     -- clover
+    {min = 87, max = 100},                                                     -- coconut
+    {min = 115, max = 150, interval = 1.2},                                    -- pepper
 }
 
-local TP_INTERVAL       = 3
+local TP_INTERVAL       = 2
 local SCAN_INTERVAL     = 0.01
 local PETAL_WAIT        = 0.08
 local RED_URGENT        = 4
@@ -60,7 +61,7 @@ local busy = false
 local cachedPetals = {}
 local hasFestiveBlessing = false
 local lastTPTime = 0
-local lastZoneInterval = TP_INTERVAL -- запоминаем интервал зоны последней петали
+local lastZoneInterval = TP_INTERVAL
 
 -- ===============================
 -- BUFF TRACKING
@@ -148,17 +149,35 @@ local function getHRP()
     return c:FindFirstChild("HumanoidRootPart"), c:FindFirstChildOfClass("Humanoid")
 end
 
-local function isInZone(y)
-    for _, z in ipairs(HEIGHT_ZONES) do
-        if y >= z.min and y <= z.max then return true end
+local function isInZone(pos)
+    local y, x, z = pos.Y, pos.X, pos.Z
+    for _, zone in ipairs(HEIGHT_ZONES) do
+        if y >= zone.min and y <= zone.max then
+            -- Если у зоны заданы границы по X/Z — проверяем
+            if zone.minX then
+                if x >= zone.minX and x <= zone.maxX and z >= zone.minZ and z <= zone.maxZ then
+                    return true
+                end
+            else
+                -- Зона только по высоте
+                return true
+            end
+        end
     end
     return false
 end
 
-local function getZoneInterval(y)
-    for _, z in ipairs(HEIGHT_ZONES) do
-        if y >= z.min and y <= z.max then
-            return z.interval or TP_INTERVAL
+local function getZoneInterval(pos)
+    local y, x, z = pos.Y, pos.X, pos.Z
+    for _, zone in ipairs(HEIGHT_ZONES) do
+        if y >= zone.min and y <= zone.max then
+            if zone.minX then
+                if x >= zone.minX and x <= zone.maxX and z >= zone.minZ and z <= zone.maxZ then
+                    return zone.interval or TP_INTERVAL
+                end
+            else
+                return zone.interval or TP_INTERVAL
+            end
         end
     end
     return TP_INTERVAL
@@ -180,7 +199,7 @@ task.spawn(function()
         local found = {}
         if particles then
             for _, obj in ipairs(particles:GetChildren()) do
-                if obj.Name == "PetalPart" and obj:IsA("BasePart") and isInZone(obj.Position.Y) then
+                if obj.Name == "PetalPart" and obj:IsA("BasePart") and isInZone(obj.Position) then
                     found[#found + 1] = obj
                 end
             end
@@ -233,8 +252,7 @@ local function tpCollect(petal, colorName)
     Camera.CameraType = camType
 
     lastTPTime = tick()
-    -- Запоминаем интервал зоны ЭТОЙ петали
-    lastZoneInterval = getZoneInterval(petal.Position.Y)
+    lastZoneInterval = getZoneInterval(petal.Position)
 
     if LOGS then
         local fb = hasFestiveBlessing and " [FB]" or ""
@@ -305,7 +323,6 @@ end
 task.spawn(function()
     while true do
         if enabled and not busy then
-            -- RED URGENT: бафф ЕСТЬ и < RED_URGENT
             local redRem = getBuffRemaining("Red Petal")
             if redRem > 0 and redRem < RED_URGENT then
                 local hrp = getHRP()
@@ -326,7 +343,6 @@ task.spawn(function()
                 end
             end
 
-            -- ОБЫЧНЫЙ: используем lastZoneInterval
             local elapsed = tick() - lastTPTime
             if elapsed >= lastZoneInterval then
                 local petal, colorName = selectTarget()
@@ -363,7 +379,11 @@ local function printStatus()
     print("  Zone intervals:")
     for i, z in ipairs(HEIGHT_ZONES) do
         local zi = z.interval or TP_INTERVAL
-        print("    [" .. i .. "] Y=" .. z.min .. "-" .. z.max .. " interval=" .. zi .. "s")
+        local bounds = ""
+        if z.minX then
+            bounds = " X=" .. z.minX .. ".." .. z.maxX .. " Z=" .. z.minZ .. ".." .. z.maxZ
+        end
+        print("    [" .. i .. "] Y=" .. z.min .. "-" .. z.max .. bounds .. " interval=" .. zi .. "s")
     end
     print("  Red urgent: <" .. RED_URGENT .. "s")
     print("  Refresh: <" .. REFRESH_THRESHOLD .. "s")
