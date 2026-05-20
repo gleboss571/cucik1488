@@ -1,4 +1,4 @@
--- Petal TP — Festive Blessing режим + обычный режим
+-- Petal TP v8
 -- R = toggle
 
 local Players = game:GetService("Players")
@@ -9,24 +9,21 @@ local RunService = game:GetService("RunService")
 
 local LP = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
-
--- ═══════════════════════════════
--- НАСТРОЙКИ
--- ═══════════════════════════════
+local Events = ReplicatedStorage:FindFirstChild("Events")
 
 local HEIGHT_ZONES = {
     {min = 36, max = 40},
     {min = 85, max = 90},
-    {min = 115, max = 150, interval = 1.1},
+    {min = 115, max = 150, interval = 1.2},
 }
 
-local TP_INTERVAL   = 2
-local SCAN_INTERVAL = 0.1
-local PETAL_DELAY   = 0.7
-
-local RED_THRESHOLD     = 5
-local DEFAULT_THRESHOLD = 3
-local LOGS = false  -- true = логи в консоль, false = тихий режим
+local TP_INTERVAL       = 3
+local SCAN_INTERVAL     = 0.01
+local PETAL_WAIT        = 0.08
+local RED_URGENT        = 4
+local REFRESH_THRESHOLD = 2
+local LOGS              = true
+local DEBUG_LOGS        = false
 
 local PETAL_COLORS = {
     ["Blue Petal"]       = Color3.fromRGB(33, 66, 249),
@@ -45,33 +42,105 @@ local PETAL_COLORS = {
 }
 
 local COLOR_PRIORITY = {
-    ["Red Petal"] = 1,
-    ["Pink Petal"] = 2,
-    ["Periwinkle Petal"] = 3,
-    ["Violet Petal"] = 4,
-    ["Scarlet Petal"] = 5,
-    ["Merigold Petal"] = 6,
-    ["Green Petal"] = 7,
-    ["Yellow Petal"] = 8,
+    ["Red Petal"] = 1, ["Pink Petal"] = 2, ["Periwinkle Petal"] = 3,
+    ["Violet Petal"] = 4, ["Scarlet Petal"] = 5, ["Merigold Petal"] = 6,
+    ["Green Petal"] = 7, ["Yellow Petal"] = 8, ["Blue Petal"] = 9,
+    ["Cyan Petal"] = 10, ["White Petal"] = 11, ["Black Petal"] = 12,
+    ["Grey Petal"] = 13,
 }
 
--- Во время Festive Blessing — только эти петали
 local FESTIVE_PETALS = {
-    ["Red Petal"] = true,
-    ["Pink Petal"] = true,
-    ["Periwinkle Petal"] = true,
-    ["Violet Petal"] = true,
+    ["Red Petal"] = true, ["Pink Petal"] = true,
+    ["Periwinkle Petal"] = true, ["Violet Petal"] = true,
     ["Scarlet Petal"] = true,
 }
-
--- ═══════════════════════════════
 
 local enabled = false
 local busy = false
 local cachedPetals = {}
-local redUrgentDone = false
-local redNoBuffUsed = false
 local hasFestiveBlessing = false
+local lastTPTime = 0
+local lastZoneInterval = TP_INTERVAL -- запоминаем интервал зоны последней петали
+
+-- ===============================
+-- BUFF TRACKING
+-- ===============================
+local liveBuffs = {}
+
+local function recordBuff(name, remaining)
+    if remaining > 0 then
+        liveBuffs[name] = tick() + remaining
+    end
+end
+
+local function getBuffRemaining(name)
+    local exp = liveBuffs[name]
+    if exp and tick() < exp then
+        return exp - tick()
+    end
+    return 0
+end
+
+local SBE = Events and Events:FindFirstChild("ServerBuffEvent")
+if SBE then
+    SBE.OnClientEvent:Connect(function(action, buffName, arg3, arg4)
+        if action == "Apply" and PETAL_COLORS[buffName] then
+            local dur = 8
+            if type(arg4) == "number" then
+                dur = arg4
+            elseif type(arg3) == "number" and arg3 < 1000 then
+                dur = arg3
+            end
+            recordBuff(buffName, dur)
+            if DEBUG_LOGS then
+                print("[SBE] Apply " .. buffName .. " dur=" .. dur)
+            end
+        end
+        if action == "Apply" and buffName == "Festive Blessing" then
+            hasFestiveBlessing = true
+        end
+        if action == "Remove" and buffName == "Festive Blessing" then
+            hasFestiveBlessing = false
+        end
+    end)
+end
+
+-- InvokeServer backup
+task.spawn(function()
+    while true do
+        local fn = Events and Events:FindFirstChild("RetrievePlayerStats")
+        if fn then
+            local ok, stats = pcall(fn.InvokeServer, fn)
+            if ok and type(stats) == "table" then
+                local festive = false
+                local function scan(data, visited)
+                    if type(data) ~= "table" or visited[data] then return end
+                    visited[data] = true
+                    if data.Src and data.Start and data.Dur then
+                        if PETAL_COLORS[data.Src] then
+                            local rem = (data.Start + data.Dur) - os.time()
+                            if rem > 0 and rem > getBuffRemaining(data.Src) then
+                                recordBuff(data.Src, rem)
+                            end
+                        end
+                        if data.Src == "Festive Blessing" then
+                            local rem = (data.Start + data.Dur) - os.time()
+                            if rem > 0 then festive = true end
+                        end
+                    end
+                    for _, v in pairs(data) do
+                        if type(v) == "table" then scan(v, visited) end
+                    end
+                end
+                scan(stats, {})
+                hasFestiveBlessing = festive
+            end
+        end
+        task.wait(10)
+    end
+end)
+
+-- ===============================
 
 local function getHRP()
     local c = LP.Character
@@ -97,9 +166,7 @@ end
 
 local function getColorName(color)
     for name, col in pairs(PETAL_COLORS) do
-        if math.abs(col.R - color.R) < 0.02
-            and math.abs(col.G - color.G) < 0.02
-            and math.abs(col.B - color.B) < 0.02 then
+        if math.abs(col.R - color.R) < 0.02 and math.abs(col.G - color.G) < 0.02 and math.abs(col.B - color.B) < 0.02 then
             return name
         end
     end
@@ -123,101 +190,105 @@ task.spawn(function()
     end
 end)
 
--- ═══════════════════════════════
--- БАФФЫ + FESTIVE BLESSING
--- ═══════════════════════════════
+-- ТП
+local function tpCollect(petal, colorName)
+    if busy then return end
+    if not petal or not petal.Parent then return end
+    local hrp, hum = getHRP()
+    if not hrp or not hum then return end
 
-local buffCache = {}
-local lastBuffTime = 0
+    busy = true
+    local savedCF = hrp.CFrame
+    local camCF = Camera.CFrame
+    local camType = Camera.CameraType
 
-local function getBuffs()
-    if tick() - lastBuffTime < 3 then return buffCache end
-    local ev = ReplicatedStorage:FindFirstChild("Events")
-    local fn = ev and ev:FindFirstChild("RetrievePlayerStats")
-    if not fn then return buffCache end
-    local ok, stats = pcall(fn.InvokeServer, fn)
-    if not ok or type(stats) ~= "table" then return buffCache end
+    Camera.CameraType = Enum.CameraType.Scriptable
+    Camera.CFrame = camCF
+    if hum then hum.AutoRotate = false end
 
-    local found = {}
-    local festive = false
+    local petalCF = petal.CFrame + Vector3.new(0, 3, 0)
 
-    local function scan(data, visited)
-        if type(data) ~= "table" then return end
-        if visited[data] then return end
-        visited[data] = true
+    hrp.CFrame = petalCF
+    hrp.AssemblyLinearVelocity = Vector3.zero
+    hrp.AssemblyAngularVelocity = Vector3.zero
 
-        if data.Src and data.Start and data.Dur then
-            -- Петальные баффы
-            if PETAL_COLORS[data.Src] then
-                local rem = (data.Start + data.Dur) - os.time()
-                if rem > 0 then found[data.Src] = rem end
-            end
-            -- Festive Blessing
-            if data.Src == "Festive Blessing" then
-                local rem = (data.Start + data.Dur) - os.time()
-                if rem > 0 then festive = true end
-            end
-        end
-
-        for _, v in pairs(data) do
-            if type(v) == "table" then scan(v, visited) end
-        end
+    local start = tick()
+    while tick() - start < PETAL_WAIT do
+        hrp.CFrame = petalCF
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        RunService.Heartbeat:Wait()
     end
-    scan(stats, {})
 
-    buffCache = found
-    hasFestiveBlessing = festive
-    lastBuffTime = tick()
-    return found
+    hrp.CFrame = savedCF
+    hrp.AssemblyLinearVelocity = Vector3.zero
+    hrp.AssemblyAngularVelocity = Vector3.zero
+    RunService.Heartbeat:Wait()
+    hrp.CFrame = savedCF
+    hrp.AssemblyLinearVelocity = Vector3.zero
+
+    if hum then
+        hum.AutoRotate = true
+        hum:ChangeState(Enum.HumanoidStateType.Running)
+    end
+    Camera.CameraType = camType
+
+    lastTPTime = tick()
+    -- Запоминаем интервал зоны ЭТОЙ петали
+    lastZoneInterval = getZoneInterval(petal.Position.Y)
+
+    if LOGS then
+        local fb = hasFestiveBlessing and " [FB]" or ""
+        local zi = lastZoneInterval ~= TP_INTERVAL and (" [zone=" .. lastZoneInterval .. "s]") or ""
+        print("[Petal] " .. colorName .. fb .. zi .. " (" .. string.format("%.2f", tick() - start) .. "s)")
+    end
+    busy = false
 end
 
--- ═══════════════════════════════
 -- ВЫБОР ЦЕЛИ
--- ═══════════════════════════════
-
 local function selectTarget()
     local hrp = getHRP()
-    if not hrp then return nil end
-    if #cachedPetals == 0 then return nil end
-
-    local buffs = getBuffs()
+    if not hrp or #cachedPetals == 0 then return nil end
 
     local byColor = {}
     for _, obj in ipairs(cachedPetals) do
         if obj and obj.Parent then
             local name = getColorName(obj.Color)
-            if name then
-                local dist = (obj.Position - hrp.Position).Magnitude
-                if not byColor[name] or dist < byColor[name].dist then
-                    byColor[name] = {part = obj, dist = dist, name = name}
+            if name and COLOR_PRIORITY[name] then
+                if hasFestiveBlessing and not FESTIVE_PETALS[name] then
+                    -- skip
+                else
+                    local dist = (obj.Position - hrp.Position).Magnitude
+                    if not byColor[name] or dist < byColor[name].dist then
+                        byColor[name] = {part = obj, dist = dist, name = name}
+                    end
                 end
             end
         end
+    end
+
+    if DEBUG_LOGS then
+        print("[D] --- selectTarget ---")
     end
 
     local candidates = {}
     for colorName, data in pairs(byColor) do
-        -- Если Festive Blessing активен — только избранные петали
-        if hasFestiveBlessing and not FESTIVE_PETALS[colorName] then
-            -- Пропускаем петали не из списка
-        elseif colorName == "Red Petal" then
-            local rem = buffs["Red Petal"]
-            if not rem then
-                if not redNoBuffUsed then
-                    candidates[#candidates + 1] = data
-                end
-            elseif rem < RED_THRESHOLD then
-                candidates[#candidates + 1] = data
+        local rem = getBuffRemaining(colorName)
+        if rem < REFRESH_THRESHOLD then
+            candidates[#candidates + 1] = data
+            if DEBUG_LOGS then
+                print("[D] + " .. colorName .. " d=" .. math.floor(data.dist) .. " buff=" .. string.format("%.1f", rem) .. "s")
             end
         else
-            local rem = buffs[colorName]
-            if not rem or rem < DEFAULT_THRESHOLD then
-                candidates[#candidates + 1] = data
+            if DEBUG_LOGS then
+                print("[D] - " .. colorName .. " buff=" .. string.format("%.1f", rem) .. "s SKIP")
             end
         end
     end
 
-    if #candidates == 0 then return nil end
+    if #candidates == 0 then
+        if DEBUG_LOGS then print("[D] No candidates") end
+        return nil
+    end
 
     table.sort(candidates, function(a, b)
         local pa = COLOR_PRIORITY[a.name] or 999
@@ -226,193 +297,98 @@ local function selectTarget()
         return a.dist < b.dist
     end)
 
+    if DEBUG_LOGS then print("[D] -> " .. candidates[1].name) end
     return candidates[1].part, candidates[1].name
 end
 
--- ═══════════════════════════════
--- НАЙТИ RED PETAL
--- ═══════════════════════════════
-
-local function findRedPetal()
-    local hrp = getHRP()
-    if not hrp then return nil end
-    local best, bestD = nil, math.huge
-    for _, obj in ipairs(cachedPetals) do
-        if obj and obj.Parent then
-            if getColorName(obj.Color) == "Red Petal" then
-                local d = (obj.Position - hrp.Position).Magnitude
-                if d < bestD then bestD = d best = obj end
-            end
-        end
-    end
-    return best
-end
-
--- ═══════════════════════════════
--- ТЕЛЕПОРТ
--- ═══════════════════════════════
-
-local function tpCollect(petal, colorName)
-    if busy then return end
-    if not petal or not petal.Parent then return end
-    local hrp, hum = getHRP()
-    if not hrp or not hum then return end
-
-    busy = true
-
-    local savedCF = hrp.CFrame
-    local camType = Camera.CameraType
-    local camCF = Camera.CFrame
-
-    Camera.CameraType = Enum.CameraType.Scriptable
-    Camera.CFrame = camCF
-
-    if hum then hum.AutoRotate = false end
-    hrp.AssemblyLinearVelocity = Vector3.zero
-    hrp.AssemblyAngularVelocity = Vector3.zero
-
-    hrp.CFrame = petal.CFrame + Vector3.new(0, 3, 0)
-    task.wait(PETAL_DELAY)
-
-    hrp.CFrame = savedCF
-    hrp.AssemblyLinearVelocity = Vector3.zero
-    hrp.AssemblyAngularVelocity = Vector3.zero
-
-    if hum then
-        hum.AutoRotate = true
-        hum:ChangeState(Enum.HumanoidStateType.Running)
-    end
-
-    Camera.CameraType = camType
-
-    if LOGS then
-        local festiveTag = hasFestiveBlessing and " [FB]" or ""
-        print("🌸 " .. (colorName or "Petal") .. festiveTag)
-    end
-    busy = false
-end
-
--- ═══════════════════════════════
--- ОСНОВНОЙ ЦИКЛ
--- ═══════════════════════════════
-
+-- ОДИН ЦИКЛ
 task.spawn(function()
     while true do
-        local waitTime = TP_INTERVAL
         if enabled and not busy then
-            local petal, colorName = selectTarget()
-            if petal then
-                waitTime = getZoneInterval(petal.Position.Y)
-                if colorName == "Red Petal" then
-                    local buffs = getBuffs()
-                    if not buffs["Red Petal"] then
-                        redNoBuffUsed = true
+            -- RED URGENT: бафф ЕСТЬ и < RED_URGENT
+            local redRem = getBuffRemaining("Red Petal")
+            if redRem > 0 and redRem < RED_URGENT then
+                local hrp = getHRP()
+                if hrp then
+                    local best, bestD = nil, math.huge
+                    for _, obj in ipairs(cachedPetals) do
+                        if obj and obj.Parent and getColorName(obj.Color) == "Red Petal" then
+                            local d = (obj.Position - hrp.Position).Magnitude
+                            if d < bestD then bestD = d best = obj end
+                        end
+                    end
+                    if best then
+                        if DEBUG_LOGS then print("[D] RED URGENT rem=" .. string.format("%.1f", redRem)) end
+                        tpCollect(best, "Red Petal")
+                        task.wait(0.3)
+                        continue
                     end
                 end
-                tpCollect(petal, colorName)
             end
-        end
-        task.wait(waitTime)
-    end
-end)
 
--- Urgent Red Petal
-task.spawn(function()
-    while true do
-        if enabled and not busy then
-            local buffs = getBuffs()
-            local redRem = buffs["Red Petal"]
-
-            if redRem and redRem < RED_THRESHOLD and not redUrgentDone then
-                local redPetal = findRedPetal()
-                if redPetal then
-                    redUrgentDone = true
-                    tpCollect(redPetal, "Red Petal (URGENT)")
+            -- ОБЫЧНЫЙ: используем lastZoneInterval
+            local elapsed = tick() - lastTPTime
+            if elapsed >= lastZoneInterval then
+                local petal, colorName = selectTarget()
+                if petal then
+                    tpCollect(petal, colorName)
                 end
             end
-
-            if not redRem then
-                redUrgentDone = false
-            end
-
-            if redRem and redRem >= RED_THRESHOLD then
-                redUrgentDone = false
-                redNoBuffUsed = false
-            end
         end
-        task.wait(0.3)
+        task.wait(0.2)
     end
 end)
 
--- ═══════════════════════════════
 -- УПРАВЛЕНИЕ
--- ═══════════════════════════════
-
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.KeyCode == Enum.KeyCode.R then
         enabled = not enabled
-        if LOGS then print(enabled and "🟢 Petal ON" or "🔴 Petal OFF") end
+        if enabled then lastTPTime = 0 end
+        print(enabled and "[Petal] ON" or "[Petal] OFF")
     end
 end)
 
 LP.CharacterAdded:Connect(function()
     busy = false
-    redUrgentDone = false
-    redNoBuffUsed = false
+    lastTPTime = 0
+    liveBuffs = {}
+    lastZoneInterval = TP_INTERVAL
 end)
 
 local function printStatus()
-    print("═══════════════════════════")
-    print("🌸 Petal Collector")
-    print("  Enabled: " .. tostring(enabled))
-    print("  Festive Blessing: " .. tostring(hasFestiveBlessing))
-    print("  TP interval: " .. TP_INTERVAL .. "s")
-    print("  Petal delay: " .. PETAL_DELAY .. "s")
-    print("  Red threshold: <" .. RED_THRESHOLD .. "s")
-    print("  Default threshold: <" .. DEFAULT_THRESHOLD .. "s")
-    print("  Scan: " .. SCAN_INTERVAL .. "s")
-    if hasFestiveBlessing then
-        print("  FB mode: Red, Pink, Periwinkle, Violet, Scarlet ONLY")
-    end
-    print("  Zones:")
+    print("=== Petal v8 ===")
+    print("  Wait: " .. PETAL_WAIT .. "s")
+    print("  Interval: " .. TP_INTERVAL .. "s (default)")
+    print("  Zone intervals:")
     for i, z in ipairs(HEIGHT_ZONES) do
-        print("    [" .. i .. "] Y=" .. z.min .. "-" .. z.max .. " | interval=" .. (z.interval or TP_INTERVAL) .. "s")
+        local zi = z.interval or TP_INTERVAL
+        print("    [" .. i .. "] Y=" .. z.min .. "-" .. z.max .. " interval=" .. zi .. "s")
     end
-    print("═══════════════════════════")
+    print("  Red urgent: <" .. RED_URGENT .. "s")
+    print("  Refresh: <" .. REFRESH_THRESHOLD .. "s")
+    print("  Festive: " .. tostring(hasFestiveBlessing))
+    print("  Buffs:")
+    for name, _ in pairs(COLOR_PRIORITY) do
+        local rem = getBuffRemaining(name)
+        if rem > 0 then print("    " .. name .. " = " .. string.format("%.1f", rem) .. "s") end
+    end
+    print("================")
 end
 
 getgenv().PT = {
-    Add = function(min, max)
-        HEIGHT_ZONES[#HEIGHT_ZONES + 1] = {min = min, max = max}
-        printStatus()
-    end,
-    Set = function(...)
-        HEIGHT_ZONES = {}
-        local a = {...}
-        for i = 1, #a, 2 do
-            HEIGHT_ZONES[#HEIGHT_ZONES + 1] = {min = a[i], max = a[i+1]}
-        end
-        printStatus()
-    end,
-    List = function() printStatus() end,
+    Add = function(min, max) HEIGHT_ZONES[#HEIGHT_ZONES + 1] = {min = min, max = max} printStatus() end,
+    Set = function(...) HEIGHT_ZONES = {} local a = {...} for i = 1, #a, 2 do HEIGHT_ZONES[#HEIGHT_ZONES + 1] = {min = a[i], max = a[i+1]} end printStatus() end,
+    List = printStatus,
     Speed = function(t) TP_INTERVAL = t printStatus() end,
-    Delay = function(t) PETAL_DELAY = t printStatus() end,
-    Red = function(t) RED_THRESHOLD = t printStatus() end,
-    Default = function(t) DEFAULT_THRESHOLD = t printStatus() end,
-    Scan = function(t) SCAN_INTERVAL = t printStatus() end,
-    ZoneSpeed = function(index, t)
-        if HEIGHT_ZONES[index] then
-            HEIGHT_ZONES[index].interval = t
-            printStatus()
-        end
-    end,
-    Log = function(on)
-        if on == nil then LOGS = not LOGS else LOGS = on end
-        print("Logs: " .. tostring(LOGS))
-    end,
+    Wait = function(t) PETAL_WAIT = t printStatus() end,
+    Urgent = function(t) RED_URGENT = t printStatus() end,
+    Refresh = function(t) REFRESH_THRESHOLD = t printStatus() end,
+    ZoneSpeed = function(i, t) if HEIGHT_ZONES[i] then HEIGHT_ZONES[i].interval = t end printStatus() end,
+    Log = function(on) LOGS = on == nil and not LOGS or on end,
+    Debug = function(on) DEBUG_LOGS = on == nil and not DEBUG_LOGS or on print("Debug: " .. tostring(DEBUG_LOGS)) end,
+    Buffs = printStatus,
 }
 
 printStatus()
-print("  R = toggle")
-print("  При Festive Blessing: только Red, Pink, Periwinkle, Violet, Scarlet")
+print("R = toggle | PT.Debug() | PT.Buffs()")
