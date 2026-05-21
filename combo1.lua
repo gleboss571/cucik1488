@@ -2,7 +2,7 @@
 -- Combo Coconut Script
 -- ================================================
 local ACCOUNT_ID = 1
-local TOTAL_ACCOUNTS = 3
+local TOTAL_ACCOUNTS = 4
 local LOGS = false
 
 local Players = game:GetService("Players")
