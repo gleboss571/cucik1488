@@ -341,3 +341,4 @@ getgenv().CC = {
 }
 
 updateCounterDisplay()
+print("[ACC " .. ACCOUNT_ID .. "] Combo Coconut Script loaded")
