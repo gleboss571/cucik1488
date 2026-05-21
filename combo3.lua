@@ -1,10 +1,9 @@
 -- ================================================
--- Combo Coconut Script v7
--- ACCOUNT_ID = 1
+-- Combo Coconut Script
 -- ================================================
 local ACCOUNT_ID = 3
 local TOTAL_ACCOUNTS = 3
-local LOGS = false   -- <== true чтобы включить принты
+local LOGS = false
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -13,6 +12,32 @@ local Player = Players.LocalPlayer
 
 local function log(...)
     if LOGS then print(...) end
+end
+
+-- ================================================
+-- Файловая синхронизация очереди между аккаунтами
+-- ACC 1 пишет сигналы, ACC 2/3 их читают.
+-- Работает на большинстве executors через writefile/readfile.
+-- ================================================
+local SYNC_FILE = "combo_coconut_queue.txt"
+local hasFileAPI = (typeof(writefile) == "function") and (typeof(readfile) == "function") and (typeof(isfile) == "function")
+
+local function writeSync(counter)
+    if not hasFileAPI then return end
+    pcall(function()
+        -- формат: counter|timestamp
+        writefile(SYNC_FILE, tostring(counter) .. "|" .. tostring(tick()))
+    end)
+end
+
+local function readSync()
+    if not hasFileAPI then return nil, 0 end
+    if not isfile(SYNC_FILE) then return nil, 0 end
+    local ok, content = pcall(readfile, SYNC_FILE)
+    if not ok or not content then return nil, 0 end
+    local c, t = string.match(content, "^(%d+)|([%d%.]+)$")
+    if not c then return nil, 0 end
+    return tonumber(c), tonumber(t) or 0
 end
 
 local lastValue = -1
@@ -26,7 +51,7 @@ local skipUsed = false
 local lastCoconutThrow = 0
 local COCONUT_COOLDOWN = 1.0
 
--- Анти-дубль сдвига очереди
+-- Анти-дубль
 local lastQueueAdvanceAt = 0
 local QUEUE_ADVANCE_DEBOUNCE = 3.0
 local lastAdvanceReason = "-"
@@ -45,7 +70,6 @@ end
 local function advanceQueue(reason)
     local now = tick()
     if now - lastQueueAdvanceAt < QUEUE_ADVANCE_DEBOUNCE then
-        log("[ACC " .. ACCOUNT_ID .. "] advanceQueue IGNORED (debounce " .. string.format("%.2f", now - lastQueueAdvanceAt) .. "s) reason=" .. tostring(reason))
         return
     end
     lastQueueAdvanceAt = now
@@ -53,7 +77,7 @@ local function advanceQueue(reason)
 
     if skipUsed then
         skipUsed = false
-        log("[ACC " .. ACCOUNT_ID .. "] Combo collected (SKIP, counter=" .. comboCounter .. ") reason=" .. tostring(reason))
+        log("[ACC " .. ACCOUNT_ID .. "] SKIP collected")
         return
     end
 
@@ -61,7 +85,12 @@ local function advanceQueue(reason)
     if comboCounter > TOTAL_ACCOUNTS then
         comboCounter = 1
     end
-    log("[ACC " .. ACCOUNT_ID .. "] >>> Queue -> " .. comboCounter .. " (reason=" .. tostring(reason) .. ")")
+    log("[ACC " .. ACCOUNT_ID .. "] Queue -> " .. comboCounter .. " (" .. tostring(reason) .. ")")
+
+    -- ACC 1 публикует новое значение для остальных
+    if ACCOUNT_ID == 1 then
+        writeSync(comboCounter)
+    end
 end
 
 -- ================================================
@@ -73,8 +102,8 @@ screenGui.Parent = game:GetService("CoreGui")
 screenGui.ResetOnSpawn = false
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 140, 0, 105)
-frame.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID - 1) * 115)
+frame.Size = UDim2.new(0, 170, 0, 160)
+frame.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID - 1) * 170)
 frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 frame.BackgroundTransparency = 0.3
 frame.BorderSizePixel = 0
@@ -126,9 +155,43 @@ stopLabel.Font = Enum.Font.Gotham
 stopLabel.TextSize = 9
 stopLabel.Parent = frame
 
+-- Отладочные строки (видны на экране, консоль не нужна)
+local dbg1 = Instance.new("TextLabel")
+dbg1.Size = UDim2.new(1, -4, 0, 12)
+dbg1.Position = UDim2.new(0, 2, 0, 74)
+dbg1.BackgroundTransparency = 1
+dbg1.Text = ""
+dbg1.TextColor3 = Color3.fromRGB(120, 160, 200)
+dbg1.Font = Enum.Font.Gotham
+dbg1.TextSize = 9
+dbg1.TextXAlignment = Enum.TextXAlignment.Left
+dbg1.Parent = frame
+
+local dbg2 = Instance.new("TextLabel")
+dbg2.Size = UDim2.new(1, -4, 0, 12)
+dbg2.Position = UDim2.new(0, 2, 0, 86)
+dbg2.BackgroundTransparency = 1
+dbg2.Text = ""
+dbg2.TextColor3 = Color3.fromRGB(120, 160, 200)
+dbg2.Font = Enum.Font.Gotham
+dbg2.TextSize = 9
+dbg2.TextXAlignment = Enum.TextXAlignment.Left
+dbg2.Parent = frame
+
+local dbg3 = Instance.new("TextLabel")
+dbg3.Size = UDim2.new(1, -4, 0, 12)
+dbg3.Position = UDim2.new(0, 2, 0, 98)
+dbg3.BackgroundTransparency = 1
+dbg3.Text = ""
+dbg3.TextColor3 = Color3.fromRGB(120, 160, 200)
+dbg3.Font = Enum.Font.Gotham
+dbg3.TextSize = 9
+dbg3.TextXAlignment = Enum.TextXAlignment.Left
+dbg3.Parent = frame
+
 local skipBtn = Instance.new("TextButton")
 skipBtn.Size = UDim2.new(1, -16, 0, 26)
-skipBtn.Position = UDim2.new(0, 8, 0, 74)
+skipBtn.Position = UDim2.new(0, 8, 0, 116)
 skipBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
 skipBtn.BorderSizePixel = 0
 skipBtn.Text = "SKIP & COMBO"
@@ -177,6 +240,18 @@ local function updateCounterDisplay()
         label.TextColor3 = Color3.fromRGB(255, 200, 100)
         idLabel.Text = "ACC #" .. ACCOUNT_ID .. " (wait " .. comboCounter .. ")"
     end
+
+    -- Отладка прямо в GUI
+    dbg1.Text = "reason: " .. lastAdvanceReason
+    dbg2.Text = "fileAPI: " .. tostring(hasFileAPI)
+        .. " | parts: " .. tostring(Workspace:FindFirstChild("Particles") ~= nil)
+    local fc, ft = readSync()
+    if fc then
+        dbg3.Text = "sync: " .. fc .. " (" .. string.format("%.0f", tick() - ft) .. "s ago)"
+    else
+        dbg3.Text = "sync: -"
+    end
+
     updateSkipButton()
 end
 
@@ -211,14 +286,12 @@ function SpawnCoconut(isCombo)
     local args = { { Name = "Coconut" } }
     game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("PlayerActivesCommand"):FireServer(unpack(args))
     if isCombo then
-        log("[ACC " .. ACCOUNT_ID .. "] COMBO COCONUT!")
         task.spawn(function()
             task.wait(11)
             SpawnCoconut(false)
         end)
     else
         lastCoconutThrow = tick()
-        log("[ACC " .. ACCOUNT_ID .. "] coconut (value=" .. lastValue .. ")")
     end
 end
 
@@ -240,44 +313,57 @@ function IsComboCoconutPresent()
 end
 
 -- ================================================
--- ДЕТЕКТОР ЧАСТИЦЫ — главный триггер сдвига очереди
--- Опрос 0.1 сек. Сдвигаем по ПОЯВЛЕНИЮ (это надёжнее
--- чем по исчезновению, т.к. частица существует дольше).
+-- Детектор частицы (опрос 0.1 сек)
 -- ================================================
 spawn(function()
     while true do
         local present = IsComboCoconutPresent()
-
         if present and not coconutActive then
             coconutActive = true
-            log("[ACC " .. ACCOUNT_ID .. "] Combo particle APPEARED")
             advanceQueue("particle-appeared")
             updateCounterDisplay()
         elseif not present and coconutActive then
             coconutActive = false
-            log("[ACC " .. ACCOUNT_ID .. "] Combo particle gone")
         end
-
         task.wait(0.1)
     end
 end)
 
--- ================================================
--- ДОПОЛНИТЕЛЬНЫЙ ДЕТЕКТОР: ChildAdded на Particles
--- Срабатывает мгновенно, не зависит от опроса
--- ================================================
+-- ChildAdded на Particles
 spawn(function()
     local particles = Workspace:WaitForChild("Particles", 30)
     if not particles then return end
     particles.ChildAdded:Connect(function(obj)
         if obj.Name == "ComboCoconut" then
-            log("[ACC " .. ACCOUNT_ID .. "] ChildAdded: ComboCoconut")
             advanceQueue("child-added")
             coconutActive = true
             updateCounterDisplay()
         end
     end)
 end)
+
+-- ================================================
+-- Слушатель файла синхронизации (только не-ACC1)
+-- ACC 2/3 берут counter напрямую из файла, который пишет ACC 1
+-- ================================================
+if ACCOUNT_ID ~= 1 and hasFileAPI then
+    spawn(function()
+        local lastSeenCounter = nil
+        while true do
+            local c, _ = readSync()
+            if c and c ~= lastSeenCounter then
+                lastSeenCounter = c
+                if c ~= comboCounter then
+                    comboCounter = c
+                    lastAdvanceReason = "file-sync"
+                    lastQueueAdvanceAt = tick()  -- блокируем повторный сдвиг от других триггеров
+                    updateCounterDisplay()
+                end
+            end
+            task.wait(0.2)
+        end
+    end)
+end
 
 -- ================================================
 -- Таймер комбо (12 сек)
@@ -290,7 +376,6 @@ local function startSpawnTimer()
     spawnTimer = task.spawn(function()
         task.wait(12)
         if lastValue == 39 and comboCounter == ACCOUNT_ID then
-            log("[ACC " .. ACCOUNT_ID .. "] Throwing COMBO by timer!")
             SpawnCoconut(true)
         end
         spawnTimer = nil
@@ -302,34 +387,31 @@ end
 -- ================================================
 skipBtn.MouseButton1Click:Connect(function()
     if ACCOUNT_ID ~= 1 then return end
-    if lastValue ~= 39 then
-        log("[ACC 1] Cannot skip - value is not 39!")
-        return
-    end
+    if lastValue ~= 39 then return end
 
     if spawnTimer then
         task.cancel(spawnTimer)
         spawnTimer = nil
     end
 
-    -- Локально сдвигаем счётчик и блокируем автотриггеры
     comboCounter = comboCounter + 1
     if comboCounter > TOTAL_ACCOUNTS then
         comboCounter = 1
     end
-    skipUsed = false  -- НЕ ставим true, потому что мы УЖЕ сдвинули и хотим заблокировать второй сдвиг через debounce
+    skipUsed = false
     lastQueueAdvanceAt = tick()
     lastAdvanceReason = "skip-button"
     coconutActive = true
 
-    updateCounterDisplay()
+    -- Публикуем для остальных аккаунтов
+    writeSync(comboCounter)
 
-    log("[ACC 1] SKIP! Combo now, queue -> ACC " .. comboCounter)
+    updateCounterDisplay()
     SpawnCoconut(true)
 end)
 
 -- ================================================
--- Слушатель PlayerAbilityEvent (value, экипировка, обычные кокосы)
+-- Слушатель PlayerAbilityEvent
 -- ================================================
 require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(data)
     for tag, info in pairs(data) do
@@ -338,7 +420,6 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                 local value = info.Values and info.Values[1] or 0
                 local prevValue = lastValue
 
-                -- Резервный триггер: value было 39 и упало (на своём аккаунте)
                 if prevValue == 39 and value < 39 then
                     advanceQueue("value-drop-from-39")
                 end
@@ -363,7 +444,6 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                     if isStopValue(value) then
                         if not reachedStopValue then
                             reachedStopValue = true
-                            log("[ACC " .. ACCOUNT_ID .. "] Reached stop: " .. value)
                         end
                     elseif not reachedStopValue then
                         TryThrowCoconut()
@@ -371,7 +451,6 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                 end
 
                 if value == 39 and comboCounter == ACCOUNT_ID and not spawnTimer then
-                    log("[ACC " .. ACCOUNT_ID .. "] My turn! Timer 12 sec...")
                     startSpawnTimer()
                 end
 
@@ -382,7 +461,7 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
     end
 end)
 
--- Фоновый кокосо-кидатель (1 раз/сек)
+-- Фоновый кокосо-кидатель
 spawn(function()
     while true do
         if lastValue >= 0 and lastValue <= 34
@@ -404,14 +483,22 @@ spawn(function()
     end
 end)
 
+-- Обновление отладочных строк раз в секунду
+spawn(function()
+    while true do
+        updateCounterDisplay()
+        task.wait(1)
+    end
+end)
+
 -- ================================================
 -- Команды
 -- ================================================
 getgenv().CC = {
     Set = function(n)
         comboCounter = n
+        if ACCOUNT_ID == 1 then writeSync(n) end
         updateCounterDisplay()
-        log("[ACC " .. ACCOUNT_ID .. "] Counter: " .. n)
     end,
 
     Reset = function()
@@ -420,24 +507,8 @@ getgenv().CC = {
         skipUsed = false
         coconutActive = false
         lastQueueAdvanceAt = 0
+        if ACCOUNT_ID == 1 then writeSync(0) end
         updateCounterDisplay()
-        log("[ACC " .. ACCOUNT_ID .. "] Full reset")
-    end,
-
-    Status = function()
-        print("========================================")
-        print("[ACC " .. ACCOUNT_ID .. "] Status:")
-        print("   Counter: " .. comboCounter)
-        print("   My turn: " .. tostring(comboCounter == ACCOUNT_ID))
-        print("   Value: " .. lastValue)
-        print("   ReachedStop: " .. tostring(reachedStopValue))
-        print("   ComboActive: " .. tostring(coconutActive))
-        print("   SkipUsed: " .. tostring(skipUsed))
-        print("   Timer: " .. tostring(spawnTimer ~= nil))
-        print("   LastAdvanceReason: " .. lastAdvanceReason)
-        print("   ParticlesFolder: " .. tostring(Workspace:FindFirstChild("Particles") ~= nil))
-        print("   Logs: " .. tostring(LOGS))
-        print("========================================")
     end,
 
     Skip = function()
@@ -449,26 +520,12 @@ getgenv().CC = {
             lastQueueAdvanceAt = tick()
             lastAdvanceReason = "skip-cmd"
             coconutActive = true
+            if ACCOUNT_ID == 1 then writeSync(comboCounter) end
             updateCounterDisplay()
-            log("[ACC " .. ACCOUNT_ID .. "] SKIP! Queue -> " .. comboCounter)
             SpawnCoconut(true)
-        else
-            log("Value is not 39!")
         end
     end,
 
-    ResetStop = function()
-        reachedStopValue = false
-        updateCounterDisplay()
-        log("[ACC " .. ACCOUNT_ID .. "] Stop flag reset")
-    end,
-
-    SetLogs = function(v)
-        LOGS = v and true or false
-        print("[ACC " .. ACCOUNT_ID .. "] Logs = " .. tostring(LOGS))
-    end,
-
-    -- Ручной сдвиг очереди (для отладки)
     Advance = function()
         lastQueueAdvanceAt = 0
         advanceQueue("manual")
@@ -476,13 +533,4 @@ getgenv().CC = {
     end,
 }
 
--- ================================================
--- Старт
--- ================================================
 updateCounterDisplay()
-if LOGS then
-    print("========================================")
-    print("[ACC " .. ACCOUNT_ID .. "] Combo Coconut v7")
-    print("Queue advance via particle ChildAdded + 0.1s poll")
-    print("========================================")
-end
