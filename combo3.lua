@@ -269,11 +269,10 @@ skipBtn.MouseButton1Click:Connect(function()
         spawnTimer = nil
     end
     
-    -- Устанавливаем счётчик = 1, чтобы после сбора комбо стало 2 (ACC 2)
-    comboCounter = 1
-    updateCounterDisplay()
-    
-    print("⏭️ [ACC 1] SKIP! Комбо сейчас, потом очередь → ACC 2")
+    -- НЕ трогаем comboCounter!
+    -- Когда комбо соберут — ВСЕ аккаунты увеличат счётчик одинаково
+    -- Так очередь сама перейдёт к следующему
+    print("⏭️ [ACC 1] SKIP! Кидаю комбо, очередь сдвинется автоматически")
     SpawnCoconut(true)
 end)
 
@@ -379,7 +378,6 @@ getgenv().CC = {
         if lastValue == 39 then
             print("⏭️ [ACC " .. ACCOUNT_ID .. "] Ручной SKIP!")
             if spawnTimer then task.cancel(spawnTimer) spawnTimer = nil end
-            comboCounter = ACCOUNT_ID
             SpawnCoconut(true)
         else
             print("⚠️ Value не 39!")
