@@ -240,10 +240,10 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                     spawnTimer = nil
                 end
 
-                if value >= 0 and value <= 34 then
+                if value >= 0 and value <= 38 then
                     EquipCanister()
                 end
-                if value >= 35 and value <= 39 then
+                if value == 39 then
                     EquipPorcelain()
                 end
 
@@ -282,13 +282,13 @@ spawn(function()
     end
 end)
 
--- Фоллбэк экипировки канистры
+-- Фоллбэк экипировки канистры (каждую 1 секунду)
 spawn(function()
     while true do
-        if lastValue >= 0 and lastValue <= 34 and not hasCanister then
+        if lastValue >= 0 and lastValue <= 38 and not hasCanister then
             EquipCanister()
         end
-        task.wait(5)
+        task.wait(1)
     end
 end)
 
