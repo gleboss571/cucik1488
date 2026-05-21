@@ -2,7 +2,7 @@
 -- Combo Coconut Script
 -- ================================================
 local ACCOUNT_ID = 1
-local TOTAL_ACCOUNTS = 4
+local TOTAL_ACCOUNTS = 3
 local LOGS = false
 
 local Players = game:GetService("Players")
@@ -32,7 +32,7 @@ local STOP_VALUES = {4, 9, 14, 19, 24, 29, 34}
 local reachedStopValue = false
 
 -- Триггер-значения для броска кокоса (отсортированы по возрастанию!)
-local THROW_VALUES = {16, 22, 28}
+local THROW_VALUES = {0, 16, 33}
 local thrownAtValue = {}
 
 local function isStopValue(v)
@@ -245,7 +245,8 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
             if info.Action == "Update" then
                 local value = info.Values and info.Values[1] or 0
 
-                if value == 0 then
+                -- Сброс цикла: value=0 ИЛИ value упало (комбо собрано без захода на 0)
+                if value == 0 or (lastValue >= 0 and value < lastValue) then
                     reachedStopValue = false
                     thrownAtValue = {}
                 end
@@ -271,14 +272,17 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                     end
                 end
 
-                -- ====== ОБЫЧНЫЕ КОКОСЫ: 16, 22, 28 с догоном пропущенных ======
-                -- value >= tv покрывает случай, когда канистра (Inspire) прокнула
-                -- и value перепрыгнуло через триггер: 15 → 20 → нам пришёл апдейт 20,
-                -- а 16 ещё не закрыто — кидаем.
-                -- break — кидаем не больше одного за тик (остальные в кулдауне 10 сек).
-                for _, tv in ipairs(THROW_VALUES) do
-                    if value >= tv and not thrownAtValue[tv] then
-                        if throwAt(tv) then break end
+                -- ====== ОБЫЧНЫЕ КОКОСЫ ======
+                -- ЖЁСТКОЕ правило: кидаем ТОЛЬКО когда value РОВНО равно триггеру.
+                -- Если value перепрыгнуло (Inspire прокнул) — пропускаем этот триггер.
+                -- Лучше потерять 1 бросок, чем зайти за 34 и сломать цикл.
+                -- value <= 34 — двойная защита: после 34 никаких бросков вообще.
+                if value <= 34 then
+                    for _, tv in ipairs(THROW_VALUES) do
+                        if value == tv and not thrownAtValue[tv] then
+                            throwAt(tv)
+                            break
+                        end
                     end
                 end
 
@@ -291,22 +295,6 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                 updateCounterDisplay()
             end
         end
-    end
-end)
-
--- Фоновый догон: если value уже прошло триггер, но кулдаун не давал кинуть —
--- пробуем ещё раз каждые 0.5 сек. Без этого один из 16/22/28 может потеряться,
--- если value быстро прошло через все три раньше окончания кулдауна.
-spawn(function()
-    while true do
-        if lastValue >= 0 and lastValue <= 34 then
-            for _, tv in ipairs(THROW_VALUES) do
-                if lastValue >= tv and not thrownAtValue[tv] then
-                    if throwAt(tv) then break end
-                end
-            end
-        end
-        task.wait(0.5)
     end
 end)
 
@@ -353,3 +341,4 @@ getgenv().CC = {
 }
 
 updateCounterDisplay()
+print("[ACC " .. ACCOUNT_ID .. "] Combo Coconut Script loaded")
