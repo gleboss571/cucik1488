@@ -21,15 +21,18 @@ local hasCanister = false
 local hasPorcelain = false
 local spawnTimer = nil
 local comboCounter = 0
-local lastCoconutThrow = 0
-local COCONUT_COOLDOWN = 1.0
 
--- Стоп-значения
+-- Реальный кулдаун ручного броска кокоса в Bee Swarm = 10 секунд.
+-- Не пытаемся вызывать чаще, иначе сервер просто отвергнет.
+local lastCoconutThrow = 0
+local COCONUT_COOLDOWN = 10.0
+
+-- Стоп-значения (для отображения "STOP")
 local STOP_VALUES = {4, 9, 14, 19, 24, 29, 34}
 local reachedStopValue = false
 
--- Триггер-значения для обычных кокосов
-local THROW_VALUES = {16, 22, 28}
+-- Триггер-значения для броска кокоса (отсортированы по возрастанию!)
+local THROW_VALUES = {0, 16, 33}
 local thrownAtValue = {}
 
 local function isStopValue(v)
@@ -39,15 +42,8 @@ local function isStopValue(v)
     return false
 end
 
-local function isThrowValue(v)
-    for _, tv in ipairs(THROW_VALUES) do
-        if v == tv then return true end
-    end
-    return false
-end
-
 -- ================================================
--- Интерфейс (компактный)
+-- Интерфейс
 -- ================================================
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ComboCounter_" .. ACCOUNT_ID
@@ -173,8 +169,15 @@ function SpawnCoconut(isCombo)
     end
 end
 
-function TryThrowCoconut()
+-- ================================================
+-- Бросок с атомарной защитой:
+-- 1) per-value lock — один кокос на каждое триггерное значение за цикл,
+-- 2) глобальный кулдаун 10 сек (= серверный кулдаун броска кокоса).
+-- ================================================
+local function throwAt(v)
+    if thrownAtValue[v] then return false end
     if tick() - lastCoconutThrow < COCONUT_COOLDOWN then return false end
+    thrownAtValue[v] = true  -- флаг ДО спавна (атомарно, без yield между)
     SpawnCoconut(false)
     return true
 end
@@ -191,7 +194,7 @@ function IsComboCoconutPresent()
 end
 
 -- ================================================
--- Мониторинг комбо (оригинальная логика: исчезновение частицы)
+-- Мониторинг комбо
 -- ================================================
 spawn(function()
     while true do
@@ -259,7 +262,6 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                     EquipPorcelain()
                 end
 
-                -- Стоп-флаг (для отображения и фоллбэк-логики)
                 if value >= 0 and value <= 34 then
                     if isStopValue(value) then
                         if not reachedStopValue then
@@ -269,10 +271,15 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                     end
                 end
 
-                -- ====== ОБЫЧНЫЕ КОКОСЫ: только на 16, 22, 28 ======
-                if isThrowValue(value) and not thrownAtValue[value] then
-                    thrownAtValue[value] = true
-                    TryThrowCoconut()
+                -- ====== ОБЫЧНЫЕ КОКОСЫ: 16, 22, 28 с догоном пропущенных ======
+                -- value >= tv покрывает случай, когда канистра (Inspire) прокнула
+                -- и value перепрыгнуло через триггер: 15 → 20 → нам пришёл апдейт 20,
+                -- а 16 ещё не закрыто — кидаем.
+                -- break — кидаем не больше одного за тик (остальные в кулдауне 10 сек).
+                for _, tv in ipairs(THROW_VALUES) do
+                    if value >= tv and not thrownAtValue[tv] then
+                        if throwAt(tv) then break end
+                    end
                 end
 
                 if value == 39 and comboCounter == ACCOUNT_ID and not spawnTimer then
@@ -287,14 +294,19 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
     end
 end)
 
--- Фоновый кокосо-кидатель: добивает 16/22/28 если апдейт пропустился
+-- Фоновый догон: если value уже прошло триггер, но кулдаун не давал кинуть —
+-- пробуем ещё раз каждые 0.5 сек. Без этого один из 16/22/28 может потеряться,
+-- если value быстро прошло через все три раньше окончания кулдауна.
 spawn(function()
     while true do
-        if isThrowValue(lastValue) and not thrownAtValue[lastValue] then
-            thrownAtValue[lastValue] = true
-            TryThrowCoconut()
+        if lastValue >= 0 and lastValue <= 34 then
+            for _, tv in ipairs(THROW_VALUES) do
+                if lastValue >= tv and not thrownAtValue[tv] then
+                    if throwAt(tv) then break end
+                end
+            end
         end
-        task.wait(1)
+        task.wait(0.5)
     end
 end)
 
@@ -323,6 +335,7 @@ getgenv().CC = {
         reachedStopValue = false
         coconutActive = false
         thrownAtValue = {}
+        lastCoconutThrow = 0
         if spawnTimer then task.cancel(spawnTimer) spawnTimer = nil end
         updateCounterDisplay()
         log("[ACC " .. ACCOUNT_ID .. "] Full reset")
