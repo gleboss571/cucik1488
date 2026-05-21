@@ -18,6 +18,7 @@ local hasCanister = false
 local hasPorcelain = false
 local spawnTimer = nil
 local comboCounter = 0
+local skipUsed = false  -- Флаг: SKIP уже увеличил счётчик, пропустить следующий инкремент
 
 -- Стоп-значения: кидаем кокосы пока не достигнем одного из них
 local STOP_VALUES = {4, 9, 14, 19, 24, 29, 34}
@@ -224,12 +225,19 @@ spawn(function()
             
         elseif not present and coconutActive then
             coconutActive = false
-            comboCounter = comboCounter + 1
-            if comboCounter > TOTAL_ACCOUNTS then 
-                comboCounter = 1 
+            
+            -- Если SKIP уже сдвинул счётчик — не увеличиваем повторно
+            if skipUsed then
+                skipUsed = false
+                print("📊 [ACC " .. ACCOUNT_ID .. "] Комбо собрано (SKIP, счётчик уже сдвинут: " .. comboCounter .. ")")
+            else
+                comboCounter = comboCounter + 1
+                if comboCounter > TOTAL_ACCOUNTS then 
+                    comboCounter = 1 
+                end
+                print("📊 [ACC " .. ACCOUNT_ID .. "] Очередь: " .. comboCounter)
             end
             updateCounterDisplay()
-            print("📊 [ACC " .. ACCOUNT_ID .. "] Очередь: " .. comboCounter)
         end
         
         task.wait(0.5)
@@ -269,10 +277,17 @@ skipBtn.MouseButton1Click:Connect(function()
         spawnTimer = nil
     end
     
-    -- НЕ трогаем comboCounter!
-    -- Когда комбо соберут — ВСЕ аккаунты увеличат счётчик одинаково
-    -- Так очередь сама перейдёт к следующему
-    print("⏭️ [ACC 1] SKIP! Кидаю комбо, очередь сдвинется автоматически")
+    -- Сразу сдвигаем очередь на ACC 1
+    -- ACC 2/3 сдвинут сами когда увидят что комбо собрано
+    -- skipUsed = true чтобы не сдвинуть дважды при детекте
+    comboCounter = comboCounter + 1
+    if comboCounter > TOTAL_ACCOUNTS then
+        comboCounter = 1
+    end
+    skipUsed = true
+    updateCounterDisplay()
+    
+    print("⏭️ [ACC 1] SKIP! Комбо сейчас, очередь → ACC " .. comboCounter)
     SpawnCoconut(true)
 end)
 
@@ -376,8 +391,12 @@ getgenv().CC = {
     
     Skip = function()
         if lastValue == 39 then
-            print("⏭️ [ACC " .. ACCOUNT_ID .. "] Ручной SKIP!")
             if spawnTimer then task.cancel(spawnTimer) spawnTimer = nil end
+            comboCounter = comboCounter + 1
+            if comboCounter > TOTAL_ACCOUNTS then comboCounter = 1 end
+            skipUsed = true
+            updateCounterDisplay()
+            print("⏭️ [ACC " .. ACCOUNT_ID .. "] SKIP! Очередь → " .. comboCounter)
             SpawnCoconut(true)
         else
             print("⚠️ Value не 39!")
