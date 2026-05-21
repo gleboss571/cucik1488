@@ -1,46 +1,28 @@
 -- ================================================
--- Combo Coconut Script
+-- Combo Coconut Script (debug GUI)
 -- ================================================
-local ACCOUNT_ID = 2
+local ACCOUNT_ID = 2     -- поменяй на 2 или 3
 local TOTAL_ACCOUNTS = 3
-local LOGS = false
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
-local Player = Players.LocalPlayer
-
-local function log(...)
-    if LOGS then print(...) end
-end
 
 local lastValue = -1
 local coconutActive = false
-local currentAccessory = "none"
 local hasCanister = false
 local hasPorcelain = false
 local spawnTimer = nil
 local comboCounter = 0
-
--- Реальный кулдаун ручного броска кокоса в Bee Swarm = 10 секунд.
--- Не пытаемся вызывать чаще, иначе сервер просто отвергнет.
-local lastCoconutThrow = 0
-local COCONUT_COOLDOWN = 10.0
-
--- Стоп-значения (для отображения "STOP")
-local STOP_VALUES = {4, 9, 14, 19, 24, 29, 34}
-local reachedStopValue = false
-
--- Триггер-значения для броска кокоса (отсортированы по возрастанию!)
-local THROW_VALUES = {0, 16, 33}
 local thrownAtValue = {}
 
-local function isStopValue(v)
-    for _, sv in ipairs(STOP_VALUES) do
-        if v == sv then return true end
-    end
-    return false
-end
+-- Отладочные счётчики
+local updateCount = 0       -- сколько раз пришёл апдейт от сервера
+local throwCount = 0        -- сколько раз мы реально кинули кокос
+local comboThrowCount = 0   -- сколько раз кинули комбо
+local lastEvent = "-"       -- последнее значимое событие
+
+local THROW_VALUES = {0, 16, 33}
 
 -- ================================================
 -- Интерфейс
@@ -51,8 +33,8 @@ screenGui.Parent = game:GetService("CoreGui")
 screenGui.ResetOnSpawn = false
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 160, 0, 80)
-frame.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID - 1) * 90)
+frame.Size = UDim2.new(0, 180, 0, 130)
+frame.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID - 1) * 140)
 frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 frame.BackgroundTransparency = 0.3
 frame.BorderSizePixel = 0
@@ -64,122 +46,103 @@ local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 8)
 corner.Parent = frame
 
-local label = Instance.new("TextLabel")
-label.Size = UDim2.new(1, 0, 0, 28)
-label.Position = UDim2.new(0, 0, 0, 2)
-label.BackgroundTransparency = 1
-label.Text = "0"
-label.TextColor3 = Color3.fromRGB(255, 200, 100)
-label.Font = Enum.Font.GothamBold
-label.TextSize = 22
-label.Parent = frame
+local function makeLabel(y, h, size, color)
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(1, -6, 0, h)
+    l.Position = UDim2.new(0, 3, 0, y)
+    l.BackgroundTransparency = 1
+    l.TextColor3 = color
+    l.Font = Enum.Font.Gotham
+    l.TextSize = size
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.Text = ""
+    l.Parent = frame
+    return l
+end
 
-local idLabel = Instance.new("TextLabel")
-idLabel.Size = UDim2.new(1, -6, 0, 16)
-idLabel.Position = UDim2.new(0, 3, 0, 30)
-idLabel.BackgroundTransparency = 1
-idLabel.Text = "ACC #" .. ACCOUNT_ID
-idLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-idLabel.Font = Enum.Font.Gotham
-idLabel.TextSize = 12
-idLabel.Parent = frame
+local bigLabel = makeLabel(2, 28, 22, Color3.fromRGB(255, 200, 100))
+bigLabel.Font = Enum.Font.GothamBold
+bigLabel.TextXAlignment = Enum.TextXAlignment.Center
 
-local valueLabel = Instance.new("TextLabel")
-valueLabel.Size = UDim2.new(1, -6, 0, 14)
-valueLabel.Position = UDim2.new(0, 3, 0, 46)
-valueLabel.BackgroundTransparency = 1
-valueLabel.Text = "value: -"
-valueLabel.TextColor3 = Color3.fromRGB(120, 120, 140)
-valueLabel.Font = Enum.Font.Gotham
-valueLabel.TextSize = 11
-valueLabel.Parent = frame
+local idLabel    = makeLabel(30, 14, 11, Color3.fromRGB(180, 180, 180))
+local valueLabel = makeLabel(46, 14, 11, Color3.fromRGB(140, 200, 255))
+local throwLabel = makeLabel(60, 14, 11, Color3.fromRGB(140, 200, 255))
+local equipLabel = makeLabel(74, 14, 11, Color3.fromRGB(140, 200, 255))
+local timerLabel = makeLabel(88, 14, 11, Color3.fromRGB(140, 200, 255))
+local eventLabel = makeLabel(102, 14, 11, Color3.fromRGB(200, 180, 100))
+local flagsLabel = makeLabel(116, 14, 11, Color3.fromRGB(160, 160, 160))
 
-local stopLabel = Instance.new("TextLabel")
-stopLabel.Size = UDim2.new(1, -6, 0, 14)
-stopLabel.Position = UDim2.new(0, 3, 0, 60)
-stopLabel.BackgroundTransparency = 1
-stopLabel.Text = ""
-stopLabel.TextColor3 = Color3.fromRGB(80, 180, 80)
-stopLabel.Font = Enum.Font.Gotham
-stopLabel.TextSize = 11
-stopLabel.Parent = frame
+local function flagsString()
+    local parts = {}
+    for _, tv in ipairs(THROW_VALUES) do
+        if thrownAtValue[tv] then
+            table.insert(parts, tostring(tv) .. "*")
+        else
+            table.insert(parts, tostring(tv))
+        end
+    end
+    return table.concat(parts, ",")
+end
 
 local function updateCounterDisplay()
-    label.Text = tostring(comboCounter)
-    valueLabel.Text = "value: " .. tostring(lastValue)
-
-    if reachedStopValue then
-        stopLabel.Text = "STOP (wait 0)"
-        stopLabel.TextColor3 = Color3.fromRGB(200, 150, 50)
-    else
-        stopLabel.Text = "throwing"
-        stopLabel.TextColor3 = Color3.fromRGB(80, 180, 80)
-    end
+    bigLabel.Text = tostring(comboCounter)
 
     if comboCounter == ACCOUNT_ID then
         frame.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
-        label.TextColor3 = Color3.fromRGB(100, 255, 100)
-        idLabel.Text = ">>> MY TURN <<<"
+        bigLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+        idLabel.Text = ">>> MY TURN <<<  ACC#" .. ACCOUNT_ID
     else
         frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-        label.TextColor3 = Color3.fromRGB(255, 200, 100)
+        bigLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
         idLabel.Text = "ACC #" .. ACCOUNT_ID .. " (wait " .. comboCounter .. ")"
     end
+
+    valueLabel.Text = "value: " .. tostring(lastValue) .. "  upd: " .. updateCount
+    throwLabel.Text = "throws: " .. throwCount .. "   combos: " .. comboThrowCount
+    equipLabel.Text = "equip: " .. (hasPorcelain and "PORCELAIN" or (hasCanister and "canister" or "-"))
+    timerLabel.Text = "timer: " .. (spawnTimer ~= nil and "RUNNING" or "-")
+    eventLabel.Text = "last: " .. lastEvent
+    flagsLabel.Text = "flags: " .. flagsString()
 end
 
 -- ================================================
--- Функции экипировки
+-- Экипировка
 -- ================================================
 function EquipCanister()
     if hasCanister then return end
-    local args = {
-        "Equip",
-        { Category = "Accessory", Type = "Coconut Canister" }
-    }
-    game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("ItemPackageEvent"):InvokeServer(unpack(args))
-    currentAccessory = "canister"
+    local args = {"Equip", { Category = "Accessory", Type = "Coconut Canister" }}
+    ReplicatedStorage:WaitForChild("Events"):WaitForChild("ItemPackageEvent"):InvokeServer(unpack(args))
     hasCanister = true
     hasPorcelain = false
+    lastEvent = "equipped canister"
 end
 
 function EquipPorcelain()
     if hasPorcelain then return end
-    local args = {
-        "Equip",
-        { Category = "Accessory", Type = "Porcelain Port-O-Hive" }
-    }
-    game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("ItemPackageEvent"):InvokeServer(unpack(args))
-    currentAccessory = "porcelain"
+    local args = {"Equip", { Category = "Accessory", Type = "Porcelain Port-O-Hive" }}
+    ReplicatedStorage:WaitForChild("Events"):WaitForChild("ItemPackageEvent"):InvokeServer(unpack(args))
     hasPorcelain = true
     hasCanister = false
+    lastEvent = "equipped porcelain"
 end
 
+-- ================================================
+-- Бросок кокоса
+-- ================================================
 function SpawnCoconut(isCombo)
     local args = { { Name = "Coconut" } }
-    game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("PlayerActivesCommand"):FireServer(unpack(args))
+    ReplicatedStorage:WaitForChild("Events"):WaitForChild("PlayerActivesCommand"):FireServer(unpack(args))
     if isCombo then
-        log("[ACC " .. ACCOUNT_ID .. "] COMBO COCONUT!")
+        comboThrowCount = comboThrowCount + 1
+        lastEvent = "COMBO thrown!"
         task.spawn(function()
             task.wait(11)
             SpawnCoconut(false)
         end)
     else
-        lastCoconutThrow = tick()
-        log("[ACC " .. ACCOUNT_ID .. "] coconut (value=" .. lastValue .. ")")
+        throwCount = throwCount + 1
+        lastEvent = "coconut at v=" .. lastValue
     end
-end
-
--- ================================================
--- Бросок с атомарной защитой:
--- 1) per-value lock — один кокос на каждое триггерное значение за цикл,
--- 2) глобальный кулдаун 10 сек (= серверный кулдаун броска кокоса).
--- ================================================
-local function throwAt(v)
-    if thrownAtValue[v] then return false end
-    if tick() - lastCoconutThrow < COCONUT_COOLDOWN then return false end
-    thrownAtValue[v] = true  -- флаг ДО спавна (атомарно, без yield между)
-    SpawnCoconut(false)
-    return true
 end
 
 function IsComboCoconutPresent()
@@ -194,42 +157,33 @@ function IsComboCoconutPresent()
 end
 
 -- ================================================
--- Мониторинг комбо
+-- Очередь по детекту частицы
 -- ================================================
 spawn(function()
     while true do
         local present = IsComboCoconutPresent()
-
         if present and not coconutActive then
             coconutActive = true
-            log("[ACC " .. ACCOUNT_ID .. "] Combo appeared")
-
+            lastEvent = "combo appeared"
         elseif not present and coconutActive then
             coconutActive = false
             comboCounter = comboCounter + 1
-            if comboCounter > TOTAL_ACCOUNTS then
-                comboCounter = 1
-            end
-            log("[ACC " .. ACCOUNT_ID .. "] Queue: " .. comboCounter)
+            if comboCounter > TOTAL_ACCOUNTS then comboCounter = 1 end
+            lastEvent = "queue -> " .. comboCounter
             updateCounterDisplay()
         end
-
         task.wait(0.5)
     end
 end)
 
 -- ================================================
--- Таймер комбо (13 сек)
+-- Таймер комбо 13 сек
 -- ================================================
 local function startSpawnTimer()
-    if spawnTimer then
-        task.cancel(spawnTimer)
-        spawnTimer = nil
-    end
+    if spawnTimer then task.cancel(spawnTimer) spawnTimer = nil end
     spawnTimer = task.spawn(function()
         task.wait(13)
         if lastValue == 39 and comboCounter == ACCOUNT_ID then
-            log("[ACC " .. ACCOUNT_ID .. "] Throwing COMBO by timer!")
             SpawnCoconut(true)
         end
         spawnTimer = nil
@@ -237,17 +191,16 @@ local function startSpawnTimer()
 end
 
 -- ================================================
--- Слушатель PlayerAbilityEvent
+-- Главный слушатель
 -- ================================================
 require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(data)
     for tag, info in pairs(data) do
         if tag == "Combo Coconuts" or tag == "ComboCoconuts" then
             if info.Action == "Update" then
+                updateCount = updateCount + 1
                 local value = info.Values and info.Values[1] or 0
 
-                -- Сброс цикла: value=0 ИЛИ value упало (комбо собрано без захода на 0)
-                if value == 0 or (lastValue >= 0 and value < lastValue) then
-                    reachedStopValue = false
+                if value == 0 then
                     thrownAtValue = {}
                 end
 
@@ -256,39 +209,25 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                     spawnTimer = nil
                 end
 
-                if value >= 0 and value <= 34 then
+                if value <= 34 then
                     EquipCanister()
-                end
-                if value >= 35 and value <= 39 then
+                else
                     EquipPorcelain()
                 end
 
-                if value >= 0 and value <= 34 then
-                    if isStopValue(value) then
-                        if not reachedStopValue then
-                            reachedStopValue = true
-                            log("[ACC " .. ACCOUNT_ID .. "] Reached stop: " .. value)
-                        end
-                    end
-                end
-
-                -- ====== ОБЫЧНЫЕ КОКОСЫ ======
-                -- ЖЁСТКОЕ правило: кидаем ТОЛЬКО когда value РОВНО равно триггеру.
-                -- Если value перепрыгнуло (Inspire прокнул) — пропускаем этот триггер.
-                -- Лучше потерять 1 бросок, чем зайти за 34 и сломать цикл.
-                -- value <= 34 — двойная защита: после 34 никаких бросков вообще.
                 if value <= 34 then
                     for _, tv in ipairs(THROW_VALUES) do
                         if value == tv and not thrownAtValue[tv] then
-                            throwAt(tv)
+                            thrownAtValue[tv] = true
+                            SpawnCoconut(false)
                             break
                         end
                     end
                 end
 
                 if value == 39 and comboCounter == ACCOUNT_ID and not spawnTimer then
-                    log("[ACC " .. ACCOUNT_ID .. "] My turn! Timer 13 sec...")
                     startSpawnTimer()
+                    lastEvent = "timer started"
                 end
 
                 lastValue = value
@@ -308,37 +247,32 @@ spawn(function()
     end
 end)
 
+-- Регулярное обновление дисплея (раз в секунду)
+spawn(function()
+    while true do
+        updateCounterDisplay()
+        task.wait(1)
+    end
+end)
+
 -- ================================================
 -- Команды
 -- ================================================
 getgenv().CC = {
-    Set = function(n)
-        comboCounter = n
-        updateCounterDisplay()
-        log("[ACC " .. ACCOUNT_ID .. "] Counter: " .. n)
-    end,
-
+    Set = function(n) comboCounter = n; updateCounterDisplay() end,
     Reset = function()
         comboCounter = 0
-        reachedStopValue = false
         coconutActive = false
         thrownAtValue = {}
-        lastCoconutThrow = 0
+        throwCount = 0
+        comboThrowCount = 0
+        updateCount = 0
+        lastEvent = "reset"
         if spawnTimer then task.cancel(spawnTimer) spawnTimer = nil end
         updateCounterDisplay()
-        log("[ACC " .. ACCOUNT_ID .. "] Full reset")
     end,
-
-    ResetStop = function()
-        reachedStopValue = false
-        updateCounterDisplay()
-        log("[ACC " .. ACCOUNT_ID .. "] Stop flag reset")
-    end,
-
-    SetLogs = function(v)
-        LOGS = v and true or false
-    end,
+    Throw = function() SpawnCoconut(false) end,
 }
 
 updateCounterDisplay()
-print("[ACC " .. ACCOUNT_ID .. "] Combo Coconut Script loaded")
+lastEvent = "script loaded"
