@@ -28,9 +28,20 @@ local COCONUT_COOLDOWN = 1.0
 local STOP_VALUES = {4, 9, 14, 19, 24, 29, 34}
 local reachedStopValue = false
 
+-- Триггер-значения для обычных кокосов
+local THROW_VALUES = {16, 22, 28}
+local thrownAtValue = {}
+
 local function isStopValue(v)
     for _, sv in ipairs(STOP_VALUES) do
         if v == sv then return true end
+    end
+    return false
+end
+
+local function isThrowValue(v)
+    for _, tv in ipairs(THROW_VALUES) do
+        if v == tv then return true end
     end
     return false
 end
@@ -205,7 +216,7 @@ spawn(function()
 end)
 
 -- ================================================
--- Таймер комбо (12 сек)
+-- Таймер комбо (13 сек)
 -- ================================================
 local function startSpawnTimer()
     if spawnTimer then
@@ -213,7 +224,7 @@ local function startSpawnTimer()
         spawnTimer = nil
     end
     spawnTimer = task.spawn(function()
-        task.wait(12)
+        task.wait(13)
         if lastValue == 39 and comboCounter == ACCOUNT_ID then
             log("[ACC " .. ACCOUNT_ID .. "] Throwing COMBO by timer!")
             SpawnCoconut(true)
@@ -233,6 +244,7 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
 
                 if value == 0 then
                     reachedStopValue = false
+                    thrownAtValue = {}
                 end
 
                 if value < 39 and spawnTimer then
@@ -247,19 +259,24 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                     EquipPorcelain()
                 end
 
+                -- Стоп-флаг (для отображения и фоллбэк-логики)
                 if value >= 0 and value <= 34 then
                     if isStopValue(value) then
                         if not reachedStopValue then
                             reachedStopValue = true
                             log("[ACC " .. ACCOUNT_ID .. "] Reached stop: " .. value)
                         end
-                    elseif not reachedStopValue then
-                        TryThrowCoconut()
                     end
                 end
 
+                -- ====== ОБЫЧНЫЕ КОКОСЫ: только на 16, 22, 28 ======
+                if isThrowValue(value) and not thrownAtValue[value] then
+                    thrownAtValue[value] = true
+                    TryThrowCoconut()
+                end
+
                 if value == 39 and comboCounter == ACCOUNT_ID and not spawnTimer then
-                    log("[ACC " .. ACCOUNT_ID .. "] My turn! Timer 12 sec...")
+                    log("[ACC " .. ACCOUNT_ID .. "] My turn! Timer 13 sec...")
                     startSpawnTimer()
                 end
 
@@ -270,12 +287,11 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
     end
 end)
 
--- Фоновый кокосо-кидатель (раз в 1 сек)
+-- Фоновый кокосо-кидатель: добивает 16/22/28 если апдейт пропустился
 spawn(function()
     while true do
-        if lastValue >= 0 and lastValue <= 34
-           and not isStopValue(lastValue)
-           and not reachedStopValue then
+        if isThrowValue(lastValue) and not thrownAtValue[lastValue] then
+            thrownAtValue[lastValue] = true
             TryThrowCoconut()
         end
         task.wait(1)
@@ -306,6 +322,8 @@ getgenv().CC = {
         comboCounter = 0
         reachedStopValue = false
         coconutActive = false
+        thrownAtValue = {}
+        if spawnTimer then task.cancel(spawnTimer) spawnTimer = nil end
         updateCounterDisplay()
         log("[ACC " .. ACCOUNT_ID .. "] Full reset")
     end,
