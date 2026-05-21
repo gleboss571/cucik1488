@@ -1,5 +1,5 @@
 -- ================================================
--- Combo Coconut Script v3
+-- Combo Coconut Script v4
 -- Поменяй ACCOUNT_ID на 1, 2, 3 или 4
 -- ================================================
 
@@ -22,6 +22,9 @@ local comboCounter = 0
 -- Стоп-значения: кидаем кокосы пока не достигнем одного из них
 local STOP_VALUES = {4, 9, 14, 19, 24, 29, 34}
 
+-- Флаг: достигли ли мы стоп-значения (сбрасывается при value = 0)
+local reachedStopValue = false
+
 local function isStopValue(v)
     for _, sv in ipairs(STOP_VALUES) do
         if v == sv then return true end
@@ -38,8 +41,8 @@ screenGui.Parent = game:GetService("CoreGui")
 screenGui.ResetOnSpawn = false
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 140, 0, 90)
-frame.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID - 1) * 100)
+frame.Size = UDim2.new(0, 140, 0, 105)
+frame.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID - 1) * 115)
 frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 frame.BackgroundTransparency = 0.3
 frame.BorderSizePixel = 0
@@ -81,10 +84,20 @@ valueLabel.Font = Enum.Font.Gotham
 valueLabel.TextSize = 10
 valueLabel.Parent = frame
 
+local stopLabel = Instance.new("TextLabel")
+stopLabel.Size = UDim2.new(1, 0, 0, 14)
+stopLabel.Position = UDim2.new(0, 0, 0, 58)
+stopLabel.BackgroundTransparency = 1
+stopLabel.Text = ""
+stopLabel.TextColor3 = Color3.fromRGB(80, 180, 80)
+stopLabel.Font = Enum.Font.Gotham
+stopLabel.TextSize = 9
+stopLabel.Parent = frame
+
 -- Кнопка SKIP (только для ACC 1)
 local skipBtn = Instance.new("TextButton")
 skipBtn.Size = UDim2.new(1, -16, 0, 26)
-skipBtn.Position = UDim2.new(0, 8, 0, 58)
+skipBtn.Position = UDim2.new(0, 8, 0, 74)
 skipBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
 skipBtn.BorderSizePixel = 0
 skipBtn.Text = "⏭️ SKIP & COMBO"
@@ -92,7 +105,7 @@ skipBtn.TextColor3 = Color3.fromRGB(150, 150, 170)
 skipBtn.TextSize = 10
 skipBtn.Font = Enum.Font.GothamBold
 skipBtn.AutoButtonColor = true
-skipBtn.Visible = (ACCOUNT_ID == 1)  -- Только для ACC 1
+skipBtn.Visible = (ACCOUNT_ID == 1)
 skipBtn.Parent = frame
 
 local skipCorner = Instance.new("UICorner")
@@ -104,7 +117,7 @@ local function updateSkipButton()
     if lastValue == 39 then
         skipBtn.BackgroundColor3 = Color3.fromRGB(180, 80, 80)
         skipBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        skipBtn.Text = "⏭️ SKIP & COMBO"
+        skipBtn.Text = "⏭️ SKIP → ACC 2"
     else
         skipBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
         skipBtn.TextColor3 = Color3.fromRGB(80, 80, 90)
@@ -115,6 +128,15 @@ end
 local function updateCounterDisplay()
     label.Text = tostring(comboCounter)
     valueLabel.Text = "value: " .. tostring(lastValue)
+    
+    if reachedStopValue then
+        stopLabel.Text = "⏹️ СТОП (ждём 0)"
+        stopLabel.TextColor3 = Color3.fromRGB(200, 150, 50)
+    else
+        stopLabel.Text = "🥥 кидаю до стопа"
+        stopLabel.TextColor3 = Color3.fromRGB(80, 180, 80)
+    end
+    
     if comboCounter == ACCOUNT_ID then
         frame.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
         label.TextColor3 = Color3.fromRGB(100, 255, 100)
@@ -174,7 +196,7 @@ function SpawnCoconut(isCombo)
             SpawnCoconut(false)
         end)
     else
-        print("🥥 [ACC " .. ACCOUNT_ID .. "] обычный кокос")
+        print("🥥 [ACC " .. ACCOUNT_ID .. "] кокос (value=" .. lastValue .. ")")
     end
 end
 
@@ -207,7 +229,7 @@ spawn(function()
                 comboCounter = 1 
             end
             updateCounterDisplay()
-            print("📊 [ACC " .. ACCOUNT_ID .. "] Счётчик: " .. comboCounter)
+            print("📊 [ACC " .. ACCOUNT_ID .. "] Очередь: " .. comboCounter)
         end
         
         task.wait(0.5)
@@ -223,7 +245,7 @@ local function startSpawnTimer()
         spawnTimer = nil
     end
     spawnTimer = task.spawn(function()
-        task.wait(12)  -- 12 секунд
+        task.wait(12)
         if lastValue == 39 and comboCounter == ACCOUNT_ID then
             print("🎯 [ACC " .. ACCOUNT_ID .. "] Кидаю КОМБО по таймеру!")
             SpawnCoconut(true)
@@ -233,7 +255,7 @@ local function startSpawnTimer()
 end
 
 -- ================================================
--- Кнопка SKIP (ACC 1): пропустить очередь и кинуть комбо
+-- Кнопка SKIP (ACC 1): кинуть комбо, очередь → ACC 2
 -- ================================================
 skipBtn.MouseButton1Click:Connect(function()
     if ACCOUNT_ID ~= 1 then return end
@@ -242,17 +264,17 @@ skipBtn.MouseButton1Click:Connect(function()
         return
     end
     
-    -- Отменяем текущий таймер если есть
     if spawnTimer then
         task.cancel(spawnTimer)
         spawnTimer = nil
     end
     
-    print("⏭️ [ACC 1] SKIP! Кидаю комбо вне очереди")
-    SpawnCoconut(true)
+    -- Устанавливаем счётчик = 1, чтобы после сбора комбо стало 2 (ACC 2)
+    comboCounter = 1
+    updateCounterDisplay()
     
-    -- Очередь сдвигается когда комбо соберут (comboCounter увеличится)
-    -- Так что после сбора комбо очередь перейдёт к следующему
+    print("⏭️ [ACC 1] SKIP! Комбо сейчас, потом очередь → ACC 2")
+    SpawnCoconut(true)
 end)
 
 -- ================================================
@@ -264,6 +286,12 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
             if info.Action == "Update" then
                 local value = info.Values and info.Values[1] or 0
                 
+                -- ====== СБРОС ЦИКЛА при value = 0 ======
+                if value == 0 then
+                    reachedStopValue = false
+                    print("🔄 [ACC " .. ACCOUNT_ID .. "] Цикл сброшен (value=0)")
+                end
+                
                 -- Отменяем таймер если value упал
                 if value < 39 and spawnTimer then
                     task.cancel(spawnTimer)
@@ -271,20 +299,28 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                 end
 
                 -- ====== ЭКИПИРОВКА ======
-                -- 0-34: канистра
                 if value >= 0 and value <= 34 then
                     EquipCanister()
                 end
                 
-                -- 35-39: фарфор
                 if value >= 35 and value <= 39 then
                     EquipPorcelain()
                 end
 
                 -- ====== ОБЫЧНЫЕ КОКОСЫ ======
-                -- Кидаем пока не достигнем стоп-значения (4,9,14,19,24,29,34)
-                if value >= 0 and value <= 34 and not isStopValue(value) then
-                    SpawnCoconut(false)
+                -- Кидаем пока не достигнем стоп-значения
+                -- После достижения — ждём пока value станет 0
+                if value >= 0 and value <= 34 then
+                    if isStopValue(value) then
+                        -- Достигли стопа — ставим флаг, НЕ кидаем
+                        if not reachedStopValue then
+                            reachedStopValue = true
+                            print("⏹️ [ACC " .. ACCOUNT_ID .. "] Достиг стопа: " .. value)
+                        end
+                    elseif not reachedStopValue then
+                        -- Ещё не достигли — кидаем
+                        SpawnCoconut(false)
+                    end
                 end
 
                 -- ====== КОМБО ТАЙМЕР ======
@@ -322,8 +358,9 @@ getgenv().CC = {
     
     Reset = function()
         comboCounter = 0
+        reachedStopValue = false
         updateCounterDisplay()
-        print("🔧 [ACC " .. ACCOUNT_ID .. "] Сброс на 0")
+        print("🔧 [ACC " .. ACCOUNT_ID .. "] Полный сброс")
     end,
     
     Status = function()
@@ -332,6 +369,7 @@ getgenv().CC = {
         print("   Счётчик: " .. comboCounter)
         print("   Моя очередь: " .. tostring(comboCounter == ACCOUNT_ID))
         print("   Value: " .. lastValue)
+        print("   Достиг стопа: " .. tostring(reachedStopValue))
         print("   Комбо: " .. tostring(coconutActive))
         print("   Таймер: " .. tostring(spawnTimer ~= nil))
         print("========================================")
@@ -341,10 +379,17 @@ getgenv().CC = {
         if lastValue == 39 then
             print("⏭️ [ACC " .. ACCOUNT_ID .. "] Ручной SKIP!")
             if spawnTimer then task.cancel(spawnTimer) spawnTimer = nil end
+            comboCounter = ACCOUNT_ID
             SpawnCoconut(true)
         else
             print("⚠️ Value не 39!")
         end
+    end,
+    
+    ResetStop = function()
+        reachedStopValue = false
+        updateCounterDisplay()
+        print("🔧 [ACC " .. ACCOUNT_ID .. "] Стоп-флаг сброшен")
     end,
 }
 
@@ -353,18 +398,23 @@ getgenv().CC = {
 -- ================================================
 updateCounterDisplay()
 print("========================================")
-print("✅ [ACC " .. ACCOUNT_ID .. "] Combo Coconut v3")
+print("✅ [ACC " .. ACCOUNT_ID .. "] Combo Coconut v4")
 print("")
-print("📋 Логика:")
-print("   • 0-34: канистра + кокосы до 4/9/14/19/24/29/34")
+print("📋 Логика кокосов:")
+print("   • Кидает до стопа (4/9/14/19/24/29/34)")
+print("   • После стопа — ждёт")
+print("   • value=0 → цикл сбрасывается")
+print("")
+print("📋 Экипировка:")
+print("   • 0-34: канистра")
 print("   • 35-39: фарфор")
-print("   • 39 + очередь: таймер 12 сек → комбо")
 print("")
+print("📋 Комбо:")
+print("   • 39 + очередь → 12 сек → комбо")
 if ACCOUNT_ID == 1 then
-    print("🔴 Кнопка SKIP: кинуть комбо вне очереди (при 39)")
+    print("")
+    print("🔴 Кнопка SKIP: комбо сразу → очередь ACC 2")
 end
 print("")
-print("📊 CC.Set(N) — установить счётчик")
-print("📊 CC.Status() — статус")
-print("📊 CC.Skip() — ручной комбо")
+print("📊 CC.Set(N) / CC.Reset() / CC.Status()")
 print("========================================")
