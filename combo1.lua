@@ -16,7 +16,7 @@ local hasPorcelain = false
 local spawnTimer = nil
 local comboCounter = 0
 
-local COCONUTS_PER_CYCLE = 4
+local COCONUTS_PER_CYCLE = 3
 local COCONUT_INTERVAL = 10
 local INITIAL_DELAY = 10
 
