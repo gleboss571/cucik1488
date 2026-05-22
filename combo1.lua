@@ -1,3 +1,6 @@
+-- ================================================
+-- Combo Coconut Script
+-- ================================================
 local ACCOUNT_ID = 1     -- поменяй на 2 или 3
 local TOTAL_ACCOUNTS = 3
 
@@ -6,24 +9,34 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local lastValue = -1
+local lastValueChangeTime = tick()
 local coconutActive = false
 local hasCanister = false
 local hasPorcelain = false
-local comboCounter = 0
 local spawnTimer = nil
-local cycleId = 0
-local totalThrows = 0
-local debugStr = "init"  -- покажет последнее событие
+local comboCounter = 0
 
+local COCONUTS_PER_CYCLE = 4
+local COCONUT_INTERVAL = 10
+local INITIAL_DELAY = 10
+
+local throwLoop = nil
+local cycleStarted = false
+local thrownThisCycle = 0
+local totalThrows = 0
+local firstUpdateReceived = false
+
+-- ================================================
 -- Интерфейс
+-- ================================================
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ComboCounter_" .. ACCOUNT_ID
 screenGui.Parent = game:GetService("CoreGui")
 screenGui.ResetOnSpawn = false
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 150, 0, 78)
-frame.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID - 1) * 88)
+frame.Size = UDim2.new(0, 160, 0, 68)
+frame.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID - 1) * 78)
 frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 frame.BackgroundTransparency = 0.3
 frame.BorderSizePixel = 0
@@ -35,15 +48,15 @@ local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 8)
 corner.Parent = frame
 
-local label = Instance.new("TextLabel")
-label.Size = UDim2.new(1, 0, 0, 26)
-label.Position = UDim2.new(0, 0, 0, 2)
-label.BackgroundTransparency = 1
-label.Text = "0"
-label.TextColor3 = Color3.fromRGB(255, 200, 100)
-label.Font = Enum.Font.GothamBold
-label.TextSize = 22
-label.Parent = frame
+local bigLabel = Instance.new("TextLabel")
+bigLabel.Size = UDim2.new(1, 0, 0, 26)
+bigLabel.Position = UDim2.new(0, 0, 0, 2)
+bigLabel.BackgroundTransparency = 1
+bigLabel.Text = "0"
+bigLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+bigLabel.Font = Enum.Font.GothamBold
+bigLabel.TextSize = 22
+bigLabel.Parent = frame
 
 local idLabel = Instance.new("TextLabel")
 idLabel.Size = UDim2.new(1, -6, 0, 14)
@@ -57,7 +70,7 @@ idLabel.Parent = frame
 
 local infoLabel = Instance.new("TextLabel")
 infoLabel.Size = UDim2.new(1, -6, 0, 14)
-infoLabel.Position = UDim2.new(0, 3, 0, 44)
+infoLabel.Position = UDim2.new(0, 3, 0, 42)
 infoLabel.BackgroundTransparency = 1
 infoLabel.TextColor3 = Color3.fromRGB(140, 200, 255)
 infoLabel.Font = Enum.Font.Gotham
@@ -65,59 +78,62 @@ infoLabel.TextSize = 10
 infoLabel.TextXAlignment = Enum.TextXAlignment.Center
 infoLabel.Parent = frame
 
-local debugLabel = Instance.new("TextLabel")
-debugLabel.Size = UDim2.new(1, -6, 0, 14)
-debugLabel.Position = UDim2.new(0, 3, 0, 58)
-debugLabel.BackgroundTransparency = 1
-debugLabel.TextColor3 = Color3.fromRGB(200, 180, 100)
-debugLabel.Font = Enum.Font.Gotham
-debugLabel.TextSize = 10
-debugLabel.TextXAlignment = Enum.TextXAlignment.Center
-debugLabel.Parent = frame
+local cycleStatusLabel = Instance.new("TextLabel")
+cycleStatusLabel.Size = UDim2.new(1, -6, 0, 14)
+cycleStatusLabel.Position = UDim2.new(0, 3, 0, 54)
+cycleStatusLabel.BackgroundTransparency = 1
+cycleStatusLabel.TextColor3 = Color3.fromRGB(200, 180, 100)
+cycleStatusLabel.Font = Enum.Font.Gotham
+cycleStatusLabel.TextSize = 10
+cycleStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
+cycleStatusLabel.Parent = frame
 
 local function updateCounterDisplay()
-    label.Text = tostring(comboCounter)
+    bigLabel.Text = tostring(comboCounter)
+
     if comboCounter == ACCOUNT_ID then
         frame.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
-        label.TextColor3 = Color3.fromRGB(100, 255, 100)
+        bigLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
         idLabel.Text = ">>> MY TURN <<<"
     else
         frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-        label.TextColor3 = Color3.fromRGB(255, 200, 100)
+        bigLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
         idLabel.Text = "ACC #" .. ACCOUNT_ID .. " (wait " .. comboCounter .. ")"
     end
-    infoLabel.Text = "v:" .. lastValue .. " t:" .. totalThrows .. " c:" .. cycleId
-    debugLabel.Text = debugStr
+
+    local age = math.floor(tick() - lastValueChangeTime)
+    infoLabel.Text = "v: " .. tostring(lastValue) .. " (" .. age .. "s)  t:" .. totalThrows
+    cycleStatusLabel.Text = "cycle: " .. thrownThisCycle .. "/" .. COCONUTS_PER_CYCLE
+        .. (cycleStarted and " RUN" or "")
 end
 
+-- ================================================
+-- Экипировка
+-- ================================================
 function EquipCanister()
-    pcall(function()
-        local args = {"Equip", { Category = "Accessory", Type = "Coconut Canister" }}
-        ReplicatedStorage:WaitForChild("Events"):WaitForChild("ItemPackageEvent"):InvokeServer(unpack(args))
-    end)
+    if hasCanister then return end
+    local args = {"Equip", { Category = "Accessory", Type = "Coconut Canister" }}
+    ReplicatedStorage:WaitForChild("Events"):WaitForChild("ItemPackageEvent"):InvokeServer(unpack(args))
     hasCanister = true
     hasPorcelain = false
 end
 
 function EquipPorcelain()
-    pcall(function()
-        local args = {"Equip", { Category = "Accessory", Type = "Porcelain Port-O-Hive" }}
-        ReplicatedStorage:WaitForChild("Events"):WaitForChild("ItemPackageEvent"):InvokeServer(unpack(args))
-    end)
+    if hasPorcelain then return end
+    local args = {"Equip", { Category = "Accessory", Type = "Porcelain Port-O-Hive" }}
+    ReplicatedStorage:WaitForChild("Events"):WaitForChild("ItemPackageEvent"):InvokeServer(unpack(args))
     hasPorcelain = true
     hasCanister = false
 end
 
+-- ================================================
+-- Бросок кокоса
+-- ================================================
 function SpawnCoconut(isCombo)
-    pcall(function()
-        local args = { { Name = "Coconut" } }
-        ReplicatedStorage:WaitForChild("Events"):WaitForChild("PlayerActivesCommand"):FireServer(unpack(args))
-    end)
+    local args = { { Name = "Coconut" } }
+    ReplicatedStorage:WaitForChild("Events"):WaitForChild("PlayerActivesCommand"):FireServer(unpack(args))
     if not isCombo then
         totalThrows = totalThrows + 1
-    end
-    if isCombo then
-        task.delay(11, function() SpawnCoconut(false) end)
     end
 end
 
@@ -133,37 +149,39 @@ function IsComboCoconutPresent()
 end
 
 -- ================================================
--- Цикл бросков — независимая корутина с pcall на каждом шаге
+-- Цикл бросков
 -- ================================================
-local function runThrowCycle()
-    cycleId = cycleId + 1
-    local myCycleId = cycleId
-    debugStr = "cycle " .. myCycleId .. " start"
+local function startThrowCycle()
+    if cycleStarted then return end
+    cycleStarted = true
+    thrownThisCycle = 0
 
-    task.spawn(function()
-        for i = 1, 4 do
-            -- Ждём 10 секунд
-            local ok = pcall(task.wait, 10)
-            if not ok then
-                debugStr = "wait #" .. i .. " failed"
-                return
-            end
+    if throwLoop then
+        task.cancel(throwLoop)
+        throwLoop = nil
+    end
 
-            -- Проверка что цикл не устарел
-            if cycleId ~= myCycleId then
-                debugStr = "cycle " .. myCycleId .. " cancelled at " .. i
-                return
-            end
+    throwLoop = task.spawn(function()
+        task.wait(INITIAL_DELAY)
 
-            -- Бросок
-            debugStr = "throw " .. i .. " of cycle " .. myCycleId
+        for i = 1, COCONUTS_PER_CYCLE do
+            if lastValue >= 34 then break end
             SpawnCoconut(false)
+            thrownThisCycle = i
+            if i < COCONUTS_PER_CYCLE then
+                task.wait(COCONUT_INTERVAL)
+            end
         end
-        debugStr = "cycle " .. myCycleId .. " done"
+        cycleStarted = false
+        throwLoop = nil
     end)
 end
 
--- Очередь
+-- ================================================
+-- Очередь и детект "комбо собрано" по частицам
+-- Когда частица ComboCoconut исчезла — комбо собрано, значит value сейчас 0.
+-- Это работает даже если апдейт PlayerAbilityEvent не приходит.
+-- ================================================
 spawn(function()
     while true do
         local present = IsComboCoconutPresent()
@@ -171,17 +189,29 @@ spawn(function()
             coconutActive = true
         elseif not present and coconutActive then
             coconutActive = false
+
+            -- очередь сдвигается
             comboCounter = comboCounter + 1
             if comboCounter > TOTAL_ACCOUNTS then comboCounter = 1 end
+
+            -- ВАЖНО: комбо собрано → форсируем value=0 и запускаем цикл,
+            -- даже если апдейт от сервера ещё не пришёл
+            lastValue = 0
+            lastValueChangeTime = tick()
+            cycleStarted = false
+            startThrowCycle()
+
             updateCounterDisplay()
         end
         task.wait(0.5)
     end
 end)
 
+-- ================================================
 -- Таймер комбо 13 сек
+-- ================================================
 local function startSpawnTimer()
-    if spawnTimer then task.cancel(spawnTimer); spawnTimer = nil end
+    if spawnTimer then task.cancel(spawnTimer) spawnTimer = nil end
     spawnTimer = task.spawn(function()
         task.wait(13)
         if lastValue == 39 and comboCounter == ACCOUNT_ID then
@@ -191,21 +221,39 @@ local function startSpawnTimer()
     end)
 end
 
+-- ================================================
 -- Главный слушатель
+-- ================================================
 require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(data)
     for tag, info in pairs(data) do
         if tag == "Combo Coconuts" or tag == "ComboCoconuts" then
             if info.Action == "Update" then
                 local value = info.Values and info.Values[1] or 0
+                local prevValue = lastValue
 
-                if value < 39 and spawnTimer then
-                    task.cancel(spawnTimer); spawnTimer = nil
+                if value ~= prevValue then
+                    lastValueChangeTime = tick()
                 end
 
-                if value == 39 then
-                    EquipPorcelain()
-                else
+                -- Запуск цикла при value == 0
+                if value == 0 then
+                    if not firstUpdateReceived or prevValue ~= 0 then
+                        cycleStarted = false
+                        startThrowCycle()
+                    end
+                end
+
+                firstUpdateReceived = true
+
+                if value < 39 and spawnTimer then
+                    task.cancel(spawnTimer)
+                    spawnTimer = nil
+                end
+
+                if value <= 34 then
                     EquipCanister()
+                else
+                    EquipPorcelain()
                 end
 
                 if value == 39 and comboCounter == ACCOUNT_ID and not spawnTimer then
@@ -213,34 +261,20 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                 end
 
                 lastValue = value
+                updateCounterDisplay()
             end
         end
     end
 end)
 
--- Вотчдог запуска цикла
-local lastCycleStartValue = nil
+-- Фоллбэк канистры
 spawn(function()
+    EquipCanister()
     while true do
-        if lastValue == 0 then
-            if lastCycleStartValue ~= 0 then
-                lastCycleStartValue = 0
-                runThrowCycle()
+        if (lastValue == -1) or (lastValue >= 0 and lastValue <= 34) then
+            if not hasCanister then
+                EquipCanister()
             end
-        else
-            lastCycleStartValue = nil
-        end
-        task.wait(1)
-    end
-end)
-
--- Фоллбэк экипировки
-spawn(function()
-    while true do
-        if lastValue == 39 then
-            if not hasPorcelain then EquipPorcelain() end
-        elseif lastValue >= 0 and lastValue <= 38 then
-            if not hasCanister then EquipCanister() end
         end
         task.wait(1)
     end
@@ -251,6 +285,31 @@ spawn(function()
     while true do
         updateCounterDisplay()
         task.wait(1)
+    end
+end)
+
+-- Подстраховка если апдейт не приходит (value давно 0)
+spawn(function()
+    task.wait(3)
+    if not firstUpdateReceived then
+        startThrowCycle()
+    end
+end)
+
+-- ================================================
+-- ВОТЧДОГ: если value застряло на 39 больше 30 сек —
+-- считаем что комбо где-то прошло мимо детектора,
+-- сбрасываем lastValue в 0 и запускаем цикл
+-- ================================================
+spawn(function()
+    while true do
+        task.wait(5)
+        if lastValue == 39 and (tick() - lastValueChangeTime) > 30 then
+            lastValue = 0
+            lastValueChangeTime = tick()
+            cycleStarted = false
+            startThrowCycle()
+        end
     end
 end)
 
