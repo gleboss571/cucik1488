@@ -17,12 +17,12 @@ local HEIGHT_ZONES = {
     {min = 20, max = 30, tpMin = 27, minX = -254.52, maxX = -166.23, minZ = 105.47, maxZ = 244.76},  -- sunflower
     {min = 36, max = 47, tpMin = 43, minX = -403, maxX = -258, minZ = 83, maxZ = 175},               -- rose
     {min = 87, max = 100, tpMin = 94},                                                                -- coconut
-    {min = 115, max = 150, interval = 1.3},                                                           -- pepper
+    {min = 115, max = 150, interval = 1.4},                                                           -- pepper
 }
 
-local TP_INTERVAL       = 2
+local TP_INTERVAL       = 3
 local SCAN_INTERVAL     = 0.01
-local PETAL_WAIT        = 0.09
+local PETAL_WAIT        = 0.1
 local RED_URGENT        = 4
 local REFRESH_THRESHOLD = 2
 local LOGS              = false
