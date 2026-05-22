@@ -15,15 +15,17 @@ local hasPorcelain = false
 local spawnTimer = nil
 local comboCounter = 0
 
--- Сколько кокосов кинуть за цикл и с каким интервалом
 local COCONUTS_PER_CYCLE = 4
-local COCONUT_INTERVAL = 10
+local COCONUT_INTERVAL = 10        -- секунд между кокосами
+local INITIAL_DELAY = 10           -- секунд ожидания перед первым кокосом
 
 local throwLoop = nil
 local cycleStarted = false
+local thrownThisCycle = 0
+local totalThrows = 0
 
 -- ================================================
--- Интерфейс (минимальный)
+-- Интерфейс
 -- ================================================
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ComboCounter_" .. ACCOUNT_ID
@@ -31,8 +33,8 @@ screenGui.Parent = game:GetService("CoreGui")
 screenGui.ResetOnSpawn = false
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 140, 0, 50)
-frame.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID - 1) * 60)
+frame.Size = UDim2.new(0, 160, 0, 68)
+frame.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID - 1) * 78)
 frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 frame.BackgroundTransparency = 0.3
 frame.BorderSizePixel = 0
@@ -45,7 +47,7 @@ corner.CornerRadius = UDim.new(0, 8)
 corner.Parent = frame
 
 local bigLabel = Instance.new("TextLabel")
-bigLabel.Size = UDim2.new(1, 0, 0, 28)
+bigLabel.Size = UDim2.new(1, 0, 0, 26)
 bigLabel.Position = UDim2.new(0, 0, 0, 2)
 bigLabel.BackgroundTransparency = 1
 bigLabel.Text = "0"
@@ -55,15 +57,34 @@ bigLabel.TextSize = 22
 bigLabel.Parent = frame
 
 local idLabel = Instance.new("TextLabel")
-idLabel.Size = UDim2.new(1, -6, 0, 16)
-idLabel.Position = UDim2.new(0, 3, 0, 30)
+idLabel.Size = UDim2.new(1, -6, 0, 14)
+idLabel.Position = UDim2.new(0, 3, 0, 28)
 idLabel.BackgroundTransparency = 1
-idLabel.Text = "ACC #" .. ACCOUNT_ID
 idLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
 idLabel.Font = Enum.Font.Gotham
 idLabel.TextSize = 11
 idLabel.TextXAlignment = Enum.TextXAlignment.Center
 idLabel.Parent = frame
+
+local infoLabel = Instance.new("TextLabel")
+infoLabel.Size = UDim2.new(1, -6, 0, 14)
+infoLabel.Position = UDim2.new(0, 3, 0, 42)
+infoLabel.BackgroundTransparency = 1
+infoLabel.TextColor3 = Color3.fromRGB(140, 200, 255)
+infoLabel.Font = Enum.Font.Gotham
+infoLabel.TextSize = 10
+infoLabel.TextXAlignment = Enum.TextXAlignment.Center
+infoLabel.Parent = frame
+
+local cycleStatusLabel = Instance.new("TextLabel")
+cycleStatusLabel.Size = UDim2.new(1, -6, 0, 14)
+cycleStatusLabel.Position = UDim2.new(0, 3, 0, 54)
+cycleStatusLabel.BackgroundTransparency = 1
+cycleStatusLabel.TextColor3 = Color3.fromRGB(200, 180, 100)
+cycleStatusLabel.Font = Enum.Font.Gotham
+cycleStatusLabel.TextSize = 10
+cycleStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
+cycleStatusLabel.Parent = frame
 
 local function updateCounterDisplay()
     bigLabel.Text = tostring(comboCounter)
@@ -77,6 +98,10 @@ local function updateCounterDisplay()
         bigLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
         idLabel.Text = "ACC #" .. ACCOUNT_ID .. " (wait " .. comboCounter .. ")"
     end
+
+    infoLabel.Text = "v: " .. tostring(lastValue) .. "  total: " .. totalThrows
+    cycleStatusLabel.Text = "cycle: " .. thrownThisCycle .. "/" .. COCONUTS_PER_CYCLE
+        .. (cycleStarted and " RUN" or "")
 end
 
 -- ================================================
@@ -104,6 +129,9 @@ end
 function SpawnCoconut(isCombo)
     local args = { { Name = "Coconut" } }
     ReplicatedStorage:WaitForChild("Events"):WaitForChild("PlayerActivesCommand"):FireServer(unpack(args))
+    if not isCombo then
+        totalThrows = totalThrows + 1
+    end
 end
 
 function IsComboCoconutPresent()
@@ -118,11 +146,12 @@ function IsComboCoconutPresent()
 end
 
 -- ================================================
--- Цикл бросков: 4 кокоса с интервалом 10 сек
+-- Цикл бросков: ждём 10 сек → 4 кокоса с интервалом 10 сек
 -- ================================================
 local function startThrowCycle()
     if cycleStarted then return end
     cycleStarted = true
+    thrownThisCycle = 0
 
     if throwLoop then
         task.cancel(throwLoop)
@@ -130,9 +159,16 @@ local function startThrowCycle()
     end
 
     throwLoop = task.spawn(function()
+        -- Ожидание перед первым кокосом
+        task.wait(INITIAL_DELAY)
+
         for i = 1, COCONUTS_PER_CYCLE do
+            -- Прерываемся если зашли в зону фарфора
             if lastValue >= 35 then break end
+
             SpawnCoconut(false)
+            thrownThisCycle = i
+
             if i < COCONUTS_PER_CYCLE then
                 task.wait(COCONUT_INTERVAL)
             end
@@ -182,9 +218,11 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
         if tag == "Combo Coconuts" or tag == "ComboCoconuts" then
             if info.Action == "Update" then
                 local value = info.Values and info.Values[1] or 0
+                local prevValue = lastValue
 
-                -- Новый цикл: value стало 0 → запускаем серию из 4 бросков
-                if value == 0 and lastValue ~= 0 then
+                -- Запуск цикла: value стало 0 (новый цикл после комбо)
+                if value == 0 and prevValue ~= 0 then
+                    cycleStarted = false
                     startThrowCycle()
                 end
 
@@ -210,7 +248,7 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
     end
 end)
 
--- Агрессивный фоллбэк канистры (раз в 1 сек)
+-- Фоллбэк канистры
 spawn(function()
     EquipCanister()
     while true do
@@ -222,5 +260,20 @@ spawn(function()
         task.wait(1)
     end
 end)
+
+-- Обновление дисплея
+spawn(function()
+    while true do
+        updateCounterDisplay()
+        task.wait(1)
+    end
+end)
+
+-- ================================================
+-- АВТОЗАПУСК ПРИ ИНЖЕКТЕ СКРИПТА
+-- Сразу запускаем цикл, не дожидаясь апдейта value=0.
+-- Это работает когда value=0 на момент запуска (альт-аккаунт с 0 пассивки).
+-- ================================================
+startThrowCycle()
 
 updateCounterDisplay()
