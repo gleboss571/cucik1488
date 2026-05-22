@@ -12,6 +12,7 @@ local hasPorcelain = false
 local comboCounter = 0
 local spawnTimer = nil
 local throwLoop = nil
+local firstUpdateReceived = false
 
 -- Интерфейс
 local screenGui = Instance.new("ScreenGui")
@@ -159,21 +160,23 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                 local value = info.Values and info.Values[1] or 0
                 local prevValue = lastValue
 
-                -- Новый цикл: value стало 0 → запускаем серию из 4 бросков
+                -- Запуск цикла при value = 0
+                -- Срабатывает и при первом апдейте если value=0, и при сбросе после комбо
                 if value == 0 and prevValue ~= 0 then
                     startThrowCycle()
                 end
+
+                firstUpdateReceived = true
 
                 if value < 39 and spawnTimer then
                     task.cancel(spawnTimer)
                     spawnTimer = nil
                 end
 
-                if value == 39 and not hasPorcelain then
+                -- Экипировка строго по value
+                if value == 39 then
                     EquipPorcelain()
-                end
-
-                if value < 39 and not hasCanister then
+                else
                     EquipCanister()
                 end
 
@@ -187,13 +190,29 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
     end
 end)
 
--- Фоллбэк канистры
+-- Подстраховка: если апдейт за 3 сек не пришёл — значит value уже давно 0,
+-- запускаем серию вручную
+spawn(function()
+    task.wait(3)
+    if not firstUpdateReceived then
+        startThrowCycle()
+    end
+end)
+
+-- Фоллбэк экипировки раз в 1 сек
+-- Жёстко по lastValue: если value=39 — фарфор, иначе канистра
 spawn(function()
     while true do
-        if lastValue ~= 39 and not hasCanister then
-            EquipCanister()
+        if lastValue == 39 then
+            if not hasPorcelain then
+                EquipPorcelain()
+            end
+        elseif lastValue >= 0 and lastValue <= 38 then
+            if not hasCanister then
+                EquipCanister()
+            end
         end
-        task.wait(5)
+        task.wait(1)
     end
 end)
 
