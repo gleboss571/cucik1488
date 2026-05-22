@@ -16,13 +16,13 @@ local spawnTimer = nil
 local comboCounter = 0
 local thrownAtValue = {}
 
--- Отладочные счётчики
-local updateCount = 0       -- сколько раз пришёл апдейт от сервера
-local throwCount = 0        -- сколько раз мы реально кинули кокос
-local comboThrowCount = 0   -- сколько раз кинули комбо
-local lastEvent = "-"       -- последнее значимое событие
+local updateCount = 0
+local throwCount = 0
+local comboThrowCount = 0
+local lastEvent = "-"
 
-local THROW_VALUES = {0, 16, 33}
+-- Триггеры: 8/20/33 — основные, 38 — запасной добивающий
+local THROW_VALUES = {8, 20, 33, 38}
 
 -- ================================================
 -- Интерфейс
@@ -209,13 +209,15 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                     spawnTimer = nil
                 end
 
+                -- Экипировка: канистра до 34, фарфор от 35
                 if value <= 34 then
                     EquipCanister()
                 else
                     EquipPorcelain()
                 end
 
-                if value <= 34 then
+                -- Бросок кокоса (строго на триггерное value, до 38 включительно)
+                if value <= 38 then
                     for _, tv in ipairs(THROW_VALUES) do
                         if value == tv and not thrownAtValue[tv] then
                             thrownAtValue[tv] = true
@@ -247,7 +249,7 @@ spawn(function()
     end
 end)
 
--- Регулярное обновление дисплея (раз в секунду)
+-- Регулярное обновление дисплея
 spawn(function()
     while true do
         updateCounterDisplay()
