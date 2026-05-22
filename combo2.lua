@@ -147,30 +147,29 @@ end
 -- ================================================
 -- ГЛАВНЫЙ ЦИКЛ (упрощённый)
 -- Каждую секунду проверяет value.
--- Когда value == 0 — кидает 4 кокоса с интервалом 10 сек.
+-- Когда value == 0 — ждёт 2с, перепроверяет, кидает 4 кокоса.
 -- ================================================
 task.spawn(function()
     while true do
-        -- Ждём первый апдейт от сервера, потом ждём value == 0
         if firstUpdateReceived and lastValue == 0 and not cycleActive then
-            cycleActive = true
-            thrownThisCycle = 0
+            -- Ждём 2 сек и перепроверяем — защита от ложного 0
+            task.wait(2)
+            if lastValue == 0 then
+                cycleActive = true
+                thrownThisCycle = 0
 
-            for i = 1, COCONUTS_PER_CYCLE do
-                -- Перед каждым броском проверяем — value всё ещё 0?
-                -- Если value ушло выше — значит другие кинули, пропускаем
-                if lastValue > 0 then break end
+                for i = 1, COCONUTS_PER_CYCLE do
+                    SpawnCoconut()
+                    thrownThisCycle = i
+                    updateCounterDisplay()
 
-                SpawnCoconut()
-                thrownThisCycle = i
-                updateCounterDisplay()
-
-                if i < COCONUTS_PER_CYCLE then
-                    task.wait(COCONUT_INTERVAL)
+                    if i < COCONUTS_PER_CYCLE then
+                        task.wait(COCONUT_INTERVAL)
+                    end
                 end
-            end
 
-            cycleActive = false
+                cycleActive = false
+            end
         end
 
         task.wait(1)
@@ -191,8 +190,7 @@ task.spawn(function()
             comboCounter = comboCounter + 1
             if comboCounter > TOTAL_ACCOUNTS then comboCounter = 1 end
 
-            -- НЕ ставим lastValue = 0 вручную!
-            -- Пусть listener получит реальное значение от сервера.
+            lastValue = 0
             lastValueChangeTime = tick()
             updateCounterDisplay()
         end
