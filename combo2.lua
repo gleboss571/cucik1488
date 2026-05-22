@@ -11,8 +11,7 @@ local hasCanister = false
 local hasPorcelain = false
 local comboCounter = 0
 local spawnTimer = nil
-local throwLoop = nil
-local cycleRunning = false
+local cycleId = 0  -- увеличивается с каждым новым циклом, защита от старых отложенных вызовов
 
 -- Интерфейс
 local screenGui = Instance.new("ScreenGui")
@@ -64,6 +63,8 @@ infoLabel.TextSize = 10
 infoLabel.TextXAlignment = Enum.TextXAlignment.Center
 infoLabel.Parent = frame
 
+local totalThrows = 0
+
 local function updateCounterDisplay()
     label.Text = tostring(comboCounter)
     if comboCounter == ACCOUNT_ID then
@@ -75,7 +76,7 @@ local function updateCounterDisplay()
         label.TextColor3 = Color3.fromRGB(255, 200, 100)
         idLabel.Text = "ACC #" .. ACCOUNT_ID .. " (wait " .. comboCounter .. ")"
     end
-    infoLabel.Text = "v:" .. lastValue .. " cycle:" .. (cycleRunning and "RUN" or "-")
+    infoLabel.Text = "v:" .. lastValue .. " t:" .. totalThrows .. " c:" .. cycleId
 end
 
 function EquipCanister()
@@ -95,11 +96,11 @@ end
 function SpawnCoconut(isCombo)
     local args = { { Name = "Coconut" } }
     ReplicatedStorage:WaitForChild("Events"):WaitForChild("PlayerActivesCommand"):FireServer(unpack(args))
+    if not isCombo then
+        totalThrows = totalThrows + 1
+    end
     if isCombo then
-        task.spawn(function()
-            task.wait(11)
-            SpawnCoconut(false)
-        end)
+        task.delay(11, function() SpawnCoconut(false) end)
     end
 end
 
@@ -114,21 +115,22 @@ function IsComboCoconutPresent()
     return false
 end
 
--- Цикл бросков: 10 сек ожидание + 4 кокоса с интервалом 10 сек
+-- ================================================
+-- Цикл бросков через task.delay (не корутина)
+-- 4 отложенных вызова, каждый со своим временем
+-- ================================================
 local function runThrowCycle()
-    if cycleRunning then return end
-    cycleRunning = true
+    cycleId = cycleId + 1
+    local myCycleId = cycleId
 
-    if throwLoop then task.cancel(throwLoop) end
-    throwLoop = task.spawn(function()
-        task.wait(10)
-        for i = 1, 4 do
+    -- 4 отложенных вызова: t+10, t+20, t+30, t+40
+    -- Каждый проверяет что cycleId не сменился (если ещё один цикл стартанул — отменяем себя)
+    for i = 1, 4 do
+        task.delay(10 * i, function()
+            if cycleId ~= myCycleId then return end  -- старый цикл, игнорим
             SpawnCoconut(false)
-            if i < 4 then task.wait(10) end
-        end
-        cycleRunning = false
-        throwLoop = nil
-    end)
+        end)
+    end
 end
 
 -- Очередь
@@ -159,7 +161,7 @@ local function startSpawnTimer()
     end)
 end
 
--- Главный слушатель: следит за value, экипировкой, таймером комбо
+-- Главный слушатель
 require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(data)
     for tag, info in pairs(data) do
         if tag == "Combo Coconuts" or tag == "ComboCoconuts" then
@@ -186,12 +188,22 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
     end
 end)
 
--- ОТДЕЛЬНЫЙ ВОТЧДОГ: каждую секунду проверяет value=0
--- Если value=0 и цикл не идёт — запускаем
+-- ВОТЧДОГ: запускает цикл когда value=0 и предыдущий цикл уже не активен
+-- Защита: чтобы не запускать снова и снова пока value=0,
+-- запоминаем что цикл стартанул и ждём пока value не станет не-0 (значит цикл реально начался)
+local lastCycleStartValue = nil
+
 spawn(function()
     while true do
-        if lastValue == 0 and not cycleRunning then
-            runThrowCycle()
+        if lastValue == 0 then
+            -- Если предыдущий цикл стартовали не на текущем "нуле" — стартуем
+            if lastCycleStartValue ~= 0 then
+                lastCycleStartValue = 0
+                runThrowCycle()
+            end
+        else
+            -- Value не 0 — разрешаем следующий запуск когда снова станет 0
+            lastCycleStartValue = nil
         end
         task.wait(1)
     end
