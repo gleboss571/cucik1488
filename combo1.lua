@@ -174,9 +174,8 @@ local function startCycle(count)
 end
 
 -- ================================================
--- Детектор ComboCoconut — очередь аккаунтов
--- Когда комбо исчезает — только аккаунт чья очередь
--- запускает цикл из 3 кокосов
+-- Детектор ComboCoconut — только считает очередь
+-- Цикл НЕ запускается здесь, он привязан к таймеру
 -- ================================================
 task.spawn(function()
     while true do
@@ -192,11 +191,6 @@ task.spawn(function()
             lastValue = 0
             lastValueChangeTime = tick()
             updateCounterDisplay()
-
-            -- Только мой аккаунт запускает цикл
-            if comboCounter == ACCOUNT_ID then
-                startCycle(3)
-            end
         end
         task.wait(0.5)
     end
@@ -220,6 +214,7 @@ end)
 
 -- ================================================
 -- Таймер комбо 13 сек (value == 39, мой ход)
+-- После броска комбо → ждём 10 сек → цикл из 3
 -- ================================================
 local function startSpawnTimer()
     if spawnTimer then task.cancel(spawnTimer) spawnTimer = nil end
@@ -227,6 +222,8 @@ local function startSpawnTimer()
         task.wait(13)
         if lastValue == 39 and comboCounter == ACCOUNT_ID then
             SpawnCoconut()
+            -- После комбо — запускаем цикл (внутри startCycle есть 10с задержка)
+            startCycle(3)
         end
         spawnTimer = nil
     end)
