@@ -151,14 +151,14 @@ end
 task.spawn(function()
     while true do
         -- Ждём пока value станет 0 и цикл ещё не запущен
-        if lastValue == 0 and not cycleActive then
+        if lastValue <= 0 and not cycleActive then
             cycleActive = true
             thrownThisCycle = 0
 
             for i = 1, COCONUTS_PER_CYCLE do
                 -- Перед каждым броском проверяем — value всё ещё 0?
                 -- Если value ушло выше — значит другие кинули, пропускаем
-                if lastValue ~= 0 then break end
+                if lastValue > 0 then break end
 
                 SpawnCoconut()
                 thrownThisCycle = i
