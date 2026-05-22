@@ -1,5 +1,5 @@
 -- ================================================
--- Combo Coconut Script (FIXED)
+-- Combo Coconut Script (FIXED v2)
 -- ================================================
 local ACCOUNT_ID = 1     -- поменяй на 2 или 3
 local TOTAL_ACCOUNTS = 3
@@ -159,16 +159,15 @@ function IsComboCoconutPresent()
 end
 
 -- ================================================
--- Цикл бросков (ИСПРАВЛЕНО)
--- Теперь НЕ сбрасывает thrownThisCycle при перезапуске,
--- а продолжает с того места, где остановился.
+-- Цикл бросков (ИСПРАВЛЕНО v2)
+-- Продолжает с текущего thrownThisCycle, не сбрасывает.
 -- ================================================
 local function startThrowCycle()
     if cycleStarted then return end
 
-    -- FIX: НЕ сбрасываем thrownThisCycle здесь!
-    -- Сброс происходит ТОЛЬКО когда цикл реально завершён полностью
-    -- или когда value вернулось к 0 после полного комбо.
+    local remaining = COCONUTS_PER_CYCLE - thrownThisCycle
+    if remaining <= 0 then return end
+
     cycleStarted = true
 
     if throwLoop then
@@ -176,19 +175,10 @@ local function startThrowCycle()
         throwLoop = nil
     end
 
-    local remaining = COCONUTS_PER_CYCLE - thrownThisCycle
-
-    if remaining <= 0 then
-        -- Цикл уже был полностью выполнен, ждём нового
-        cycleStarted = false
-        return
-    end
-
     throwLoop = task.spawn(function()
         task.wait(INITIAL_DELAY)
 
         for i = 1, remaining do
-            -- Стоп по value
             if lastValue >= 34 then break end
             if isStopValue(lastValue) then break end
 
@@ -204,7 +194,7 @@ local function startThrowCycle()
     end)
 end
 
--- Полный сброс цикла (вызывается только при реальном начале нового раунда)
+-- Полный сброс цикла — ТОЛЬКО при реальном новом раунде
 local function resetAndStartCycle()
     if throwLoop then
         task.cancel(throwLoop)
@@ -216,8 +206,8 @@ local function resetAndStartCycle()
 end
 
 -- ================================================
--- Очередь и детект "комбо собрано" по частицам
--- (ИСПРАВЛЕНО: не сбрасывает цикл, а продолжает)
+-- Детектор ComboCoconut
+-- НЕ трогает цикл если он уже идёт
 -- ================================================
 spawn(function()
     while true do
@@ -233,8 +223,6 @@ spawn(function()
             lastValue = 0
             lastValueChangeTime = tick()
 
-            -- FIX: Только продолжаем цикл, НЕ сбрасываем thrownThisCycle
-            -- Если цикл не запущен — запускаем (он продолжит с текущего thrownThisCycle)
             if not cycleStarted then
                 startThrowCycle()
             end
@@ -260,7 +248,8 @@ local function startSpawnTimer()
 end
 
 -- ================================================
--- Главный слушатель (ИСПРАВЛЕНО)
+-- Главный слушатель (ИСПРАВЛЕНО v2)
+-- value=0 НЕ сбрасывает цикл если он уже работает
 -- ================================================
 require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(data)
     for tag, info in pairs(data) do
@@ -273,9 +262,14 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                     lastValueChangeTime = tick()
                 end
 
-                -- FIX: Полный сброс цикла ТОЛЬКО при переходе к 0 после завершённого комбо
+                -- FIX v2: при value=0 запускаем цикл ТОЛЬКО если он ещё не идёт.
+                -- Раньше resetAndStartCycle() вызывался каждый раз при value=0,
+                -- что обнуляло thrownThisCycle и убивало уже брошенные кокосы из счётчика.
+                -- Теперь: если цикл уже крутится — не трогаем его.
                 if value == 0 then
-                    if not firstUpdateReceived or prevValue ~= 0 then
+                    if not firstUpdateReceived then
+                        resetAndStartCycle()
+                    elseif prevValue ~= 0 and not cycleStarted then
                         resetAndStartCycle()
                     end
                 end
@@ -325,7 +319,7 @@ spawn(function()
     end
 end)
 
--- Подстраховка если апдейт не приходит (value давно 0)
+-- Подстраховка если апдейт не приходит
 spawn(function()
     task.wait(3)
     if not firstUpdateReceived then
