@@ -23,7 +23,7 @@ local throwLoop = nil
 local cycleStarted = false
 local thrownThisCycle = 0
 local totalThrows = 0
-local firstUpdateReceived = false  -- получили ли первый апдейт от сервера
+local firstUpdateReceived = false
 
 -- ================================================
 -- Интерфейс
@@ -148,6 +148,7 @@ end
 
 -- ================================================
 -- Цикл бросков: ждём 10 сек → 4 кокоса с интервалом 10 сек
+-- Прерывается если value >= 34 (чтобы не кидать в зоне 34+)
 -- ================================================
 local function startThrowCycle()
     if cycleStarted then return end
@@ -163,7 +164,7 @@ local function startThrowCycle()
         task.wait(INITIAL_DELAY)
 
         for i = 1, COCONUTS_PER_CYCLE do
-            if lastValue >= 35 then break end
+            if lastValue >= 34 then break end   -- стоп если value уже >= 34
             SpawnCoconut(false)
             thrownThisCycle = i
             if i < COCONUTS_PER_CYCLE then
@@ -217,9 +218,7 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                 local value = info.Values and info.Values[1] or 0
                 local prevValue = lastValue
 
-                -- Запуск цикла ТОЛЬКО при value == 0:
-                -- 1) первый апдейт после инжекта и value = 0 (альт с 0 пассивки)
-                -- 2) переход с любого value на 0 (новый цикл после комбо)
+                -- Запуск цикла ТОЛЬКО при value == 0
                 if value == 0 then
                     if not firstUpdateReceived or prevValue ~= 0 then
                         cycleStarted = false
@@ -272,17 +271,10 @@ spawn(function()
     end
 end)
 
--- ================================================
--- ПРОВЕРКА ПРИ ИНЖЕКТЕ: если value=0 не приходит апдейтом
--- (потому что value не меняется), читаем текущее значение и запускаем цикл сами.
--- Через 3 сек после загрузки: если firstUpdateReceived всё ещё false,
--- значит сервер не присылает апдейтов потому что value давно не меняется.
--- В этом случае считаем что value=0 и запускаем серию.
--- ================================================
+-- Подстраховка если апдейт не приходит (value давно 0)
 spawn(function()
     task.wait(3)
     if not firstUpdateReceived then
-        -- Апдейт не пришёл за 3 сек, скорее всего value=0 уже давно
         startThrowCycle()
     end
 end)
