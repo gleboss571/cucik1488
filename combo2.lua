@@ -21,8 +21,7 @@ local throwCount = 0
 local comboThrowCount = 0
 local lastEvent = "-"
 
--- Триггеры: 8/20/33 — основные, 38 — запасной добивающий
-local THROW_VALUES = {8, 20, 33, 38}
+local THROW_VALUES = {8, 20, 33}
 
 -- ================================================
 -- Интерфейс
@@ -135,10 +134,6 @@ function SpawnCoconut(isCombo)
     if isCombo then
         comboThrowCount = comboThrowCount + 1
         lastEvent = "COMBO thrown!"
-        task.spawn(function()
-            task.wait(11)
-            SpawnCoconut(false)
-        end)
     else
         throwCount = throwCount + 1
         lastEvent = "coconut at v=" .. lastValue
@@ -209,15 +204,15 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                     spawnTimer = nil
                 end
 
-                -- Экипировка: канистра до 34, фарфор от 35
+                -- Экипировка: канистра 0-34, фарфор от 35
                 if value <= 34 then
                     EquipCanister()
                 else
                     EquipPorcelain()
                 end
 
-                -- Бросок кокоса (строго на триггерное value, до 38 включительно)
-                if value <= 38 then
+                -- Бросок кокоса (строго на триггерное value)
+                if value <= 34 then
                     for _, tv in ipairs(THROW_VALUES) do
                         if value == tv and not thrownAtValue[tv] then
                             thrownAtValue[tv] = true
@@ -239,13 +234,22 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
     end
 end)
 
--- Фоллбэк экипировки канистры
+-- ================================================
+-- АГРЕССИВНЫЙ ФОЛЛБЭК КАНИСТРЫ
+-- Раз в 1 секунду проверяет: если value в зоне 0-34 и канистры нет — одевает.
+-- Также при самом старте (lastValue == -1) пытается одеть, чтобы быть готовым.
+-- ================================================
 spawn(function()
+    -- При запуске сразу пробуем надеть канистру
+    EquipCanister()
+
     while true do
-        if lastValue >= 0 and lastValue <= 34 and not hasCanister then
-            EquipCanister()
+        if (lastValue == -1) or (lastValue >= 0 and lastValue <= 34) then
+            if not hasCanister then
+                EquipCanister()
+            end
         end
-        task.wait(5)
+        task.wait(1)
     end
 end)
 
