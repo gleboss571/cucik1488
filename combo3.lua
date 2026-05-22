@@ -20,11 +20,21 @@ local COCONUTS_PER_CYCLE = 4
 local COCONUT_INTERVAL = 10
 local INITIAL_DELAY = 10
 
+-- Стоп-значения: если value стало одним из них — прекращаем серию
+local STOP_VALUES = {4, 9, 14, 19, 24, 29, 34}
+
 local throwLoop = nil
 local cycleStarted = false
 local thrownThisCycle = 0
 local totalThrows = 0
 local firstUpdateReceived = false
+
+local function isStopValue(v)
+    for _, sv in ipairs(STOP_VALUES) do
+        if v == sv then return true end
+    end
+    return false
+end
 
 -- ================================================
 -- Интерфейс
@@ -150,6 +160,7 @@ end
 
 -- ================================================
 -- Цикл бросков
+-- Стоп: 4 кокоса ИЛИ value стало стоп-значением (4/9/14/19/24/29/34)
 -- ================================================
 local function startThrowCycle()
     if cycleStarted then return end
@@ -165,9 +176,13 @@ local function startThrowCycle()
         task.wait(INITIAL_DELAY)
 
         for i = 1, COCONUTS_PER_CYCLE do
+            -- Стоп по value
             if lastValue >= 34 then break end
+            if isStopValue(lastValue) then break end
+
             SpawnCoconut(false)
             thrownThisCycle = i
+
             if i < COCONUTS_PER_CYCLE then
                 task.wait(COCONUT_INTERVAL)
             end
@@ -179,8 +194,6 @@ end
 
 -- ================================================
 -- Очередь и детект "комбо собрано" по частицам
--- Когда частица ComboCoconut исчезла — комбо собрано, значит value сейчас 0.
--- Это работает даже если апдейт PlayerAbilityEvent не приходит.
 -- ================================================
 spawn(function()
     while true do
@@ -190,12 +203,9 @@ spawn(function()
         elseif not present and coconutActive then
             coconutActive = false
 
-            -- очередь сдвигается
             comboCounter = comboCounter + 1
             if comboCounter > TOTAL_ACCOUNTS then comboCounter = 1 end
 
-            -- ВАЖНО: комбо собрано → форсируем value=0 и запускаем цикл,
-            -- даже если апдейт от сервера ещё не пришёл
             lastValue = 0
             lastValueChangeTime = tick()
             cycleStarted = false
@@ -235,7 +245,6 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                     lastValueChangeTime = tick()
                 end
 
-                -- Запуск цикла при value == 0
                 if value == 0 then
                     if not firstUpdateReceived or prevValue ~= 0 then
                         cycleStarted = false
@@ -296,11 +305,7 @@ spawn(function()
     end
 end)
 
--- ================================================
--- ВОТЧДОГ: если value застряло на 39 больше 30 сек —
--- считаем что комбо где-то прошло мимо детектора,
--- сбрасываем lastValue в 0 и запускаем цикл
--- ================================================
+-- ВОТЧДОГ: если value застряло на 39 больше 30 сек
 spawn(function()
     while true do
         task.wait(5)
