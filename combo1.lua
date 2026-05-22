@@ -22,6 +22,7 @@ local COCONUT_INTERVAL = 10
 -- Состояние цикла
 local cycleActive = false
 local thrownThisCycle = 0
+local firstUpdateReceived = false
 
 -- ================================================
 -- Интерфейс
@@ -150,8 +151,8 @@ end
 -- ================================================
 task.spawn(function()
     while true do
-        -- Ждём пока value станет 0 и цикл ещё не запущен
-        if lastValue <= 0 and not cycleActive then
+        -- Ждём первый апдейт от сервера, потом ждём value == 0
+        if firstUpdateReceived and lastValue == 0 and not cycleActive then
             cycleActive = true
             thrownThisCycle = 0
 
@@ -224,6 +225,8 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                 if value ~= lastValue then
                     lastValueChangeTime = tick()
                 end
+
+                firstUpdateReceived = true
 
                 if value < 39 and spawnTimer then
                     task.cancel(spawnTimer)
