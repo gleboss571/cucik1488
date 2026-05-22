@@ -11,7 +11,9 @@ local hasCanister = false
 local hasPorcelain = false
 local comboCounter = 0
 local spawnTimer = nil
-local cycleId = 0  -- увеличивается с каждым новым циклом, защита от старых отложенных вызовов
+local cycleId = 0
+local totalThrows = 0
+local debugStr = "init"  -- покажет последнее событие
 
 -- Интерфейс
 local screenGui = Instance.new("ScreenGui")
@@ -20,8 +22,8 @@ screenGui.Parent = game:GetService("CoreGui")
 screenGui.ResetOnSpawn = false
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 130, 0, 64)
-frame.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID - 1) * 74)
+frame.Size = UDim2.new(0, 150, 0, 78)
+frame.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID - 1) * 88)
 frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 frame.BackgroundTransparency = 0.3
 frame.BorderSizePixel = 0
@@ -63,7 +65,15 @@ infoLabel.TextSize = 10
 infoLabel.TextXAlignment = Enum.TextXAlignment.Center
 infoLabel.Parent = frame
 
-local totalThrows = 0
+local debugLabel = Instance.new("TextLabel")
+debugLabel.Size = UDim2.new(1, -6, 0, 14)
+debugLabel.Position = UDim2.new(0, 3, 0, 58)
+debugLabel.BackgroundTransparency = 1
+debugLabel.TextColor3 = Color3.fromRGB(200, 180, 100)
+debugLabel.Font = Enum.Font.Gotham
+debugLabel.TextSize = 10
+debugLabel.TextXAlignment = Enum.TextXAlignment.Center
+debugLabel.Parent = frame
 
 local function updateCounterDisplay()
     label.Text = tostring(comboCounter)
@@ -77,25 +87,32 @@ local function updateCounterDisplay()
         idLabel.Text = "ACC #" .. ACCOUNT_ID .. " (wait " .. comboCounter .. ")"
     end
     infoLabel.Text = "v:" .. lastValue .. " t:" .. totalThrows .. " c:" .. cycleId
+    debugLabel.Text = debugStr
 end
 
 function EquipCanister()
-    local args = {"Equip", { Category = "Accessory", Type = "Coconut Canister" }}
-    ReplicatedStorage:WaitForChild("Events"):WaitForChild("ItemPackageEvent"):InvokeServer(unpack(args))
+    pcall(function()
+        local args = {"Equip", { Category = "Accessory", Type = "Coconut Canister" }}
+        ReplicatedStorage:WaitForChild("Events"):WaitForChild("ItemPackageEvent"):InvokeServer(unpack(args))
+    end)
     hasCanister = true
     hasPorcelain = false
 end
 
 function EquipPorcelain()
-    local args = {"Equip", { Category = "Accessory", Type = "Porcelain Port-O-Hive" }}
-    ReplicatedStorage:WaitForChild("Events"):WaitForChild("ItemPackageEvent"):InvokeServer(unpack(args))
+    pcall(function()
+        local args = {"Equip", { Category = "Accessory", Type = "Porcelain Port-O-Hive" }}
+        ReplicatedStorage:WaitForChild("Events"):WaitForChild("ItemPackageEvent"):InvokeServer(unpack(args))
+    end)
     hasPorcelain = true
     hasCanister = false
 end
 
 function SpawnCoconut(isCombo)
-    local args = { { Name = "Coconut" } }
-    ReplicatedStorage:WaitForChild("Events"):WaitForChild("PlayerActivesCommand"):FireServer(unpack(args))
+    pcall(function()
+        local args = { { Name = "Coconut" } }
+        ReplicatedStorage:WaitForChild("Events"):WaitForChild("PlayerActivesCommand"):FireServer(unpack(args))
+    end)
     if not isCombo then
         totalThrows = totalThrows + 1
     end
@@ -116,21 +133,34 @@ function IsComboCoconutPresent()
 end
 
 -- ================================================
--- Цикл бросков через task.delay (не корутина)
--- 4 отложенных вызова, каждый со своим временем
+-- Цикл бросков — независимая корутина с pcall на каждом шаге
 -- ================================================
 local function runThrowCycle()
     cycleId = cycleId + 1
     local myCycleId = cycleId
+    debugStr = "cycle " .. myCycleId .. " start"
 
-    -- 4 отложенных вызова: t+10, t+20, t+30, t+40
-    -- Каждый проверяет что cycleId не сменился (если ещё один цикл стартанул — отменяем себя)
-    for i = 1, 4 do
-        task.delay(10 * i, function()
-            if cycleId ~= myCycleId then return end  -- старый цикл, игнорим
+    task.spawn(function()
+        for i = 1, 4 do
+            -- Ждём 10 секунд
+            local ok = pcall(task.wait, 10)
+            if not ok then
+                debugStr = "wait #" .. i .. " failed"
+                return
+            end
+
+            -- Проверка что цикл не устарел
+            if cycleId ~= myCycleId then
+                debugStr = "cycle " .. myCycleId .. " cancelled at " .. i
+                return
+            end
+
+            -- Бросок
+            debugStr = "throw " .. i .. " of cycle " .. myCycleId
             SpawnCoconut(false)
-        end)
-    end
+        end
+        debugStr = "cycle " .. myCycleId .. " done"
+    end)
 end
 
 -- Очередь
@@ -188,28 +218,23 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
     end
 end)
 
--- ВОТЧДОГ: запускает цикл когда value=0 и предыдущий цикл уже не активен
--- Защита: чтобы не запускать снова и снова пока value=0,
--- запоминаем что цикл стартанул и ждём пока value не станет не-0 (значит цикл реально начался)
+-- Вотчдог запуска цикла
 local lastCycleStartValue = nil
-
 spawn(function()
     while true do
         if lastValue == 0 then
-            -- Если предыдущий цикл стартовали не на текущем "нуле" — стартуем
             if lastCycleStartValue ~= 0 then
                 lastCycleStartValue = 0
                 runThrowCycle()
             end
         else
-            -- Value не 0 — разрешаем следующий запуск когда снова станет 0
             lastCycleStartValue = nil
         end
         task.wait(1)
     end
 end)
 
--- Фоллбэк экипировки раз в 1 сек
+-- Фоллбэк экипировки
 spawn(function()
     while true do
         if lastValue == 39 then
