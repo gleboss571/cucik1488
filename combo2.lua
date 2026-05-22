@@ -1,7 +1,7 @@
 -- ================================================
--- Combo Coconut Script
+-- Combo Coconut Script (FIXED)
 -- ================================================
-local ACCOUNT_ID = 2     -- поменяй на 2 или 3
+local ACCOUNT_ID = 1     -- поменяй на 2 или 3
 local TOTAL_ACCOUNTS = 3
 
 local Players = game:GetService("Players")
@@ -159,31 +159,43 @@ function IsComboCoconutPresent()
 end
 
 -- ================================================
--- Цикл бросков
--- Стоп: 4 кокоса ИЛИ value стало стоп-значением (4/9/14/19/24/29/34)
+-- Цикл бросков (ИСПРАВЛЕНО)
+-- Теперь НЕ сбрасывает thrownThisCycle при перезапуске,
+-- а продолжает с того места, где остановился.
 -- ================================================
 local function startThrowCycle()
     if cycleStarted then return end
+
+    -- FIX: НЕ сбрасываем thrownThisCycle здесь!
+    -- Сброс происходит ТОЛЬКО когда цикл реально завершён полностью
+    -- или когда value вернулось к 0 после полного комбо.
     cycleStarted = true
-    thrownThisCycle = 0
 
     if throwLoop then
         task.cancel(throwLoop)
         throwLoop = nil
     end
 
+    local remaining = COCONUTS_PER_CYCLE - thrownThisCycle
+
+    if remaining <= 0 then
+        -- Цикл уже был полностью выполнен, ждём нового
+        cycleStarted = false
+        return
+    end
+
     throwLoop = task.spawn(function()
         task.wait(INITIAL_DELAY)
 
-        for i = 1, COCONUTS_PER_CYCLE do
+        for i = 1, remaining do
             -- Стоп по value
             if lastValue >= 34 then break end
             if isStopValue(lastValue) then break end
 
             SpawnCoconut(false)
-            thrownThisCycle = i
+            thrownThisCycle = thrownThisCycle + 1
 
-            if i < COCONUTS_PER_CYCLE then
+            if i < remaining then
                 task.wait(COCONUT_INTERVAL)
             end
         end
@@ -192,8 +204,20 @@ local function startThrowCycle()
     end)
 end
 
+-- Полный сброс цикла (вызывается только при реальном начале нового раунда)
+local function resetAndStartCycle()
+    if throwLoop then
+        task.cancel(throwLoop)
+        throwLoop = nil
+    end
+    cycleStarted = false
+    thrownThisCycle = 0
+    startThrowCycle()
+end
+
 -- ================================================
 -- Очередь и детект "комбо собрано" по частицам
+-- (ИСПРАВЛЕНО: не сбрасывает цикл, а продолжает)
 -- ================================================
 spawn(function()
     while true do
@@ -208,8 +232,12 @@ spawn(function()
 
             lastValue = 0
             lastValueChangeTime = tick()
-            cycleStarted = false
-            startThrowCycle()
+
+            -- FIX: Только продолжаем цикл, НЕ сбрасываем thrownThisCycle
+            -- Если цикл не запущен — запускаем (он продолжит с текущего thrownThisCycle)
+            if not cycleStarted then
+                startThrowCycle()
+            end
 
             updateCounterDisplay()
         end
@@ -232,7 +260,7 @@ local function startSpawnTimer()
 end
 
 -- ================================================
--- Главный слушатель
+-- Главный слушатель (ИСПРАВЛЕНО)
 -- ================================================
 require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(data)
     for tag, info in pairs(data) do
@@ -245,10 +273,10 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                     lastValueChangeTime = tick()
                 end
 
+                -- FIX: Полный сброс цикла ТОЛЬКО при переходе к 0 после завершённого комбо
                 if value == 0 then
                     if not firstUpdateReceived or prevValue ~= 0 then
-                        cycleStarted = false
-                        startThrowCycle()
+                        resetAndStartCycle()
                     end
                 end
 
@@ -301,7 +329,7 @@ end)
 spawn(function()
     task.wait(3)
     if not firstUpdateReceived then
-        startThrowCycle()
+        resetAndStartCycle()
     end
 end)
 
@@ -312,8 +340,7 @@ spawn(function()
         if lastValue == 39 and (tick() - lastValueChangeTime) > 30 then
             lastValue = 0
             lastValueChangeTime = tick()
-            cycleStarted = false
-            startThrowCycle()
+            resetAndStartCycle()
         end
     end
 end)
