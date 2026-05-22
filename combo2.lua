@@ -16,13 +16,14 @@ local spawnTimer = nil
 local comboCounter = 0
 
 local COCONUTS_PER_CYCLE = 4
-local COCONUT_INTERVAL = 10        -- секунд между кокосами
-local INITIAL_DELAY = 10           -- секунд ожидания перед первым кокосом
+local COCONUT_INTERVAL = 10
+local INITIAL_DELAY = 10
 
 local throwLoop = nil
 local cycleStarted = false
 local thrownThisCycle = 0
 local totalThrows = 0
+local firstUpdateReceived = false  -- получили ли первый апдейт от сервера
 
 -- ================================================
 -- Интерфейс
@@ -159,16 +160,12 @@ local function startThrowCycle()
     end
 
     throwLoop = task.spawn(function()
-        -- Ожидание перед первым кокосом
         task.wait(INITIAL_DELAY)
 
         for i = 1, COCONUTS_PER_CYCLE do
-            -- Прерываемся если зашли в зону фарфора
             if lastValue >= 35 then break end
-
             SpawnCoconut(false)
             thrownThisCycle = i
-
             if i < COCONUTS_PER_CYCLE then
                 task.wait(COCONUT_INTERVAL)
             end
@@ -220,11 +217,17 @@ require(ReplicatedStorage.Events).ClientListen("PlayerAbilityEvent", function(da
                 local value = info.Values and info.Values[1] or 0
                 local prevValue = lastValue
 
-                -- Запуск цикла: value стало 0 (новый цикл после комбо)
-                if value == 0 and prevValue ~= 0 then
-                    cycleStarted = false
-                    startThrowCycle()
+                -- Запуск цикла ТОЛЬКО при value == 0:
+                -- 1) первый апдейт после инжекта и value = 0 (альт с 0 пассивки)
+                -- 2) переход с любого value на 0 (новый цикл после комбо)
+                if value == 0 then
+                    if not firstUpdateReceived or prevValue ~= 0 then
+                        cycleStarted = false
+                        startThrowCycle()
+                    end
                 end
+
+                firstUpdateReceived = true
 
                 if value < 39 and spawnTimer then
                     task.cancel(spawnTimer)
@@ -270,10 +273,18 @@ spawn(function()
 end)
 
 -- ================================================
--- АВТОЗАПУСК ПРИ ИНЖЕКТЕ СКРИПТА
--- Сразу запускаем цикл, не дожидаясь апдейта value=0.
--- Это работает когда value=0 на момент запуска (альт-аккаунт с 0 пассивки).
+-- ПРОВЕРКА ПРИ ИНЖЕКТЕ: если value=0 не приходит апдейтом
+-- (потому что value не меняется), читаем текущее значение и запускаем цикл сами.
+-- Через 3 сек после загрузки: если firstUpdateReceived всё ещё false,
+-- значит сервер не присылает апдейтов потому что value давно не меняется.
+-- В этом случае считаем что value=0 и запускаем серию.
 -- ================================================
-startThrowCycle()
+spawn(function()
+    task.wait(3)
+    if not firstUpdateReceived then
+        -- Апдейт не пришёл за 3 сек, скорее всего value=0 уже давно
+        startThrowCycle()
+    end
+end)
 
 updateCounterDisplay()
