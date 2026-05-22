@@ -191,7 +191,8 @@ task.spawn(function()
             comboCounter = comboCounter + 1
             if comboCounter > TOTAL_ACCOUNTS then comboCounter = 1 end
 
-            lastValue = 0
+            -- НЕ ставим lastValue = 0 вручную!
+            -- Пусть listener получит реальное значение от сервера.
             lastValueChangeTime = tick()
             updateCounterDisplay()
         end
