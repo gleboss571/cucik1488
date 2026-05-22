@@ -223,7 +223,7 @@ local function startSpawnTimer()
         if lastValue == 39 and comboCounter == ACCOUNT_ID then
             SpawnCoconut()
             -- После комбо — запускаем цикл (внутри startCycle есть 10с задержка)
-            startCycle(3)
+            startCycle(4)
         end
         spawnTimer = nil
     end)
