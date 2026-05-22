@@ -2,7 +2,7 @@
 -- Combo Coconut Script (v5)
 -- ================================================
 local ACCOUNT_ID = 3     -- поменяй на 2 или 3
-local TOTAL_ACCOUNTS = 3
+local TOTAL_ACCOUNTS = 4
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
