@@ -1,5 +1,5 @@
 -- ================================================
--- Combo Coconut Script (v4)
+-- Combo Coconut Script (v5)
 -- ================================================
 local ACCOUNT_ID = 2     -- поменяй на 2 или 3
 local TOTAL_ACCOUNTS = 3
@@ -16,11 +16,12 @@ local spawnTimer = nil
 local comboCounter = 0
 local totalThrows = 0
 
-local COCONUTS_PER_CYCLE = 3
 local COCONUT_INTERVAL = 10
+local CYCLE_DELAY = 10
 
 local cycleActive = false
 local thrownThisCycle = 0
+local cycleSize = 0
 local firstUpdateReceived = false
 
 -- ================================================
@@ -100,7 +101,7 @@ local function updateCounterDisplay()
 
     local age = math.floor(tick() - lastValueChangeTime)
     infoLabel.Text = "v: " .. tostring(lastValue) .. " (" .. age .. "s)  t:" .. totalThrows
-    cycleStatusLabel.Text = "cycle: " .. thrownThisCycle .. "/" .. COCONUTS_PER_CYCLE
+    cycleStatusLabel.Text = "cycle: " .. thrownThisCycle .. "/" .. cycleSize
         .. (cycleActive and " RUN" or "")
 end
 
@@ -144,31 +145,38 @@ function IsComboCoconutPresent()
 end
 
 -- ================================================
--- Цикл из 3 кокосов
+-- Цикл бросков
+-- count: сколько кокосов бросить (3 после комбо, 4 при старте)
 -- ================================================
-local function startCycle()
+local function startCycle(count)
     if cycleActive then return end
     cycleActive = true
+    cycleSize = count
     thrownThisCycle = 0
+    updateCounterDisplay()
 
     task.spawn(function()
-        for i = 1, COCONUTS_PER_CYCLE do
+        -- Задержка 10 сек перед началом
+        task.wait(CYCLE_DELAY)
+
+        for i = 1, count do
             SpawnCoconut()
             thrownThisCycle = i
             updateCounterDisplay()
 
-            if i < COCONUTS_PER_CYCLE then
+            if i < count then
                 task.wait(COCONUT_INTERVAL)
             end
         end
         cycleActive = false
+        updateCounterDisplay()
     end)
 end
 
 -- ================================================
 -- Детектор ComboCoconut — очередь аккаунтов
--- Когда комбо-кокос исчезает — сразу запускаем цикл,
--- НЕ ждём value == 0 (потому что абилка набивает пассивку)
+-- Когда комбо исчезает — только аккаунт чья очередь
+-- запускает цикл из 3 кокосов
 -- ================================================
 task.spawn(function()
     while true do
@@ -185,23 +193,25 @@ task.spawn(function()
             lastValueChangeTime = tick()
             updateCounterDisplay()
 
-            -- Сразу запускаем цикл, не ждём value == 0
-            startCycle()
+            -- Только мой аккаунт запускает цикл
+            if comboCounter == ACCOUNT_ID then
+                startCycle(3)
+            end
         end
         task.wait(0.5)
     end
 end)
 
 -- ================================================
--- Фоллбэк: если value == 0 а цикл не запущен
--- (на случай если комбо не было, или скрипт только стартовал)
+-- Фоллбэк: value == 0, нет комбо, нет цикла
+-- Старт скрипта или простой — кидаем 4 кокоса
 -- ================================================
 task.spawn(function()
     while true do
-        if firstUpdateReceived and lastValue == 0 and not cycleActive then
-            task.wait(2)
-            if lastValue == 0 and not cycleActive then
-                startCycle()
+        if firstUpdateReceived and lastValue == 0 and not cycleActive and not coconutActive then
+            task.wait(3)
+            if lastValue == 0 and not cycleActive and not coconutActive then
+                startCycle(4)
             end
         end
         task.wait(1)
