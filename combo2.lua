@@ -1,7 +1,7 @@
 -- ================================================
 -- Combo Coconut Script (FIXED)
 -- ================================================
-local ACCOUNT_ID = 1     -- поменяй на 2 или 3
+local ACCOUNT_ID = 2     -- поменяй на 2 или 3
 local TOTAL_ACCOUNTS = 3
 
 local Players = game:GetService("Players")
