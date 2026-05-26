@@ -1,4 +1,4 @@
--- Petal TP v8
+-- Petal TP v9 (Heartbeat/PostSim + Camera Lock)
 -- R = toggle
 
 local Players = game:GetService("Players")
@@ -223,7 +223,7 @@ task.spawn(function()
     end
 end)
 
--- ТП — телепортирует на tpMin (новая высота)
+-- ТП — Heartbeat / PostSimulation + Camera Lock
 local function tpCollect(petal, colorName)
     if busy then return end
     if not petal or not petal.Parent then return end
@@ -235,40 +235,57 @@ local function tpCollect(petal, colorName)
     local camCF = Camera.CFrame
     local camType = Camera.CameraType
 
+    -- Фиксация камеры
     Camera.CameraType = Enum.CameraType.Scriptable
     Camera.CFrame = camCF
     if hum then hum.AutoRotate = false end
 
-    -- X/Z от петали, Y = tpMin (новая высота)
     local tpY = getTPHeight(petal.Position)
-    if DEBUG_LOGS then
-        print("[D] TP " .. colorName .. " petalY=" .. string.format("%.0f", petal.Position.Y) .. " -> tpY=" .. string.format("%.0f", tpY))
-    end
     local petalCF = CFrame.new(petal.Position.X, tpY, petal.Position.Z)
 
-    hrp.CFrame = petalCF
-    hrp.AssemblyLinearVelocity = Vector3.zero
-    hrp.AssemblyAngularVelocity = Vector3.zero
+    -- Heartbeat: телепорт к петали
+    local hbConn = RunService.Heartbeat:Connect(function()
+        if hrp.Parent then
+            hrp.CFrame = petalCF
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+        end
+    end)
 
-    local start = tick()
-    while tick() - start < PETAL_WAIT do
-        hrp.CFrame = petalCF
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        RunService.Heartbeat:Wait()
-    end
+    -- PostSimulation: возврат домой
+    local psConn = RunService.PostSimulation:Connect(function()
+        if hrp.Parent then
+            hrp.CFrame = savedCF
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+        end
+    end)
 
+    -- Дополнительная страховка камеры каждый кадр
+    local camBindName = "TPv9_CamLock"
+    RunService:BindToRenderStep(camBindName, 0, function()
+        Camera.CFrame = camCF
+    end)
+
+    -- Удержание (PETAL_WAIT)
+    task.wait(PETAL_WAIT)
+
+    -- Очистка
+    hbConn:Disconnect()
+    psConn:Disconnect()
+    RunService:UnbindFromRenderStep(camBindName)
+
+    -- Гарантированное возвращение HRP на место
     hrp.CFrame = savedCF
     hrp.AssemblyLinearVelocity = Vector3.zero
     hrp.AssemblyAngularVelocity = Vector3.zero
-    RunService.Heartbeat:Wait()
-    hrp.CFrame = savedCF
-    hrp.AssemblyLinearVelocity = Vector3.zero
 
+    -- Восстановление камеры и хуманоида
+    Camera.CameraType = camType
     if hum then
         hum.AutoRotate = true
         hum:ChangeState(Enum.HumanoidStateType.Running)
     end
-    Camera.CameraType = camType
 
     lastTPTime = tick()
     lastZoneInterval = getZoneInterval(petal.Position)
@@ -276,7 +293,7 @@ local function tpCollect(petal, colorName)
     if LOGS then
         local fb = hasFestiveBlessing and " [FB]" or ""
         local zi = lastZoneInterval ~= TP_INTERVAL and (" [zone=" .. lastZoneInterval .. "s]") or ""
-        print("[Petal] " .. colorName .. fb .. zi .. " Y=" .. string.format("%.0f", tpY) .. " (" .. string.format("%.2f", tick() - start) .. "s)")
+        print("[Petal] " .. colorName .. fb .. zi .. " Y=" .. string.format("%.0f", tpY) .. " (ghost)")
     end
     busy = false
 end
@@ -399,7 +416,7 @@ LP.CharacterAdded:Connect(function()
 end)
 
 local function printStatus()
-    print("=== Petal v8 ===")
+    print("=== Petal v9 (Heartbeat/PostSim + CamLock) ===")
     print("  Wait: " .. PETAL_WAIT .. "s")
     print("  Interval: " .. TP_INTERVAL .. "s (default)")
     print("  Zones (detect -> tp):")
