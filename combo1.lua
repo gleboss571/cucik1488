@@ -1,21 +1,21 @@
 --[[
-   ALT Combo Coconut Thrower (Delta / Volt v5)
-   Задержка старта 10 сек, правильный FireServer, быстрая реакция на флаг.
+   ALT Combo Coconut Thrower (Delta, задержка 10 сек)
+   Ждёт 10 секунд, затем проверяет Coconut Canister на мейне.
+   При value == 39 и флаг=true → бросок с задержкой ACCOUNT_ID*0.5
 --]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
 
-local MAIN_ACCOUNT_NAME = "Kukurudza_dontreal"
-local ACCOUNT_ID = 1
+local MAIN_ACCOUNT_NAME = "Kukurudza_dontreal"  -- ИМЯ МЕЙНА
+local ACCOUNT_ID = 1   -- измените на 1, 2 или 3
+local START_DELAY = 10  -- секунд ожидания
 local SCAN_INTERVAL = 0.5
-local START_DELAY = 13              -- секунд ожидания перед бросками
 
 local LP = Players.LocalPlayer
 
--- Прямой доступ к событиям (без require)
+-- Прямой доступ
 local Events = ReplicatedStorage:WaitForChild("Events")
 local PlayerAbilityEvent = Events:WaitForChild("PlayerAbilityEvent")
 local PlayerActivesCommand = Events:WaitForChild("PlayerActivesCommand")
@@ -26,18 +26,17 @@ local lastComboValue = -1
 local totalThrows = 0
 local currentBackpack = nil
 local throwScheduled = false
-local startTime = tick()            -- время запуска скрипта
-local canThrow = false              -- разрешение бросков (после стартовой задержки)
+local canThrow = false
 
--- =============== GUI (с консолью) ===============
+-- =============== GUI (консоль + статус) ===============
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ComboThrower_" .. ACCOUNT_ID
 screenGui.Parent = game:GetService("CoreGui")
 screenGui.ResetOnSpawn = false
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 280, 0, 210)
-frame.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID-1)*220)
+frame.Size = UDim2.new(0, 280, 0, 220)
+frame.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID-1)*230)
 frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
 frame.BackgroundTransparency = 0.3
 frame.BorderSizePixel = 0
@@ -46,18 +45,18 @@ frame.Draggable = true
 frame.Parent = screenGui
 
 local statusLabel = Instance.new("TextLabel")
-statusLabel.Size = UDim2.new(1,-10,0,24)
+statusLabel.Size = UDim2.new(1,-10,0,20)
 statusLabel.Position = UDim2.new(0,5,0,5)
 statusLabel.BackgroundTransparency = 1
 statusLabel.Text = "Val: - | Flag: false"
 statusLabel.TextColor3 = Color3.fromRGB(255,255,255)
 statusLabel.Font = Enum.Font.Gotham
-statusLabel.TextSize = 14
+statusLabel.TextSize = 13
 statusLabel.Parent = frame
 
 local throwLabel = Instance.new("TextLabel")
-throwLabel.Size = UDim2.new(1,-10,0,18)
-throwLabel.Position = UDim2.new(0,5,0,30)
+throwLabel.Size = UDim2.new(1,-10,0,16)
+throwLabel.Position = UDim2.new(0,5,0,26)
 throwLabel.BackgroundTransparency = 1
 throwLabel.Text = "Throws: 0"
 throwLabel.TextColor3 = Color3.fromRGB(200,200,200)
@@ -66,8 +65,8 @@ throwLabel.TextSize = 11
 throwLabel.Parent = frame
 
 local countdownLabel = Instance.new("TextLabel")
-countdownLabel.Size = UDim2.new(1,-10,0,18)
-countdownLabel.Position = UDim2.new(0,5,0,48)
+countdownLabel.Size = UDim2.new(1,-10,0,16)
+countdownLabel.Position = UDim2.new(0,5,0,42)
 countdownLabel.BackgroundTransparency = 1
 countdownLabel.Text = "Wait " .. START_DELAY .. "s"
 countdownLabel.TextColor3 = Color3.fromRGB(255,200,100)
@@ -75,10 +74,10 @@ countdownLabel.Font = Enum.Font.Gotham
 countdownLabel.TextSize = 11
 countdownLabel.Parent = frame
 
--- Консоль
+-- Лог-окно
 local logFrame = Instance.new("ScrollingFrame")
-logFrame.Size = UDim2.new(1,-10,0,110)
-logFrame.Position = UDim2.new(0,5,0,68)
+logFrame.Size = UDim2.new(1,-10,0,120)
+logFrame.Position = UDim2.new(0,5,0,62)
 logFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
 logFrame.BorderSizePixel = 0
 logFrame.CanvasSize = UDim2.new(0,0,0,0)
@@ -114,7 +113,7 @@ local function updateGUI()
     end
 end
 
--- =============== ЭКИПИРОВКА ===============
+-- Экипировка
 local function equipAccessory(itemType)
     pcall(function()
         ItemPackageEvent:InvokeServer("Equip", {
@@ -138,7 +137,7 @@ local function equipPorcelain()
     addLog("→ Porcelain")
 end
 
--- =============== ПРОВЕРКА ФЛАГА ===============
+-- Проверка флага
 local function checkMainCoconut()
     local mainPlayer = Players:FindFirstChild(MAIN_ACCOUNT_NAME)
     if not mainPlayer then return false end
@@ -165,18 +164,18 @@ task.spawn(function()
     end
 end)
 
--- =============== БРОСОК ===============
+-- Бросок
 local function tryThrow()
     if not scorchingActive or lastComboValue ~= 39 or throwScheduled or not canThrow then return end
     throwScheduled = true
     local delay = ACCOUNT_ID * 0.5
-    addLog("План через " .. delay .. " сек")
+    addLog("План через " .. delay .. "с")
     task.spawn(function()
         task.wait(delay)
         throwScheduled = false
         if lastComboValue == 39 and scorchingActive and canThrow then
-            local found = false
             local particles = Workspace:FindFirstChild("Particles")
+            local found = false
             if particles then
                 for _, obj in ipairs(particles:GetChildren()) do
                     if obj.Name == "ComboCoconut" then found = true; break end
@@ -188,16 +187,16 @@ local function tryThrow()
                 totalThrows = totalThrows + 1
                 updateGUI()
             else
-                addLog("Отмена: кокос уже есть")
+                addLog("Уже есть ComboCoconut")
             end
         else
-            addLog("Отмена: val=" .. lastComboValue .. " flag=" .. tostring(scorchingActive) .. " canThrow=" .. tostring(canThrow))
+            addLog("Отмена: val=" .. lastComboValue .. " flag=" .. tostring(scorchingActive))
         end
     end)
 end
 
--- =============== СЛУШАТЕЛЬ COMBO COCONUTS ===============
-PlayerAbilityEvent.OnClientEvent:Connect(function(data)  -- для Delta используем прямое подключение
+-- Слушатель комбо
+PlayerAbilityEvent.OnClientEvent:Connect(function(data)
     for tag, info in pairs(data) do
         if tag == "Combo Coconuts" or tag == "ComboCoconuts" then
             if info.Action == "Update" then
@@ -224,7 +223,8 @@ PlayerAbilityEvent.OnClientEvent:Connect(function(data)  -- для Delta исп�
     end
 end)
 
--- =============== ЗАДЕРЖКА СТАРТА ===============
+-- Задержка старта
+local startTime = tick()
 task.spawn(function()
     while tick() - startTime < START_DELAY do
         updateGUI()
@@ -232,11 +232,10 @@ task.spawn(function()
     end
     canThrow = true
     addLog("→→→ СТАРТ ←←←")
-    -- Проверяем, не пора ли бросить сразу
     if lastComboValue == 39 and scorchingActive then
         tryThrow()
     end
 end)
 
 updateGUI()
-addLog("Ожидание " .. START_DELAY .. " сек...")
+addLog("Ожидание " .. START_DELAY .. "с...")
