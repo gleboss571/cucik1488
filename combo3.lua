@@ -1,6 +1,8 @@
 --[[
-   ALT Combo Coconut Thrower (по флагу Coconut Canister на мейне)
+   ALT Combo Coconut Thrower (с авто-экипировкой по value)
    Бросает комбо-кокос при value == 39, если флаг активен.
+   value ≤ 34 → Coconut Canister
+   value ≥ 35 → Porcelain Port-O-Hive
 --]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -18,6 +20,7 @@ local Events = require(ReplicatedStorage.Events)
 local scorchingActive = false
 local lastComboValue = -1
 local totalThrows = 0
+local currentBackpack = nil   -- "canister" или "porcelain"
 
 -- =============== GUI ===============
 local screenGui = Instance.new("ScreenGui")
@@ -60,6 +63,26 @@ local function updateGUI()
     throwLabel.Text = "Throws: " .. totalThrows
 end
 
+-- =============== ФУНКЦИИ ЭКИПИРОВКИ ===============
+local function equipAccessory(itemType)
+    ReplicatedStorage.Events.ItemPackageEvent:InvokeServer("Equip", {
+        Category = "Accessory",
+        Type = itemType,
+    })
+end
+
+local function equipCanister()
+    if currentBackpack == "canister" then return end
+    equipAccessory("Coconut Canister")
+    currentBackpack = "canister"
+end
+
+local function equipPorcelain()
+    if currentBackpack == "porcelain" then return end
+    equipAccessory("Porcelain Port-O-Hive")
+    currentBackpack = "porcelain"
+end
+
 -- =============== ПРОВЕРКА ФЛАГА ===============
 local function checkMainCoconut()
     local mainPlayer = Players:FindFirstChild(MAIN_ACCOUNT_NAME)
@@ -94,12 +117,19 @@ Events.ClientListen("PlayerAbilityEvent", function(data)
                 if value ~= lastComboValue then
                     lastComboValue = value
                     updateGUI()
+
+                    -- Авто-экипировка как в старом скрипте
+                    if value <= 34 then
+                        equipCanister()
+                    else
+                        equipPorcelain()
+                    end
+
                     if value == 39 and scorchingActive then
                         local delay = ACCOUNT_ID * 0.5
                         task.spawn(function()
                             task.wait(delay)
                             if lastComboValue == 39 and scorchingActive then
-                                -- проверяем, не появился ли уже комбо-кокос
                                 local found = false
                                 local particles = Workspace:FindFirstChild("Particles")
                                 if particles then
@@ -121,4 +151,6 @@ Events.ClientListen("PlayerAbilityEvent", function(data)
     end
 end)
 
+-- При старте можно сразу надеть канистру
+equipCanister()
 updateGUI()
