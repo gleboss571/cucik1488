@@ -25,6 +25,7 @@ local tokens = {
     [2000457501] = { name = "Inspire", base = 8, normalColor = Color3.new(1, 1, 0), dupedColor = Color3.new(1, 0.84, 0), bgColor = Color3.new(0,0,0), prefix = "IN " },
     [1629547638] = { name = "Token Link", base = 4, normalColor = Color3.new(0,0,0), dupedColor = nil, bgColor = Color3.new(1,1,1), prefix = "TL " },
     [5877939956] = { name = "Glitch", base = 4, normalColor = Color3.new(1,1,1), dupedColor = Color3.new(1,1,1), bgColor = Color3.new(0,0,0), prefix = "SM " },
+    [8173559749] = { name = "TP", base = 8, normalColor = Color3.new(0.7, 0.2, 0.9), dupedColor = Color3.new(0.5, 0.1, 0.7), bgColor = Color3.new(0,0,0), prefix = "TP " },
 }
 
 local activeTokens = {}
