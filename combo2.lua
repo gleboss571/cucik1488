@@ -1,9 +1,10 @@
 --[[
-   ALT Combo Coconut Thrower (рабочий v2/v3, Delta-совместимый)
+   ALT Combo Coconut Thrower (полный v5-совместимый, Delta)
    Задержка старта 10 сек.
    value ≤ 34 → Coconut Canister
    value ≥ 35 → Porcelain Port-O-Hive
-   При value == 39 и активном флаге (Coconut Canister на мейне) → бросок с задержкой
+   При value == 39 и активном флаге → комбо-бросок
+   При value == 0 → автозапуск цикла из 4 кокосов
 --]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -11,9 +12,12 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 
 local MAIN_ACCOUNT_NAME = "Kukurudza_dontreal"  -- ИМЯ МЕЙНА
-local ACCOUNT_ID = 2                              -- ваш ID (1, 2, 3)
+local ACCOUNT_ID = 2                              -- ваш ID (1,2,3)
+local TOTAL_ACCOUNTS = 3
 local START_DELAY = 10                            -- секунд на запуск скриптов
 local SCAN_INTERVAL = 0.5
+local COCONUT_INTERVAL = 10                       -- пауза между кокосами в цикле
+local CYCLE_DELAY = 10                            -- задержка перед циклом
 
 local LP = Players.LocalPlayer
 
@@ -23,11 +27,20 @@ local PlayerAbilityEvent = Events:WaitForChild("PlayerAbilityEvent")
 local PlayerActivesCommand = Events:WaitForChild("PlayerActivesCommand")
 local ItemPackageEvent = Events:WaitForChild("ItemPackageEvent")
 
-local scorchingActive = false
-local lastComboValue = -1
+-- Переменные состояния
+local lastValue = -1
+local lastValueChangeTime = tick()
+local coconutActive = false
+local hasCanister = false
+local hasPorcelain = false
+local spawnTimer = nil
+local comboCounter = 0
 local totalThrows = 0
-local currentBackpack = nil          -- "canister" или "porcelain"
-local throwScheduled = false
+local cycleActive = false
+local thrownThisCycle = 0
+local cycleSize = 0
+local firstUpdateReceived = false
+local scorchingActive = false
 local canThrow = false
 local startTime = tick()
 
@@ -77,7 +90,7 @@ countdownLabel.Font = Enum.Font.Gotham
 countdownLabel.TextSize = 11
 countdownLabel.Parent = frame
 
--- Лог (две строки)
+-- Лог
 local logLabel1 = Instance.new("TextLabel")
 logLabel1.Size = UDim2.new(1,-10,0,16)
 logLabel1.Position = UDim2.new(0,5,0,64)
@@ -104,7 +117,7 @@ local function addLog(msg)
 end
 
 local function updateGUI()
-    statusLabel.Text = string.format("Val: %d | Flag: %s", lastComboValue, tostring(scorchingActive))
+    statusLabel.Text = string.format("Val: %d | Flag: %s", lastValue, tostring(scorchingActive))
     throwLabel.Text = "Throws: " .. totalThrows
     if not canThrow then
         local remaining = math.max(0, START_DELAY - (tick() - startTime))
@@ -125,17 +138,17 @@ local function equipAccessory(itemType)
 end
 
 local function equipCanister()
-    if currentBackpack == "canister" then return end
+    if hasCanister then return end
     equipAccessory("Coconut Canister")
-    currentBackpack = "canister"
-    addLog("Canister")
+    hasCanister = true
+    hasPorcelain = false
 end
 
 local function equipPorcelain()
-    if currentBackpack == "porcelain" then return end
+    if hasPorcelain then return end
     equipAccessory("Porcelain Port-O-Hive")
-    currentBackpack = "porcelain"
-    addLog("Porcelain")
+    hasPorcelain = true
+    hasCanister = false
 end
 
 -- =============== ПРОВЕРКА ФЛАГА ===============
@@ -157,68 +170,136 @@ task.spawn(function()
             scorchingActive = newFlag
             updateGUI()
             addLog("Flag " .. (scorchingActive and "ON" or "OFF"))
-            if scorchingActive and lastComboValue == 39 and canThrow then
-                tryThrow()
+            if scorchingActive and lastValue == 39 and comboCounter == ACCOUNT_ID and not spawnTimer and canThrow then
+                startSpawnTimer()
             end
         end
         task.wait(SCAN_INTERVAL)
     end
 end)
 
--- =============== БРОСОК (работает v3) ===============
-local function tryThrow()
-    if not scorchingActive or lastComboValue ~= 39 or throwScheduled or not canThrow then return end
-    throwScheduled = true
-    local delay = ACCOUNT_ID * 0.5
-    addLog("Plan " .. delay .. "s")
+-- =============== БРОСОК КОКОСА ===============
+local function SpawnCoconut()
+    PlayerActivesCommand:FireServer({ Name = "Coconut" })   -- рабочий формат v3
+    totalThrows = totalThrows + 1
+    updateGUI()
+    addLog("THROW!")
+end
+
+-- =============== ЦИКЛ БРОСКОВ (как в v5) ===============
+local function startCycle(count)
+    if cycleActive then return end
+    cycleActive = true
+    cycleSize = count
+    thrownThisCycle = 0
+    updateGUI()
     task.spawn(function()
-        task.wait(delay)
-        throwScheduled = false
-        if lastComboValue == 39 and scorchingActive and canThrow then
-            local found = false
-            local particles = Workspace:FindFirstChild("Particles")
-            if particles then
-                for _, obj in ipairs(particles:GetChildren()) do
-                    if obj.Name == "ComboCoconut" then found = true; break end
-                end
+        task.wait(CYCLE_DELAY)
+        for i = 1, count do
+            SpawnCoconut()
+            thrownThisCycle = i
+            updateGUI()
+            if i < count then
+                task.wait(COCONUT_INTERVAL)
             end
-            if not found then
-                addLog("THROW!")
-                PlayerActivesCommand:FireServer({ Name = "Coconut" })   -- формат v3
-                totalThrows = totalThrows + 1
-                updateGUI()
-            else
-                addLog("Already exists")
-            end
-        else
-            addLog("Cancel: val=" .. lastComboValue .. " f=" .. tostring(scorchingActive))
         end
+        cycleActive = false
+        updateGUI()
     end)
 end
 
--- =============== СЛУШАТЕЛЬ COMBO COCONUTS ===============
+-- =============== ДЕТЕКТОР ComboCoconut (очередь) ===============
+task.spawn(function()
+    while true do
+        local present = false
+        local particles = Workspace:FindFirstChild("Particles")
+        if particles then
+            for _, obj in ipairs(particles:GetChildren()) do
+                if obj.Name == "ComboCoconut" then present = true; break end
+            end
+        end
+        if present and not coconutActive then
+            coconutActive = true
+        elseif not present and coconutActive then
+            coconutActive = false
+            comboCounter = comboCounter + 1
+            if comboCounter > TOTAL_ACCOUNTS then comboCounter = 1 end
+            lastValue = 0
+            lastValueChangeTime = tick()
+            updateGUI()
+        end
+        task.wait(0.5)
+    end
+end)
+
+-- =============== ФОЛЛБЭК СТАРТА (value == 0) ===============
+task.spawn(function()
+    while true do
+        if firstUpdateReceived and lastValue == 0 and not cycleActive and not coconutActive and canThrow then
+            task.wait(3)
+            if lastValue == 0 and not cycleActive and not coconutActive and canThrow then
+                startCycle(4)
+            end
+        end
+        task.wait(1)
+    end
+end)
+
+-- =============== ТАЙМЕР КОМБО (value == 39) ===============
+local function startSpawnTimer()
+    if spawnTimer then task.cancel(spawnTimer) spawnTimer = nil end
+    spawnTimer = task.spawn(function()
+        task.wait(13)
+        if lastValue == 39 and comboCounter == ACCOUNT_ID and scorchingActive then
+            SpawnCoconut()
+            startCycle(4)
+        end
+        spawnTimer = nil
+    end)
+end
+
+-- =============== СЛУШАТЕЛЬ PlayerAbilityEvent ===============
 PlayerAbilityEvent.OnClientEvent:Connect(function(data)
     for tag, info in pairs(data) do
         if tag == "Combo Coconuts" or tag == "ComboCoconuts" then
             if info.Action == "Update" then
                 local value = info.Values and info.Values[1] or 0
-                if lastComboValue == -1 then
-                    lastComboValue = value
+                if not firstUpdateReceived then
+                    firstUpdateReceived = true
+                    lastValue = value
                     if value <= 34 then equipCanister() else equipPorcelain() end
                     updateGUI()
                     addLog("Init " .. value)
-                    if value == 39 and scorchingActive and canThrow then tryThrow() end
+                    if value == 39 and comboCounter == ACCOUNT_ID and scorchingActive and canThrow then
+                        startSpawnTimer()
+                    end
                     return
                 end
-                if value ~= lastComboValue then
-                    lastComboValue = value
+                if value ~= lastValue then
+                    lastValue = value
+                    lastValueChangeTime = tick()
                     updateGUI()
                     addLog(value .. (value <= 34 and " Can" or " Porc"))
                     if value <= 34 then equipCanister() else equipPorcelain() end
-                    if value ~= 39 then throwScheduled = false end
-                    if value == 39 and scorchingActive and canThrow then tryThrow() end
+                    if value == 39 and comboCounter == ACCOUNT_ID and scorchingActive and canThrow and not spawnTimer then
+                        startSpawnTimer()
+                    elseif value < 39 and spawnTimer then
+                        task.cancel(spawnTimer)
+                        spawnTimer = nil
+                    end
                 end
             end
+        end
+    end
+end)
+
+-- =============== ВОТЧДОГ (value == 39 зависло) ===============
+task.spawn(function()
+    while true do
+        task.wait(5)
+        if lastValue == 39 and (tick() - lastValueChangeTime) > 30 then
+            lastValue = 0
+            lastValueChangeTime = tick()
         end
     end
 end)
@@ -231,10 +312,12 @@ task.spawn(function()
     end
     canThrow = true
     addLog("START")
-    if lastComboValue == 39 and scorchingActive then
-        tryThrow()
+    if lastValue == 39 and comboCounter == ACCOUNT_ID and scorchingActive and not spawnTimer then
+        startSpawnTimer()
     end
 end)
 
+-- Первичная экипировка
+equipCanister()
 updateGUI()
 addLog("Wait " .. START_DELAY .. "s")
