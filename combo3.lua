@@ -1,7 +1,6 @@
 --[[
-   ALT Combo Coconut Thrower (Delta, задержка 10 сек)
-   Ждёт 10 секунд, затем проверяет Coconut Canister на мейне.
-   При value == 39 и флаг=true → бросок с задержкой ACCOUNT_ID*0.5
+   ALT Combo Coconut Thrower (исправлен GUI + FireServer)
+   Совместим с Delta, задержка старта 10 сек.
 --]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -10,12 +9,12 @@ local Workspace = game:GetService("Workspace")
 
 local MAIN_ACCOUNT_NAME = "Kukurudza_dontreal"  -- ИМЯ МЕЙНА
 local ACCOUNT_ID = 3   -- измените на 1, 2 или 3
-local START_DELAY = 10  -- секунд ожидания
+local START_DELAY = 10
 local SCAN_INTERVAL = 0.5
 
 local LP = Players.LocalPlayer
 
--- Прямой доступ
+-- Прямой доступ к событиям
 local Events = ReplicatedStorage:WaitForChild("Events")
 local PlayerAbilityEvent = Events:WaitForChild("PlayerAbilityEvent")
 local PlayerActivesCommand = Events:WaitForChild("PlayerActivesCommand")
@@ -27,16 +26,17 @@ local totalThrows = 0
 local currentBackpack = nil
 local throwScheduled = false
 local canThrow = false
+local startTime = tick()   -- ВАЖНО: ранее отсутствовало
 
--- =============== GUI (консоль + статус) ===============
+-- =============== ПРОСТОЙ GUI (PlayerGui) ===============
+local playerGui = LP:WaitForChild("PlayerGui")
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ComboThrower_" .. ACCOUNT_ID
-screenGui.Parent = game:GetService("CoreGui")
-screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui   -- ИСПОЛЬЗУЕМ PlayerGui
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 280, 0, 220)
-frame.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID-1)*230)
+frame.Size = UDim2.new(0, 220, 0, 100)
+frame.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID-1)*110)
 frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
 frame.BackgroundTransparency = 0.3
 frame.BorderSizePixel = 0
@@ -51,11 +51,11 @@ statusLabel.BackgroundTransparency = 1
 statusLabel.Text = "Val: - | Flag: false"
 statusLabel.TextColor3 = Color3.fromRGB(255,255,255)
 statusLabel.Font = Enum.Font.Gotham
-statusLabel.TextSize = 13
+statusLabel.TextSize = 12
 statusLabel.Parent = frame
 
 local throwLabel = Instance.new("TextLabel")
-throwLabel.Size = UDim2.new(1,-10,0,16)
+throwLabel.Size = UDim2.new(1,-10,0,18)
 throwLabel.Position = UDim2.new(0,5,0,26)
 throwLabel.BackgroundTransparency = 1
 throwLabel.Text = "Throws: 0"
@@ -65,8 +65,8 @@ throwLabel.TextSize = 11
 throwLabel.Parent = frame
 
 local countdownLabel = Instance.new("TextLabel")
-countdownLabel.Size = UDim2.new(1,-10,0,16)
-countdownLabel.Position = UDim2.new(0,5,0,42)
+countdownLabel.Size = UDim2.new(1,-10,0,18)
+countdownLabel.Position = UDim2.new(0,5,0,44)
 countdownLabel.BackgroundTransparency = 1
 countdownLabel.Text = "Wait " .. START_DELAY .. "s"
 countdownLabel.TextColor3 = Color3.fromRGB(255,200,100)
@@ -74,32 +74,19 @@ countdownLabel.Font = Enum.Font.Gotham
 countdownLabel.TextSize = 11
 countdownLabel.Parent = frame
 
--- Лог-окно
-local logFrame = Instance.new("ScrollingFrame")
-logFrame.Size = UDim2.new(1,-10,0,120)
-logFrame.Position = UDim2.new(0,5,0,62)
-logFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
-logFrame.BorderSizePixel = 0
-logFrame.CanvasSize = UDim2.new(0,0,0,0)
-logFrame.ScrollBarThickness = 6
-logFrame.Parent = frame
-
-local logText = Instance.new("TextLabel")
-logText.Size = UDim2.new(1,0,0,0)
-logText.BackgroundTransparency = 1
-logText.Font = Enum.Font.Code
-logText.TextSize = 11
-logText.TextColor3 = Color3.fromRGB(180,255,180)
-logText.TextWrapped = true
-logText.RichText = true
-logText.Parent = logFrame
+-- Лог (одна строка)
+local logLabel = Instance.new("TextLabel")
+logLabel.Size = UDim2.new(1,-10,0,18)
+logLabel.Position = UDim2.new(0,5,0,64)
+logLabel.BackgroundTransparency = 1
+logLabel.Text = ""
+logLabel.TextColor3 = Color3.fromRGB(180,255,180)
+logLabel.Font = Enum.Font.Code
+logLabel.TextSize = 10
+logLabel.Parent = frame
 
 local function addLog(msg)
-    local newText = (logText.Text ~= "" and logText.Text .. "\n" or "") .. msg
-    logText.Text = newText
-    logText.Size = UDim2.new(1,0,0,logText.TextBounds.Y + 10)
-    logFrame.CanvasSize = UDim2.new(0,0,0,logText.TextBounds.Y + 10)
-    logFrame.CanvasPosition = Vector2.new(0, logFrame.CanvasSize.Y.Offset)
+    logLabel.Text = msg   -- только последнее сообщение
 end
 
 local function updateGUI()
@@ -113,7 +100,7 @@ local function updateGUI()
     end
 end
 
--- Экипировка
+-- =============== ЭКИПИРОВКА ===============
 local function equipAccessory(itemType)
     pcall(function()
         ItemPackageEvent:InvokeServer("Equip", {
@@ -127,17 +114,17 @@ local function equipCanister()
     if currentBackpack == "canister" then return end
     equipAccessory("Coconut Canister")
     currentBackpack = "canister"
-    addLog("→ Canister")
+    addLog("Canister")
 end
 
 local function equipPorcelain()
     if currentBackpack == "porcelain" then return end
     equipAccessory("Porcelain Port-O-Hive")
     currentBackpack = "porcelain"
-    addLog("→ Porcelain")
+    addLog("Porcelain")
 end
 
--- Проверка флага
+-- =============== ПРОВЕРКА ФЛАГА ===============
 local function checkMainCoconut()
     local mainPlayer = Players:FindFirstChild(MAIN_ACCOUNT_NAME)
     if not mainPlayer then return false end
@@ -155,7 +142,7 @@ task.spawn(function()
         if newFlag ~= scorchingActive then
             scorchingActive = newFlag
             updateGUI()
-            addLog("Flag → " .. (scorchingActive and "ON" or "OFF"))
+            addLog("Flag " .. (scorchingActive and "ON" or "OFF"))
             if scorchingActive and lastComboValue == 39 and canThrow then
                 tryThrow()
             end
@@ -164,38 +151,38 @@ task.spawn(function()
     end
 end)
 
--- Бросок
+-- =============== БРОСОК ===============
 local function tryThrow()
     if not scorchingActive or lastComboValue ~= 39 or throwScheduled or not canThrow then return end
     throwScheduled = true
     local delay = ACCOUNT_ID * 0.5
-    addLog("План через " .. delay .. "с")
+    addLog("Planned " .. delay .. "s")
     task.spawn(function()
         task.wait(delay)
         throwScheduled = false
         if lastComboValue == 39 and scorchingActive and canThrow then
-            local particles = Workspace:FindFirstChild("Particles")
             local found = false
+            local particles = Workspace:FindFirstChild("Particles")
             if particles then
                 for _, obj in ipairs(particles:GetChildren()) do
                     if obj.Name == "ComboCoconut" then found = true; break end
                 end
             end
             if not found then
-                addLog("БРОСОК!")
-                PlayerActivesCommand:FireServer({ Name = "Coconut" })
+                addLog("THROW!")
+                PlayerActivesCommand:FireServer({ { Name = "Coconut" } })   -- ИСПРАВЛЕН ФОРМАТ
                 totalThrows = totalThrows + 1
                 updateGUI()
             else
-                addLog("Уже есть ComboCoconut")
+                addLog("Already exists")
             end
         else
-            addLog("Отмена: val=" .. lastComboValue .. " flag=" .. tostring(scorchingActive))
+            addLog("Cancel: val=" .. lastComboValue .. " f=" .. tostring(scorchingActive))
         end
     end)
 end
 
--- Слушатель комбо
+-- =============== СЛУШАТЕЛЬ ===============
 PlayerAbilityEvent.OnClientEvent:Connect(function(data)
     for tag, info in pairs(data) do
         if tag == "Combo Coconuts" or tag == "ComboCoconuts" then
@@ -205,15 +192,14 @@ PlayerAbilityEvent.OnClientEvent:Connect(function(data)
                     lastComboValue = value
                     if value <= 34 then equipCanister() else equipPorcelain() end
                     updateGUI()
-                    addLog("Init val=" .. value)
+                    addLog("Init " .. value)
                     if value == 39 and scorchingActive and canThrow then tryThrow() end
                     return
                 end
                 if value ~= lastComboValue then
-                    local prev = lastComboValue
                     lastComboValue = value
                     updateGUI()
-                    addLog("Val " .. prev .. " → " .. value)
+                    addLog(value .. (value <= 34 and " Can" or " Porc"))
                     if value <= 34 then equipCanister() else equipPorcelain() end
                     if value ~= 39 then throwScheduled = false end
                     if value == 39 and scorchingActive and canThrow then tryThrow() end
@@ -224,18 +210,17 @@ PlayerAbilityEvent.OnClientEvent:Connect(function(data)
 end)
 
 -- Задержка старта
-local startTime = tick()
 task.spawn(function()
     while tick() - startTime < START_DELAY do
         updateGUI()
         task.wait(0.5)
     end
     canThrow = true
-    addLog("→→→ СТАРТ ←←←")
+    addLog("START")
     if lastComboValue == 39 and scorchingActive then
         tryThrow()
     end
 end)
 
 updateGUI()
-addLog("Ожидание " .. START_DELAY .. "с...")
+addLog("Wait " .. START_DELAY .. "s")
