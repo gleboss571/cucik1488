@@ -1,30 +1,33 @@
 --[[
-   Account 2/3: Gumdrops Farmer (Firebase)
+   Account 2/3: Gumdrops Farmer (Firebase, исправленный)
    Использует Gumdrops при boostActive = true, координация через Firebase.
-   MY_ID должен быть 2 или 3.
+   MY_ID = 2 или 3.
 --]]
 
 local MY_ID = 2  -- замените на 3 для второго помощника
-local WEB_APP_URL = "https://fuflik1-e9325-default-rtdb.europe-west1.firebasedatabase.app" -- замените на ваш URL
-local CHECK_INTERVAL = 1
-local GUMMY_THRESHOLD = 20     -- начинаем использовать Gumdrops, если стеков > 20
-local GUMMY_MAX = 30           -- значение, при котором активируется Gummy Morph
-local MORPH_DURATION = 10      -- длительность Gummy Morph
+local WEB_APP_URL = "https://fuflik1-e9325-default-rtdb.europe-west1.firebasedatabase.app"
+local CHECK_INTERVAL = 1       -- опрос Firebase каждую секунду
+local GUMMY_THRESHOLD = 20
+local GUMMY_MAX = 30
+local MORPH_DURATION = 10
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 
--- Текущее значение стеков Gummy Morph (из PlayerAbilityEvent)
+-- Прямой доступ к событиям (Delta-совместимый)
+local Events = ReplicatedStorage:WaitForChild("Events")
+local PlayerAbilityEvent = Events:WaitForChild("PlayerAbilityEvent")
+local PlayerActivesCommand = Events:WaitForChild("PlayerActivesCommand")
+
+-- Текущие стеки Gummy Morph
 local gummyValue = 0
-local Events = require(ReplicatedStorage.Events)
-if Events and Events.ClientListen then
-    Events.ClientListen("PlayerAbilityEvent", function(data)
-        local info = data["Gummy Morph"]
-        if info and info.Action == "Update" then
+PlayerAbilityEvent.OnClientEvent:Connect(function(data)
+    for tag, info in pairs(data) do
+        if tag == "Gummy Morph" and info.Action == "Update" then
             gummyValue = info.Values and info.Values[1] or 0
         end
-    end)
-end
+    end
+end)
 
 -- Чтение состояния из Firebase
 local function readState()
@@ -40,8 +43,8 @@ local function readState()
     return nil
 end
 
--- Запись одного поля в Firebase
-local function writeState(key, value)
+-- Запись одного ключа в Firebase
+local function writeKey(key, value)
     request({
         Url = WEB_APP_URL .. "/state/" .. key .. ".json",
         Method = "PUT",
@@ -50,9 +53,9 @@ local function writeState(key, value)
     })
 end
 
--- Использование Gumdrops
+-- Использование Gumdrops (рабочий формат)
 local function useGumdrops()
-    ReplicatedStorage.Events.PlayerActivesCommand:FireServer({ Name = "Gumdrops" })
+    PlayerActivesCommand:FireServer({ Name = "Gumdrops" })
 end
 
 -- Основной цикл
@@ -70,40 +73,35 @@ task.spawn(function()
         local boostActive = state.boostActive
         local currentFarmer = state.farmer
 
-        -- Если сейчас моя очередь (я уже захватил роль)
+        -- Если сейчас моя очередь
         if myTurn then
-            -- Проверяем, не истекло ли время морфа
             if tick() >= morphEndTime then
                 myTurn = false
-                writeState("farmer", 0)
+                writeKey("farmer", 0)
                 task.wait(CHECK_INTERVAL)
                 continue
             end
 
-            -- Продолжаем использовать Gumdrops, пока стеки < GUMMY_MAX,
-            -- ДАЖЕ ЕСЛИ boostActive стал false
             if gummyValue < GUMMY_MAX then
                 useGumdrops()
                 task.wait(2)  -- каждые 2 секунды
             else
-                -- Gummy Morph активирован, просто ждём
                 task.wait(1)
             end
             continue
         end
 
-        -- Если роль свободна (0) и буст активен, пытаемся захватить
-        if currentFarmer == 0 or currentFarmer == nil then
-            if boostActive and gummyValue >= GUMMY_THRESHOLD then
+        -- Если роль свободна и буст активен
+        if (currentFarmer == 0 or currentFarmer == nil) and boostActive then
+            if gummyValue >= GUMMY_THRESHOLD then
                 -- Пытаемся захватить роль
-                writeState("farmer", MY_ID)
+                writeKey("farmer", MY_ID)
                 task.wait(0.5)
-                -- Проверяем, что роль действительно наша (нет гонки)
                 local check = readState()
                 if check and check.farmer == MY_ID then
                     myTurn = true
                     morphEndTime = tick() + MORPH_DURATION
-                    useGumdrops() -- сразу используем
+                    useGumdrops()
                 end
             end
         end
