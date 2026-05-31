@@ -5,7 +5,7 @@
 --]]
 
 local MY_ID = 2  -- замените на 3 для второго помощника
-local WEB_APP_URL = "https://fuflik1-e9325-default-rtdb.firebaseio.com" -- замените на ваш URL
+local WEB_APP_URL = "https://fuflik1-e9325-default-rtdb.europe-west1.firebasedatabase.app" -- замените на ваш URL
 local CHECK_INTERVAL = 1
 local GUMMY_THRESHOLD = 20     -- начинаем использовать Gumdrops, если стеков > 20
 local GUMMY_MAX = 30           -- значение, при котором активируется Gummy Morph
