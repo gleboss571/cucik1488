@@ -1,5 +1,5 @@
 --[[
-   ALT Combo Coconut Thrower (с авто-экипировкой по value)
+   ALT Combo Coconut Thrower (авто-рюкзак по value, фикс инициализации)
    Бросает комбо-кокос при value == 39, если флаг активен.
    value ≤ 34 → Coconut Canister
    value ≥ 35 → Porcelain Port-O-Hive
@@ -20,7 +20,8 @@ local Events = require(ReplicatedStorage.Events)
 local scorchingActive = false
 local lastComboValue = -1
 local totalThrows = 0
-local currentBackpack = nil   -- "canister" или "porcelain"
+local currentBackpack = nil
+local firstUpdate = true               -- ждём первого события
 
 -- =============== GUI ===============
 local screenGui = Instance.new("ScreenGui")
@@ -114,11 +115,25 @@ Events.ClientListen("PlayerAbilityEvent", function(data)
         if tag == "Combo Coconuts" or tag == "ComboCoconuts" then
             if info.Action == "Update" then
                 local value = info.Values and info.Values[1] or 0
+
+                -- При первом обновлении сразу применяем рюкзак
+                if firstUpdate then
+                    firstUpdate = false
+                    if value <= 34 then
+                        equipCanister()
+                    else
+                        equipPorcelain()
+                    end
+                    lastComboValue = value
+                    updateGUI()
+                    return  -- не запускаем бросок сразу
+                end
+
                 if value ~= lastComboValue then
                     lastComboValue = value
                     updateGUI()
 
-                    -- Авто-экипировка как в старом скрипте
+                    -- Авто-экипировка при изменении value
                     if value <= 34 then
                         equipCanister()
                     else
@@ -151,6 +166,4 @@ Events.ClientListen("PlayerAbilityEvent", function(data)
     end
 end)
 
--- При старте можно сразу надеть канистру
-equipCanister()
 updateGUI()
