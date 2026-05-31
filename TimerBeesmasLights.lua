@@ -9,9 +9,9 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 local COOLDOWN_TIME = 20
 local TARGET_AMOUNT = 25
-local LIFESPAN_MULTIPLIER = 1.24
+local LIFESPAN_MULTIPLIER = 1.22
 local COLLECT_THRESHOLD_FACTOR = 0.9
-local CD_CHECK_INTERVAL = 3
+local CD_CHECK_INTERVAL = 1
 local LOGS = false
 
 local tokenBaseLifetimes = {
