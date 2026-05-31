@@ -1,5 +1,5 @@
 --[[
-   ALT Combo Coconut Thrower (авто-рюкзак по value, фикс инициализации)
+   ALT Combo Coconut Thrower (исправлен: бросок при 39 без firstUpdate)
    Бросает комбо-кокос при value == 39, если флаг активен.
    value ≤ 34 → Coconut Canister
    value ≥ 35 → Porcelain Port-O-Hive
@@ -21,7 +21,7 @@ local scorchingActive = false
 local lastComboValue = -1
 local totalThrows = 0
 local currentBackpack = nil
-local firstUpdate = true               -- ждём первого события
+local throwScheduled = false            -- защита от повторных таймеров
 
 -- =============== GUI ===============
 local screenGui = Instance.new("ScreenGui")
@@ -104,10 +104,43 @@ task.spawn(function()
         if newFlag ~= scorchingActive then
             scorchingActive = newFlag
             updateGUI()
+            -- если флаг только что стал true и value == 39, пробуем бросить
+            if scorchingActive and lastComboValue == 39 then
+                tryThrow()
+            end
         end
         task.wait(SCAN_INTERVAL)
     end
 end)
+
+-- =============== ПОПЫТКА БРОСКА ===============
+local function tryThrow()
+    if not scorchingActive then return end
+    if lastComboValue ~= 39 then return end
+    if throwScheduled then return end   -- уже запланирован бросок
+
+    throwScheduled = true
+    local delay = ACCOUNT_ID * 0.5
+    task.spawn(function()
+        task.wait(delay)
+        throwScheduled = false
+        -- перепроверяем условия на момент пробуждения
+        if lastComboValue == 39 and scorchingActive then
+            local found = false
+            local particles = Workspace:FindFirstChild("Particles")
+            if particles then
+                for _, obj in ipairs(particles:GetChildren()) do
+                    if obj.Name == "ComboCoconut" then found = true; break end
+                end
+            end
+            if not found then
+                ReplicatedStorage.Events.PlayerActivesCommand:FireServer({ Name = "Coconut" })
+                totalThrows = totalThrows + 1
+                updateGUI()
+            end
+        end
+    end)
+end
 
 -- =============== СЛУШАТЕЛЬ COMBO COCONUTS ===============
 Events.ClientListen("PlayerAbilityEvent", function(data)
@@ -116,49 +149,37 @@ Events.ClientListen("PlayerAbilityEvent", function(data)
             if info.Action == "Update" then
                 local value = info.Values and info.Values[1] or 0
 
-                -- При первом обновлении сразу применяем рюкзак
-                if firstUpdate then
-                    firstUpdate = false
-                    if value <= 34 then
-                        equipCanister()
-                    else
-                        equipPorcelain()
-                    end
+                -- первое получение: просто запоминаем и обновляем рюкзак
+                if lastComboValue == -1 then
                     lastComboValue = value
+                    if value <= 34 then equipCanister() else equipPorcelain() end
                     updateGUI()
-                    return  -- не запускаем бросок сразу
+                    -- если уже 39 и флаг активен, планируем бросок
+                    if value == 39 and scorchingActive then
+                        tryThrow()
+                    end
+                    return
                 end
 
                 if value ~= lastComboValue then
                     lastComboValue = value
                     updateGUI()
 
-                    -- Авто-экипировка при изменении value
+                    -- авто-рюкзак
                     if value <= 34 then
                         equipCanister()
                     else
                         equipPorcelain()
                     end
 
+                    -- сброс расписания, если value ушло с 39
+                    if value ~= 39 then
+                        throwScheduled = false
+                    end
+
+                    -- если стало 39, планируем бросок
                     if value == 39 and scorchingActive then
-                        local delay = ACCOUNT_ID * 0.5
-                        task.spawn(function()
-                            task.wait(delay)
-                            if lastComboValue == 39 and scorchingActive then
-                                local found = false
-                                local particles = Workspace:FindFirstChild("Particles")
-                                if particles then
-                                    for _, obj in ipairs(particles:GetChildren()) do
-                                        if obj.Name == "ComboCoconut" then found = true; break end
-                                    end
-                                end
-                                if not found then
-                                    ReplicatedStorage.Events.PlayerActivesCommand:FireServer({ Name = "Coconut" })
-                                    totalThrows = totalThrows + 1
-                                    updateGUI()
-                                end
-                            end
-                        end)
+                        tryThrow()
                     end
                 end
             end
