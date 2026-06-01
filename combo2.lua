@@ -1,6 +1,6 @@
 --[[
    ALT Combo Coconut Thrower (Firebase-очередь, улучшенный)
-   Попытки броска: 1) unpack, 2) unpack, 3) без unpack.
+   Попытки броска: 1) unpack, 2) без unpack, с ожиданием до 2 сек.
    + индикатор FB, повторные запросы, восстановление очереди.
 --]]
 
@@ -11,7 +11,7 @@ local HttpService = game:GetService("HttpService")
 
 -- ====================== НАСТРОЙКИ ======================
 local FIREBASE_URL = "https://fuflik1-e9325-default-rtdb.europe-west1.firebasedatabase.app"
-local ACCOUNT_ID = 2                  -- 1,2,3,4
+local ACCOUNT_ID = 1                  -- 1,2,3,4
 local TOTAL_ACCOUNTS = 2
 local COMBO_DELAY = 18                -- задержка перед броском
 local CYCLE_COUNT = 4                 -- кокосов после комбо
@@ -201,38 +201,33 @@ local function equipPorcelain()
     hasCanister = false
 end
 
--- =============== БРОСОК: 1) unpack, 2) unpack, 3) без unpack ===============
+-- =============== БРОСОК: 1) unpack, 2) без unpack, ожидание до 2 сек ===============
 local function SpawnCoconut()
     -- Попытка 1: unpack
     PlayerActivesCommand:FireServer(unpack({ { Name = "Coconut" } }))
-    task.wait(1)
-    if hasComboCoconut() then
-        totalThrows = totalThrows + 1
-        updateGUI(readQueue() or 0)
-        addLog("THROW! (unpack 1)")
-        return true
+    local start = tick()
+    while tick() - start < 2 do
+        if hasComboCoconut() then
+            totalThrows = totalThrows + 1
+            updateGUI(readQueue() or 0)
+            addLog("THROW! (unpack)")
+            return true
+        end
+        task.wait(0.2)
     end
 
-    -- Попытка 2: unpack (повтор)
-    addLog("Retry unpack 2...")
-    PlayerActivesCommand:FireServer(unpack({ { Name = "Coconut" } }))
-    task.wait(1)
-    if hasComboCoconut() then
-        totalThrows = totalThrows + 1
-        updateGUI(readQueue() or 0)
-        addLog("THROW! (unpack 2)")
-        return true
-    end
-
-    -- Попытка 3: без unpack
     addLog("Retry without unpack...")
+    -- Попытка 2: без unpack
     PlayerActivesCommand:FireServer({ Name = "Coconut" })
-    task.wait(1)
-    if hasComboCoconut() then
-        totalThrows = totalThrows + 1
-        updateGUI(readQueue() or 0)
-        addLog("THROW! (no unpack)")
-        return true
+    start = tick()
+    while tick() - start < 2 do
+        if hasComboCoconut() then
+            totalThrows = totalThrows + 1
+            updateGUI(readQueue() or 0)
+            addLog("THROW! (no unpack)")
+            return true
+        end
+        task.wait(0.2)
     end
 
     addLog("FAILED to spawn ComboCoconut")
