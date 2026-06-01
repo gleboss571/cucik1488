@@ -16,7 +16,7 @@ local SCAN_INTERVAL = 0.5
 local COCONUT_INTERVAL = 10                       -- пауза между кокосами в цикле
 local CYCLE_DELAY = 10                            -- задержка перед циклом
 local CYCLE_COUNT = 4                             -- количество кокосов в цикле (по умолчанию 4)
-local COMBO_DELAY = 13                            -- задержка перед комбо-броском (сек)
+local COMBO_DELAY = 16                            -- задержка перед комбо-броском (сек)
 
 local LP = Players.LocalPlayer
 
