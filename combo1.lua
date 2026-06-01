@@ -1,7 +1,7 @@
 --[[
-   ALT Combo Coconut Thrower (FINAL v7)
+   ALT Combo Coconut Thrower (FINAL v8)
    Delta Executor, Lua 5.1
-   Все баги v6 исправлены.
+   Фикс гонки через токен-клейм в отдельном поле comboClaim.
 --]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -41,7 +41,7 @@ local fbStatus = "FB: --"
 
 local cachedQueue = 0
 local lastQueueCheck = 0
-local lastEquipTime = 0          -- (7) debounce экипировки
+local lastEquipTime = 0
 
 -- ====================== GUI ======================
 local playerGui = LP:WaitForChild("PlayerGui")
@@ -126,7 +126,6 @@ local function addLog(msg)
     end)
 end
 
--- (5) Учёт отрицательного ID в GUI
 local function updateGUI()
     statusLabel.Text = string.format(
         "Val: %d | Q: %s | #%d", lastValue, tostring(cachedQueue), ACCOUNT_ID)
@@ -149,7 +148,11 @@ local function updateGUI()
         countdownLabel.Text = "Wait " .. math.ceil(remaining) .. "s"
     else
         indicator.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-        countdownLabel.Text = "Waiting (Q=" .. tostring(cachedQueue) .. ")"
+        if type(cachedQueue) == "number" and cachedQueue < 0 then
+            countdownLabel.Text = "Busy (Q=" .. tostring(cachedQueue) .. ")"
+        else
+            countdownLabel.Text = "Waiting (Q=" .. tostring(cachedQueue) .. ")"
+        end
     end
 
     fbLabel.Text = fbStatus
@@ -212,13 +215,50 @@ local function readLastUpdateTime()
     return nil
 end
 
+-- ========== CLAIM — отдельное поле для токена ==========
+local function writeClaim(token)
+    local body
+    if type(token) == "string" then
+        body = '"' .. token .. '"'
+    else
+        body = tostring(token)
+    end
+    safeRequest(
+        FIREBASE_URL .. FIREBASE_PATH .. "/comboClaim.json",
+        "PUT", body)
+end
+
+local function readClaim()
+    local body = safeRequest(
+        FIREBASE_URL .. FIREBASE_PATH .. "/comboClaim.json", "GET")
+    if body and body ~= "null" then
+        return body:gsub('"', '')  -- убираем JSON-кавычки
+    end
+    return nil
+end
+
+-- ========== ЗАХВАТ ОЧЕРЕДИ С ТОКЕНОМ ==========
 local function tryAcquireQueue()
     local current = readQueue()
+    -- Если не наш ход ИЛИ очередь уже захвачена (отрицательная) — отказ
     if current ~= ACCOUNT_ID then return false end
-    writeQueue(-ACCOUNT_ID)
+
+    -- Генерируем уникальный токен
+    local token = ACCOUNT_ID .. "-" .. tostring(math.floor(tick() * 1000) % 1000000)
+    writeClaim(token)
     task.wait(2)
-    local verify = readQueue()
-    return verify == -ACCOUNT_ID
+
+    -- Проверяем — наш ли токен остался
+    local verify = readClaim()
+    if verify == token then
+        -- Мы победили — блокируем очередь
+        writeQueue(-ACCOUNT_ID)
+        addLog("Acquired queue (token OK)")
+        return true
+    end
+
+    addLog("Token conflict: wrote " .. token .. " got " .. tostring(verify))
+    return false
 end
 
 local function getNextQueue()
@@ -250,7 +290,6 @@ local function equipAccessory(itemType)
     return ok
 end
 
--- (7) Debounce — не чаще раза в 3 секунды
 local function equipCanister()
     if isAccessoryEquipped("Coconut Canister") then
         hasCanister = true
@@ -287,11 +326,10 @@ local function hasComboCoconut()
 end
 
 -- ====================== БРОСОК ======================
--- (6) Разное время ожидания: первый формат ждёт дольше
 local function SpawnCoconut()
     local formats = {
-        {fn = function() PlayerActivesCommand:FireServer({Name = "Coconut"}) end,              waitTime = 5},
-        {fn = function() PlayerActivesCommand:FireServer("Coconut") end,                       waitTime = 3},
+        {fn = function() PlayerActivesCommand:FireServer({Name = "Coconut"}) end,                  waitTime = 5},
+        {fn = function() PlayerActivesCommand:FireServer("Coconut") end,                           waitTime = 3},
         {fn = function() PlayerActivesCommand:FireServer({Name = "Coconut", Type = "Active"}) end, waitTime = 3},
     }
 
@@ -332,7 +370,6 @@ local function startCycle(count)
 end
 
 -- ====================== ОСНОВНАЯ ЛОГИКА ======================
--- (3) Cleanup только в одной точке — после pcall
 local function tryCombo()
     if not canThrow then return end
     if lastValue ~= 39 then return end
@@ -343,14 +380,24 @@ local function tryCombo()
 
     comboThread = task.spawn(function()
         local ok, err = pcall(function()
+            -- Шаг 1: захват очереди через токен
             if not tryAcquireQueue() then
                 addLog("Queue conflict, skipping")
                 return
             end
+
+            -- Шаг 2: убеждаемся, что очередь реально наша
+            if cachedQueue ~= -ACCOUNT_ID then
+                addLog("Queue stolen after acquire")
+                return
+            end
+
             updateGUI()
 
+            -- Шаг 3: ждём COMBO_DELAY
             task.wait(COMBO_DELAY)
 
+            -- Шаг 4: перепроверка после ожидания
             if lastValue ~= 39 then
                 addLog("Abort: value changed during delay")
                 writeQueue(getNextQueue())
@@ -363,6 +410,7 @@ local function tryCombo()
                 return
             end
 
+            -- Шаг 5: бросок
             local nextQueue = getNextQueue()
             local success = SpawnCoconut()
             if success then
@@ -406,14 +454,14 @@ PlayerAbilityEvent.OnClientEvent:Connect(function(data)
                 if value == 39 then
                     tryCombo()
                 elseif value < 39 and comboLock then
-                    -- (1) Убиваем поток
+                    -- Убиваем поток
                     if comboThread then
                         pcall(task.cancel, comboThread)
                         comboThread = nil
                     end
                     comboLock = false
 
-                    -- (1) Восстанавливаем очередь, если мы её захватили
+                    -- Восстанавливаем очередь, если мы её захватили
                     task.spawn(function()
                         local current = readQueue()
                         if current == -ACCOUNT_ID then
@@ -431,7 +479,6 @@ PlayerAbilityEvent.OnClientEvent:Connect(function(data)
 end)
 
 -- ====================== ЗАДЕРЖКА СТАРТА ======================
--- (2) canThrow = true ПЕРЕД tryCombo
 task.spawn(function()
     while os.time() - startTime < START_DELAY do
         if os.time() - lastQueueCheck > 3 then readQueue() end
@@ -457,8 +504,6 @@ task.spawn(function()
 end)
 
 -- ====================== ВОТЧДОГ ======================
--- (4) Только аккаунт 1 ресетит мёртвую очередь
--- (5) Учёт отрицательного ID
 task.spawn(function()
     task.wait(math.random(0, 10))
 
@@ -477,7 +522,6 @@ task.spawn(function()
         end
 
         -- Retry при зависшем значении 39
-        local isMyQueue = (cachedQueue == ACCOUNT_ID or cachedQueue == -ACCOUNT_ID)
         if lastValue == 39
             and (os.time() - lastValueChangeTime) > 30
             and not comboLock
