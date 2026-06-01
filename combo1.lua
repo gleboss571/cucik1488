@@ -12,7 +12,7 @@ local HttpService = game:GetService("HttpService")
 -- ====================== НАСТРОЙКИ ======================
 local FIREBASE_URL = "https://fuflik1-e9325-default-rtdb.europe-west1.firebasedatabase.app"
 local ACCOUNT_ID = 1                  -- 1,2,3,4
-local TOTAL_ACCOUNTS = 4
+local TOTAL_ACCOUNTS = 2
 local COMBO_DELAY = 18                -- задержка перед броском
 local CYCLE_COUNT = 4                 -- кокосов после комбо
 local CYCLE_DELAY = 10                -- задержка перед циклом
