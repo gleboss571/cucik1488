@@ -9,7 +9,7 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 -- ====================== ДОБАВЛЯЙТЕ СВОИ СКРИПТЫ СЮДА ======================
 local SCRIPTS = {
-    { Name = "Suslik", Url = "https://raw.githubusercontent.com/gleboss571/cucik1488/refs/heads/main/suslik.lua" },
+    { Name = "Hps", Url = "https://raw.githubusercontent.com/gleboss571/cucik1488/refs/heads/main/hpsMain.lua" },
     { Name = "Timer Beesmas Lights", Url = "https://raw.githubusercontent.com/gleboss571/cucik1488/refs/heads/main/TimerBeesmasLights.lua" },
     { Name = "ATL", Url = "https://raw.githubusercontent.com/gleboss571/cucik1488/refs/heads/main/atl.lua" },
     { Name = "Auto Splinker", Url = "https://raw.githubusercontent.com/gleboss571/cucik1488/refs/heads/main/autosplinker.lua" },
