@@ -1,10 +1,7 @@
 --[[
-   ALT Combo Coconut Thrower (полный v5-совместимый, Delta)
-   Задержка старта 10 сек.
-   value ≤ 34 → Coconut Canister
-   value ≥ 35 → Porcelain Port-O-Hive
-   При value == 39 и активном флаге → комбо-бросок
-   При value == 0 → автозапуск цикла из 4 кокосов
+   ALT Combo Coconut Thrower (v5 + настройки цикла и таймера)
+   Переменные: CYCLE_COUNT (кокосов в цикле), COMBO_DELAY (секунд перед комбо)
+   Delta-совместим, задержка старта 10 сек.
 --]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -18,6 +15,8 @@ local START_DELAY = 10                            -- секунд на запу�
 local SCAN_INTERVAL = 0.5
 local COCONUT_INTERVAL = 10                       -- пауза между кокосами в цикле
 local CYCLE_DELAY = 10                            -- задержка перед циклом
+local CYCLE_COUNT = 4                             -- количество кокосов в цикле (по умолчанию 4)
+local COMBO_DELAY = 16                            -- задержка перед комбо-броском (сек)
 
 local LP = Players.LocalPlayer
 
@@ -180,13 +179,13 @@ end)
 
 -- =============== БРОСОК КОКОСА ===============
 local function SpawnCoconut()
-    PlayerActivesCommand:FireServer({ Name = "Coconut" })   -- рабочий формат v3
+    PlayerActivesCommand:FireServer({ Name = "Coconut" })
     totalThrows = totalThrows + 1
     updateGUI()
     addLog("THROW!")
 end
 
--- =============== ЦИКЛ БРОСКОВ (как в v5) ===============
+-- =============== ЦИКЛ БРОСКОВ (настраиваемый CYCLE_COUNT) ===============
 local function startCycle(count)
     if cycleActive then return end
     cycleActive = true
@@ -238,21 +237,21 @@ task.spawn(function()
         if firstUpdateReceived and lastValue == 0 and not cycleActive and not coconutActive and canThrow then
             task.wait(3)
             if lastValue == 0 and not cycleActive and not coconutActive and canThrow then
-                startCycle(4)
+                startCycle(CYCLE_COUNT)
             end
         end
         task.wait(1)
     end
 end)
 
--- =============== ТАЙМЕР КОМБО (value == 39) ===============
+-- =============== ТАЙМЕР КОМБО (настраиваемый COMBO_DELAY) ===============
 local function startSpawnTimer()
     if spawnTimer then task.cancel(spawnTimer) spawnTimer = nil end
     spawnTimer = task.spawn(function()
-        task.wait(13)
+        task.wait(COMBO_DELAY)
         if lastValue == 39 and comboCounter == ACCOUNT_ID and scorchingActive then
             SpawnCoconut()
-            startCycle(4)
+            startCycle(CYCLE_COUNT)
         end
         spawnTimer = nil
     end)
