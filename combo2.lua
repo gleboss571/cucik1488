@@ -1,7 +1,7 @@
 --[[
-   ALT Combo Coconut Thrower (FINAL v8)
+   ALT Combo Coconut Thrower (FINAL v9)
    Delta Executor, Lua 5.1
-   Фикс гонки через токен-клейм в отдельном поле comboClaim.
+   Автопропуск хода если нет 39.
 --]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -13,11 +13,13 @@ local FIREBASE_URL = "https://fuflik1-e9325-default-rtdb.europe-west1.firebaseda
 local FIREBASE_PATH = ""
 local ACCOUNT_ID = 2
 local TOTAL_ACCOUNTS = 2
-local COMBO_DELAY = 18
+local COMBO_DELAY = 16
 local CYCLE_COUNT = 4
 local CYCLE_DELAY = 10
 local COCONUT_INTERVAL = 10
 local START_DELAY = 10
+local QUEUE_POLL_INTERVAL = 1   -- как часто проверяем очередь
+local SKIP_DELAY = 1            -- задержка перед пропуском (антиспам Firebase)
 
 local LP = Players.LocalPlayer
 
@@ -38,6 +40,7 @@ local startTime = os.time()
 local comboLock = false
 local comboThread = nil
 local fbStatus = "FB: --"
+local skipping = false          -- защита от двойного пропуска
 
 local cachedQueue = 0
 local lastQueueCheck = 0
@@ -136,12 +139,15 @@ local function updateGUI()
     if comboLock then
         indicator.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
         countdownLabel.Text = "COMBO IN PROGRESS"
+    elseif skipping then
+        indicator.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
+        countdownLabel.Text = "SKIPPING (no 39)"
     elseif cycleActive then
         indicator.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
         countdownLabel.Text = "CYCLE ACTIVE"
     elseif isMyQueue and lastValue == 39 then
         indicator.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        countdownLabel.Text = "MY TURN"
+        countdownLabel.Text = "MY TURN — READY"
     elseif not canThrow then
         indicator.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
         local remaining = math.max(0, START_DELAY - (os.time() - startTime))
@@ -149,7 +155,7 @@ local function updateGUI()
     else
         indicator.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
         if type(cachedQueue) == "number" and cachedQueue < 0 then
-            countdownLabel.Text = "Busy (Q=" .. tostring(cachedQueue) .. ")"
+            countdownLabel.Text = "Busy (acct " .. tostring(math.abs(cachedQueue)) .. " combo)"
         else
             countdownLabel.Text = "Waiting (Q=" .. tostring(cachedQueue) .. ")"
         end
@@ -215,7 +221,7 @@ local function readLastUpdateTime()
     return nil
 end
 
--- ========== CLAIM — отдельное поле для токена ==========
+-- ========== CLAIM — токен для защиты от гонки ==========
 local function writeClaim(token)
     local body
     if type(token) == "string" then
@@ -232,37 +238,68 @@ local function readClaim()
     local body = safeRequest(
         FIREBASE_URL .. FIREBASE_PATH .. "/comboClaim.json", "GET")
     if body and body ~= "null" then
-        return body:gsub('"', '')  -- убираем JSON-кавычки
+        return body:gsub('"', '')
     end
     return nil
 end
 
--- ========== ЗАХВАТ ОЧЕРЕДИ С ТОКЕНОМ ==========
 local function tryAcquireQueue()
     local current = readQueue()
-    -- Если не наш ход ИЛИ очередь уже захвачена (отрицательная) — отказ
     if current ~= ACCOUNT_ID then return false end
 
-    -- Генерируем уникальный токен
     local token = ACCOUNT_ID .. "-" .. tostring(math.floor(tick() * 1000) % 1000000)
     writeClaim(token)
     task.wait(2)
 
-    -- Проверяем — наш ли токен остался
     local verify = readClaim()
     if verify == token then
-        -- Мы победили — блокируем очередь
         writeQueue(-ACCOUNT_ID)
-        addLog("Acquired queue (token OK)")
+        addLog("Acquired (token OK)")
         return true
     end
 
-    addLog("Token conflict: wrote " .. token .. " got " .. tostring(verify))
+    addLog("Token conflict: " .. token .. " vs " .. tostring(verify))
     return false
 end
 
 local function getNextQueue()
     return (ACCOUNT_ID % TOTAL_ACCOUNTS) + 1
+end
+
+-- ====================== ПРОПУСК ХОДА ======================
+local function skipTurn()
+    if skipping then return end
+    if comboLock then return end
+
+    skipping = true
+    updateGUI()
+
+    task.spawn(function()
+        task.wait(SKIP_DELAY)
+
+        -- Перепроверяем — может за секунду значение стало 39
+        if lastValue == 39 then
+            addLog("Skip aborted — got 39!")
+            skipping = false
+            updateGUI()
+            return
+        end
+
+        -- Перечитываем очередь — вдруг кто-то уже передал
+        local current = readQueue()
+        if current ~= ACCOUNT_ID then
+            addLog("Skip aborted — not my turn anymore")
+            skipping = false
+            updateGUI()
+            return
+        end
+
+        local nextQ = getNextQueue()
+        writeQueue(nextQ)
+        addLog("No 39, skip → " .. nextQ)
+        skipping = false
+        updateGUI()
+    end)
 end
 
 -- ====================== ЭКИПИРОВКА ======================
@@ -373,31 +410,26 @@ end
 local function tryCombo()
     if not canThrow then return end
     if lastValue ~= 39 then return end
-    if comboLock or cycleActive then return end
+    if comboLock or cycleActive or skipping then return end
 
     comboLock = true
     updateGUI()
 
     comboThread = task.spawn(function()
         local ok, err = pcall(function()
-            -- Шаг 1: захват очереди через токен
             if not tryAcquireQueue() then
                 addLog("Queue conflict, skipping")
                 return
             end
 
-            -- Шаг 2: убеждаемся, что очередь реально наша
             if cachedQueue ~= -ACCOUNT_ID then
                 addLog("Queue stolen after acquire")
                 return
             end
 
             updateGUI()
-
-            -- Шаг 3: ждём COMBO_DELAY
             task.wait(COMBO_DELAY)
 
-            -- Шаг 4: перепроверка после ожидания
             if lastValue ~= 39 then
                 addLog("Abort: value changed during delay")
                 writeQueue(getNextQueue())
@@ -410,7 +442,6 @@ local function tryCombo()
                 return
             end
 
-            -- Шаг 5: бросок
             local nextQueue = getNextQueue()
             local success = SpawnCoconut()
             if success then
@@ -422,7 +453,6 @@ local function tryCombo()
 
         if not ok then addLog("ComboErr: " .. tostring(err)) end
 
-        -- Единственная точка cleanup:
         comboLock = false
         comboThread = nil
         updateGUI()
@@ -452,16 +482,18 @@ PlayerAbilityEvent.OnClientEvent:Connect(function(data)
                 end
 
                 if value == 39 then
-                    tryCombo()
+                    -- Получили 39 — если наш ход, запускаем комбо
+                    if cachedQueue == ACCOUNT_ID then
+                        tryCombo()
+                    end
                 elseif value < 39 and comboLock then
-                    -- Убиваем поток
+                    -- Значение упало — отменяем комбо
                     if comboThread then
                         pcall(task.cancel, comboThread)
                         comboThread = nil
                     end
                     comboLock = false
 
-                    -- Восстанавливаем очередь, если мы её захватили
                     task.spawn(function()
                         local current = readQueue()
                         if current == -ACCOUNT_ID then
@@ -472,6 +504,34 @@ PlayerAbilityEvent.OnClientEvent:Connect(function(data)
                         end
                         updateGUI()
                     end)
+                end
+            end
+        end
+    end
+end)
+
+-- ====================== ПОЛЛИНГ ОЧЕРЕДИ ======================
+-- Главный цикл: проверяем очередь и решаем — комбо или пропуск
+task.spawn(function()
+    -- Ждём окончания START_DELAY
+    while not canThrow do
+        task.wait(0.5)
+    end
+
+    while true do
+        task.wait(QUEUE_POLL_INTERVAL)
+
+        if not comboLock and not cycleActive and not skipping and canThrow then
+            readQueue()
+            updateGUI()
+
+            if cachedQueue == ACCOUNT_ID then
+                if lastValue == 39 then
+                    -- Наш ход + есть 39 → комбо
+                    tryCombo()
+                else
+                    -- Наш ход + нет 39 → пропускаем
+                    skipTurn()
                 end
             end
         end
@@ -497,10 +557,6 @@ task.spawn(function()
 
     canThrow = true
     addLog("START")
-
-    if cachedQueue == ACCOUNT_ID and lastValue == 39 then
-        tryCombo()
-    end
 end)
 
 -- ====================== ВОТЧДОГ ======================
@@ -510,7 +566,7 @@ task.spawn(function()
     while true do
         task.wait(30)
 
-        -- Проверка мёртвой очереди — только аккаунт 1
+        -- Мёртвая очередь — только аккаунт 1 ресетит
         local lastUpdate = readLastUpdateTime()
         if lastUpdate and (os.time() - lastUpdate) > 180 then
             if ACCOUNT_ID == 1 then
@@ -521,20 +577,12 @@ task.spawn(function()
             end
         end
 
-        -- Retry при зависшем значении 39
-        if lastValue == 39
-            and (os.time() - lastValueChangeTime) > 30
+        -- Застрявший отрицательный ID
+        if cachedQueue == -ACCOUNT_ID
             and not comboLock
-            and not cycleActive
-            and canThrow then
-            addLog("WD: retry combo")
-            lastValueChangeTime = os.time()
-            -- Если очередь застряла на нашем отрицательном ID — восстановить
-            if cachedQueue == -ACCOUNT_ID then
-                writeQueue(ACCOUNT_ID)
-                addLog("WD: restored negative queue → " .. ACCOUNT_ID)
-            end
-            tryCombo()
+            and not cycleActive then
+            writeQueue(ACCOUNT_ID)
+            addLog("WD: restored stuck -ID → " .. ACCOUNT_ID)
         end
 
         -- Проверка персонажа
