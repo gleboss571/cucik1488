@@ -14,12 +14,12 @@ local FIREBASE_PATH = ""
 local ACCOUNT_ID    = 1   -- менять на каждом аккаунте: 1, 2, 3, 4
 local TOTAL_ACCOUNTS = 2
 local START_DELAY    = 10
-local COMBO_DELAY    = 18  -- секунд после исчезновения кокоса → бросок
+local COMBO_DELAY    = 16  -- секунд после исчезновения кокоса → бросок
 local CYCLE_COUNT    = 4
 local CYCLE_DELAY    = 10
 local COCONUT_INTERVAL = 10
-local QUEUE_POLL_INTERVAL = 0.3
-local SKIP_DELAY     = 0.3
+local QUEUE_POLL_INTERVAL = 1
+local SKIP_DELAY     = 1
 local COCONUT_SCAN   = 0.1  -- как часто сканируем Particles
 
 local LP = Players.LocalPlayer
