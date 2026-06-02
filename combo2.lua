@@ -1,6 +1,6 @@
 --[[
-   ALT Combo Coconut Thrower (Firebase v1)
-   Очередь через Firebase. Пропуск хода если нет 39.
+   ALT Combo Coconut Thrower (Firebase v2)
+   Тригер: ComboCoconut исчез из Particles → таймер → бросок.
    Delta-совместим, Lua 5.1.
 --]]
 
@@ -11,40 +11,46 @@ local Workspace = game:GetService("Workspace")
 -- ====================== НАСТРОЙКИ ======================
 local FIREBASE_URL = "https://fuflik1-e9325-default-rtdb.europe-west1.firebasedatabase.app"
 local FIREBASE_PATH = ""
-local ACCOUNT_ID = 2          -- менять на каждом аккаунте: 1, 2, 3, 4
+local ACCOUNT_ID    = 2   -- менять на каждом аккаунте: 1, 2, 3, 4
 local TOTAL_ACCOUNTS = 2
-local START_DELAY = 10
-local COMBO_DELAY = 16
-local CYCLE_COUNT = 4
-local CYCLE_DELAY = 10
+local START_DELAY    = 10
+local COMBO_DELAY    = 18  -- секунд после исчезновения кокоса → бросок
+local CYCLE_COUNT    = 4
+local CYCLE_DELAY    = 10
 local COCONUT_INTERVAL = 10
-local QUEUE_POLL_INTERVAL = 1  -- как часто проверяем очередь
-local SKIP_DELAY = 1           -- пауза перед пропуском хода
+local QUEUE_POLL_INTERVAL = 0.3
+local SKIP_DELAY     = 0.3
+local COCONUT_SCAN   = 0.1  -- как часто сканируем Particles
 
 local LP = Players.LocalPlayer
 
-local Events = ReplicatedStorage:WaitForChild("Events")
-local PlayerAbilityEvent = Events:WaitForChild("PlayerAbilityEvent")
-local PlayerActivesCommand = Events:WaitForChild("PlayerActivesCommand")
-local ItemPackageEvent = Events:WaitForChild("ItemPackageEvent")
+local Events            = ReplicatedStorage:WaitForChild("Events")
+local PlayerAbilityEvent    = Events:WaitForChild("PlayerAbilityEvent")
+local PlayerActivesCommand  = Events:WaitForChild("PlayerActivesCommand")
+local ItemPackageEvent      = Events:WaitForChild("ItemPackageEvent")
 
 -- ====================== СОСТОЯНИЕ ======================
-local lastValue = -1
+local lastValue          = -1
 local lastValueChangeTime = tick()
-local hasCanister = false
-local hasPorcelain = false
-local spawnTimer = nil
-local totalThrows = 0
-local cycleActive = false
+local hasCanister        = false
+local hasPorcelain       = false
+local comboThread        = nil
+local totalThrows        = 0
+local cycleActive        = false
 local firstUpdateReceived = false
-local canThrow = false
-local startTime = tick()
-local skipping = false
-local lastEquipTime = 0
+local canThrow           = false
+local startTime          = tick()
+local skipping           = false
+local comboLock          = false
+local lastEquipTime      = 0
 
-local cachedQueue = 0
+-- Состояние кокоса в Particles
+local coconutPresent     = false  -- сейчас есть в Particles
+local coconutSeenWhileMyQueue = false  -- видели кокос пока наша очередь
+
+local cachedQueue  = 0
 local lastQueueCheck = 0
-local fbStatus = "FB: --"
+local fbStatus     = "FB: --"
 
 -- ====================== GUI ======================
 local playerGui = LP:WaitForChild("PlayerGui")
@@ -76,7 +82,6 @@ local statusLabel = Instance.new("TextLabel")
 statusLabel.Size = UDim2.new(1, -10, 0, 20)
 statusLabel.Position = UDim2.new(0, 5, 0, 5)
 statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "Val: - | Q: ? | #" .. ACCOUNT_ID
 statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 statusLabel.Font = Enum.Font.Gotham
 statusLabel.TextSize = 12
@@ -114,7 +119,7 @@ fbLabel.Parent = frame
 
 local logLabel = Instance.new("TextLabel")
 logLabel.Size = UDim2.new(1, -10, 0, 16)
-logLabel.Position = UDim2.new(0, 5, 0, 82)
+logLabel.Position = UDim2.new(0, 5, 0, 84)
 logLabel.BackgroundTransparency = 1
 logLabel.Text = ""
 logLabel.TextColor3 = Color3.fromRGB(180, 255, 180)
@@ -134,9 +139,7 @@ local function updateGUI()
         "Val: %d | Q: %s | #%d", lastValue, tostring(cachedQueue), ACCOUNT_ID)
     throwLabel.Text = "Throws: " .. totalThrows
 
-    local isMyQueue = (cachedQueue == ACCOUNT_ID)
-
-    if spawnTimer then
+    if comboLock then
         indicator.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
         countdownLabel.Text = "COMBO IN PROGRESS"
     elseif skipping then
@@ -145,12 +148,15 @@ local function updateGUI()
     elseif cycleActive then
         indicator.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
         countdownLabel.Text = "CYCLE ACTIVE"
-    elseif isMyQueue and lastValue == 39 then
+    elseif cachedQueue == ACCOUNT_ID and coconutPresent then
+        indicator.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
+        countdownLabel.Text = "WAITING COCONUT..."
+    elseif cachedQueue == ACCOUNT_ID and lastValue == 39 then
         indicator.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
         countdownLabel.Text = "MY TURN — READY"
-    elseif isMyQueue and lastValue ~= 39 then
+    elseif cachedQueue == ACCOUNT_ID then
         indicator.BackgroundColor3 = Color3.fromRGB(255, 150, 0)
-        countdownLabel.Text = "MY TURN (wait 39)"
+        countdownLabel.Text = "MY TURN (no 39)"
     elseif not canThrow then
         indicator.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
         local remaining = math.max(0, START_DELAY - (tick() - startTime))
@@ -220,85 +226,8 @@ local function readLastUpdateTime()
     return nil
 end
 
-local function writeClaim(token)
-    local body = type(token) == "string"
-        and ('"' .. token .. '"')
-        or tostring(token)
-    safeRequest(
-        FIREBASE_URL .. FIREBASE_PATH .. "/comboClaim.json",
-        "PUT", body)
-end
-
-local function readClaim()
-    local body = safeRequest(
-        FIREBASE_URL .. FIREBASE_PATH .. "/comboClaim.json", "GET")
-    if body and body ~= "null" then
-        return body:gsub('"', '')
-    end
-    return nil
-end
-
 local function getNextQueue()
     return (ACCOUNT_ID % TOTAL_ACCOUNTS) + 1
-end
-
--- Захват очереди через токен (защита от гонки)
-local function tryAcquireQueue()
-    local current = readQueue()
-    if current ~= ACCOUNT_ID then return false end
-
-    local token = ACCOUNT_ID .. "-" .. tostring(math.floor(tick() * 1000) % 1000000)
-    writeClaim(token)
-    task.wait(2)
-
-    local verify = readClaim()
-    if verify == token then
-        addLog("Acquired (token OK)")
-        return true
-    end
-
-    addLog("Token conflict: " .. tostring(verify))
-    return false
-end
-
--- ====================== ПРОПУСК ХОДА ======================
-local function skipTurn()
-    if skipping then return end
-    if spawnTimer then return end
-    if cycleActive then return end
-    if not canThrow then return end
-    if cachedQueue ~= ACCOUNT_ID then return end
-
-    skipping = true
-    updateGUI()
-    addLog("No 39, waiting " .. SKIP_DELAY .. "s...")
-
-    task.spawn(function()
-        task.wait(SKIP_DELAY)
-
-        -- Если за время ожидания пришёл 39 — не пропускаем
-        if lastValue == 39 then
-            addLog("Skip aborted — got 39!")
-            skipping = false
-            updateGUI()
-            return
-        end
-
-        -- Если очередь уже не наша — не пропускаем
-        local current = readQueue()
-        if current ~= ACCOUNT_ID then
-            addLog("Skip aborted — queue moved")
-            skipping = false
-            updateGUI()
-            return
-        end
-
-        local nextQ = getNextQueue()
-        writeQueue(nextQ)
-        addLog("No 39, skip → " .. nextQ)
-        skipping = false
-        updateGUI()
-    end)
 end
 
 -- ====================== ЭКИПИРОВКА ======================
@@ -325,10 +254,7 @@ local function equipAccessory(itemType)
 end
 
 local function equipCanister()
-    if isAccessoryEquipped("Coconut Canister") then
-        hasCanister = true
-        return
-    end
+    if isAccessoryEquipped("Coconut Canister") then hasCanister = true; return end
     if hasCanister then return end
     if tick() - lastEquipTime < 3 then return end
     lastEquipTime = tick()
@@ -339,10 +265,7 @@ local function equipCanister()
 end
 
 local function equipPorcelain()
-    if isAccessoryEquipped("Porcelain Port-O-Hive") then
-        hasPorcelain = true
-        return
-    end
+    if isAccessoryEquipped("Porcelain Port-O-Hive") then hasPorcelain = true; return end
     if hasPorcelain then return end
     if tick() - lastEquipTime < 3 then return end
     lastEquipTime = tick()
@@ -352,7 +275,7 @@ local function equipPorcelain()
     end
 end
 
--- ====================== БРОСОК КОКОСА ======================
+-- ====================== БРОСОК ======================
 local function SpawnCoconut()
     PlayerActivesCommand:FireServer({Name = "Coconut"})
     totalThrows = totalThrows + 1
@@ -360,7 +283,7 @@ local function SpawnCoconut()
     addLog("THROW!")
 end
 
--- ====================== ЦИКЛ БРОСКОВ ======================
+-- ====================== ЦИКЛ ======================
 local function startCycle(count)
     if cycleActive then return end
     cycleActive = true
@@ -379,51 +302,191 @@ local function startCycle(count)
     end)
 end
 
--- ====================== ТАЙМЕР КОМБО ======================
-local function startSpawnTimer()
-    if spawnTimer then
-        task.cancel(spawnTimer)
-        spawnTimer = nil
+-- ====================== ПРОПУСК ХОДА ======================
+local function skipTurn()
+    if skipping then return end
+    if comboLock then return end
+    if not canThrow then return end
+    if cachedQueue ~= ACCOUNT_ID then return end
+    if coconutPresent then return end  -- не пропускаем пока есть кокос
+
+    skipping = true
+    updateGUI()
+    addLog("No 39, skip in " .. SKIP_DELAY .. "s")
+
+    task.spawn(function()
+        task.wait(SKIP_DELAY)
+
+        if lastValue == 39 then
+            addLog("Skip aborted — got 39!")
+            skipping = false
+            updateGUI()
+            return
+        end
+
+        if coconutPresent then
+            addLog("Skip aborted — coconut appeared")
+            skipping = false
+            updateGUI()
+            return
+        end
+
+        local current = readQueue()
+        if current ~= ACCOUNT_ID then
+            addLog("Skip aborted — queue moved")
+            skipping = false
+            updateGUI()
+            return
+        end
+
+        local nextQ = getNextQueue()
+        writeQueue(nextQ)
+        coconutSeenWhileMyQueue = false
+        addLog("No 39, skip → " .. nextQ)
+        skipping = false
+        updateGUI()
+    end)
+end
+
+-- ====================== ОСНОВНОЕ КОМБО ======================
+local function startCombo()
+    if comboLock then return end
+    if not canThrow then return end
+    if lastValue ~= 39 then
+        -- Нет 39 — пропускаем ход
+        skipTurn()
+        return
     end
 
-    addLog("Timer " .. COMBO_DELAY .. "s")
+    comboLock = true
+    coconutSeenWhileMyQueue = false
     updateGUI()
 
-    spawnTimer = task.spawn(function()
+    comboThread = task.spawn(function()
         local ok, err = pcall(function()
-            -- Захватываем очередь через токен
-            if not tryAcquireQueue() then
-                addLog("Acquire failed, skip")
-                return
-            end
+            addLog("Timer " .. COMBO_DELAY .. "s")
 
-            updateGUI()
+            -- Ждём COMBO_DELAY секунд
             task.wait(COMBO_DELAY)
 
-            -- Перепроверяем после ожидания
+            -- Перепроверяем перед броском
             if lastValue ~= 39 then
-                addLog("Abort: value changed")
+                addLog("Abort: value changed → skip")
                 writeQueue(getNextQueue())
                 return
             end
 
-            if readQueue() ~= ACCOUNT_ID then
-                addLog("Abort: queue stolen")
+            if cachedQueue ~= ACCOUNT_ID then
+                addLog("Abort: queue changed")
                 return
             end
 
             local nextQ = getNextQueue()
+
+            -- Бросаем
             SpawnCoconut()
-            startCycle(CYCLE_COUNT)
+
+            -- Сразу передаём очередь
             writeQueue(nextQ)
-            addLog("Done, queue → " .. nextQ)
+            addLog("Queue → " .. nextQ)
+
+            -- Запускаем цикл (параллельно)
+            startCycle(CYCLE_COUNT)
         end)
 
-        if not ok then addLog("Timer err: " .. tostring(err)) end
-        spawnTimer = nil
+        if not ok then
+            addLog("Combo err: " .. tostring(err))
+            -- Fallback: передаём очередь если ещё наша
+            local current = readQueue()
+            if current == ACCOUNT_ID then
+                writeQueue(getNextQueue())
+                addLog("Err fallback → " .. getNextQueue())
+            end
+        end
+
+        comboLock = false
+        comboThread = nil
         updateGUI()
     end)
 end
+
+-- ====================== ДЕТЕКТОР ComboCoconut ======================
+task.spawn(function()
+    while true do
+        local present = false
+        local particles = Workspace:FindFirstChild("Particles")
+        if particles then
+            present = particles:FindFirstChild("ComboCoconut", true) ~= nil
+        end
+
+        if present and not coconutPresent then
+            -- Кокос появился
+            coconutPresent = true
+            if cachedQueue == ACCOUNT_ID then
+                coconutSeenWhileMyQueue = true
+                addLog("Coconut appeared — watching...")
+            end
+            updateGUI()
+
+        elseif not present and coconutPresent then
+            -- Кокос исчез
+            coconutPresent = false
+            addLog("Coconut gone")
+
+            -- Если наша очередь и мы видели кокос → запускаем комбо
+            if cachedQueue == ACCOUNT_ID
+                and coconutSeenWhileMyQueue
+                and canThrow
+                and not comboLock
+                and not skipping then
+                addLog("Trigger: coconut gone → startCombo")
+                startCombo()
+            end
+
+            updateGUI()
+        end
+
+        task.wait(COCONUT_SCAN)
+    end
+end)
+
+-- ====================== ПОЛЛИНГ ОЧЕРЕДИ ======================
+-- Проверяем очередь, и если наша — решаем что делать
+task.spawn(function()
+    while not canThrow do
+        task.wait(0.5)
+    end
+
+    while true do
+        task.wait(QUEUE_POLL_INTERVAL)
+
+        if canThrow and not comboLock and not skipping then
+            readQueue()
+            updateGUI()
+
+            if cachedQueue == ACCOUNT_ID then
+                if coconutPresent then
+                    -- Кокос ещё в воздухе — ждём
+                    addLog("My turn, waiting coconut to disappear...")
+                    coconutSeenWhileMyQueue = true
+
+                elseif coconutSeenWhileMyQueue then
+                    -- Уже видели кокос и он исчез — детектор уже запустил комбо
+                    -- Ничего не делаем
+
+                else
+                    -- Кокоса нет и не было (первый бросок или после рестарта)
+                    if lastValue == 39 then
+                        addLog("No prev coconut, direct combo")
+                        startCombo()
+                    else
+                        skipTurn()
+                    end
+                end
+            end
+        end
+    end
+end)
 
 -- ====================== СЛУШАТЕЛЬ ======================
 PlayerAbilityEvent.OnClientEvent:Connect(function(data)
@@ -457,55 +520,21 @@ PlayerAbilityEvent.OnClientEvent:Connect(function(data)
                     equipPorcelain()
                 end
 
-                if value == 39 then
-                    -- Если наша очередь — запускаем комбо
-                    if cachedQueue == ACCOUNT_ID
-                        and canThrow
-                        and not spawnTimer
-                        and not skipping then
-                        startSpawnTimer()
-                    end
-                elseif value < 39 and spawnTimer then
-                    task.cancel(spawnTimer)
-                    spawnTimer = nil
-                    -- Восстанавливаем очередь если захватили
+                -- Если value упало до броска — отменяем
+                if value < 39 and comboLock and comboThread then
+                    pcall(task.cancel, comboThread)
+                    comboThread = nil
+                    comboLock = false
+                    -- Передаём очередь если ещё наша
                     task.spawn(function()
                         local current = readQueue()
                         if current == ACCOUNT_ID then
-                            -- Всё чисто
-                        else
-                            writeQueue(ACCOUNT_ID)
+                            writeQueue(getNextQueue())
+                            addLog("Cancelled, queue → " .. getNextQueue())
                         end
-                        addLog("Timer cancelled")
+                        coconutSeenWhileMyQueue = false
                         updateGUI()
                     end)
-                end
-            end
-        end
-    end
-end)
-
--- ====================== ПОЛЛИНГ ОЧЕРЕДИ ======================
--- Главный цикл: проверяем очередь каждые QUEUE_POLL_INTERVAL секунд
-task.spawn(function()
-    while not canThrow do
-        task.wait(0.5)
-    end
-
-    while true do
-        task.wait(QUEUE_POLL_INTERVAL)
-
-        if canThrow and not spawnTimer and not cycleActive and not skipping then
-            readQueue()
-            updateGUI()
-
-            if cachedQueue == ACCOUNT_ID then
-                if lastValue == 39 then
-                    -- Наш ход, есть 39 → комбо
-                    startSpawnTimer()
-                else
-                    -- Наш ход, нет 39 → пропускаем
-                    skipTurn()
                 end
             end
         end
@@ -520,11 +549,10 @@ task.spawn(function()
         task.wait(0.5)
     end
 
-    -- Если очередь мертва > 5 минут — сбрасываем на 1
     local lastUpdate = readLastUpdateTime()
     if lastUpdate and (os.time() - lastUpdate) > 300 then
         writeQueue(1)
-        addLog("Queue idle >5min, reset")
+        addLog("Queue idle >5min, reset to 1")
     end
 
     readQueue()
@@ -537,27 +565,19 @@ end)
 -- ====================== ВОТЧДОГ ======================
 task.spawn(function()
     task.wait(math.random(0, 10))
-
     while true do
         task.wait(30)
 
-        -- Только аккаунт 1 ресетит мёртвую очередь
         local lastUpdate = readLastUpdateTime()
         if lastUpdate and (os.time() - lastUpdate) > 180 then
             if ACCOUNT_ID == 1 then
                 writeQueue(1)
                 addLog("WD: queue dead, reset to 1")
             else
-                addLog("WD: queue dead, wait for #1")
+                addLog("WD: queue dead, wait #1")
             end
         end
 
-        -- Если значение 39 зависло > 60 сек — предупреждаем
-        if lastValue == 39 and (tick() - lastValueChangeTime) > 60 then
-            addLog("WD: value 39 stuck 60s")
-        end
-
-        -- Проверка персонажа
         local char = LP.Character
         if not char
             or not char:FindFirstChild("Humanoid")
