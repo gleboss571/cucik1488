@@ -1,6 +1,6 @@
 --[[
-   ALT Combo Coconut Thrower (v5 + настройки цикла и таймера)
-   Переменные: CYCLE_COUNT (кокосов в цикле), COMBO_DELAY (секунд перед комбо)
+   ALT Combo Coconut Thrower (v5, без проверки рюкзака)
+   Очерёдность определяется по ComboCoconut. Бросок при value==39 и вашей очереди.
    Delta-совместим, задержка старта 10 сек.
 --]]
 
@@ -8,14 +8,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 
-local MAIN_ACCOUNT_NAME = "Kukurudza_dontreal"  -- ИМЯ МЕЙНА
-local ACCOUNT_ID = 2                              -- ваш ID (1,2,3)
+local ACCOUNT_ID = 2                              -- ваш ID (1,2,3,4)
 local TOTAL_ACCOUNTS = 2
 local START_DELAY = 10                            -- секунд на запуск скриптов
 local SCAN_INTERVAL = 0.5
 local COCONUT_INTERVAL = 10                       -- пауза между кокосами в цикле
 local CYCLE_DELAY = 10                            -- задержка перед циклом
-local CYCLE_COUNT = 4                             -- количество кокосов в цикле (по умолчанию 4)
+local CYCLE_COUNT = 4                             -- количество кокосов в цикле
 local COMBO_DELAY = 18                            -- задержка перед комбо-броском (сек)
 
 local LP = Players.LocalPlayer
@@ -39,7 +38,6 @@ local cycleActive = false
 local thrownThisCycle = 0
 local cycleSize = 0
 local firstUpdateReceived = false
-local scorchingActive = false
 local canThrow = false
 local startTime = tick()
 
@@ -50,8 +48,8 @@ screenGui.Name = "ComboThrower_" .. ACCOUNT_ID
 screenGui.Parent = playerGui
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 220, 0, 110)
-frame.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID-1)*120)
+frame.Size = UDim2.new(0, 220, 0, 90)  -- чуть меньше, т.к. флаг не нужен
+frame.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID-1)*100)
 frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
 frame.BackgroundTransparency = 0.3
 frame.BorderSizePixel = 0
@@ -63,7 +61,7 @@ local statusLabel = Instance.new("TextLabel")
 statusLabel.Size = UDim2.new(1,-10,0,20)
 statusLabel.Position = UDim2.new(0,5,0,5)
 statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "Val: - | Flag: false"
+statusLabel.Text = "Val: - | Queue: 0"
 statusLabel.TextColor3 = Color3.fromRGB(255,255,255)
 statusLabel.Font = Enum.Font.Gotham
 statusLabel.TextSize = 12
@@ -100,23 +98,12 @@ logLabel1.Font = Enum.Font.Code
 logLabel1.TextSize = 10
 logLabel1.Parent = frame
 
-local logLabel2 = Instance.new("TextLabel")
-logLabel2.Size = UDim2.new(1,-10,0,16)
-logLabel2.Position = UDim2.new(0,5,0,80)
-logLabel2.BackgroundTransparency = 1
-logLabel2.Text = ""
-logLabel2.TextColor3 = Color3.fromRGB(180,255,180)
-logLabel2.Font = Enum.Font.Code
-logLabel2.TextSize = 10
-logLabel2.Parent = frame
-
 local function addLog(msg)
-    logLabel2.Text = logLabel1.Text
     logLabel1.Text = msg
 end
 
 local function updateGUI()
-    statusLabel.Text = string.format("Val: %d | Flag: %s", lastValue, tostring(scorchingActive))
+    statusLabel.Text = string.format("Val: %d | Queue: %d", lastValue, comboCounter)
     throwLabel.Text = "Throws: " .. totalThrows
     if not canThrow then
         local remaining = math.max(0, START_DELAY - (tick() - startTime))
@@ -150,33 +137,6 @@ local function equipPorcelain()
     hasCanister = false
 end
 
--- =============== ПРОВЕРКА ФЛАГА ===============
-local function checkMainCoconut()
-    local mainPlayer = Players:FindFirstChild(MAIN_ACCOUNT_NAME)
-    if not mainPlayer then return false end
-    local char = mainPlayer.Character
-    if not char then return false end
-    for _, child in ipairs(char:GetChildren()) do
-        if child.Name == "Coconut Canister" then return true end
-    end
-    return false
-end
-
-task.spawn(function()
-    while true do
-        local newFlag = checkMainCoconut()
-        if newFlag ~= scorchingActive then
-            scorchingActive = newFlag
-            updateGUI()
-            addLog("Flag " .. (scorchingActive and "ON" or "OFF"))
-            if scorchingActive and lastValue == 39 and comboCounter == ACCOUNT_ID and not spawnTimer and canThrow then
-                startSpawnTimer()
-            end
-        end
-        task.wait(SCAN_INTERVAL)
-    end
-end)
-
 -- =============== БРОСОК КОКОСА ===============
 local function SpawnCoconut()
     PlayerActivesCommand:FireServer({ Name = "Coconut" })
@@ -185,7 +145,7 @@ local function SpawnCoconut()
     addLog("THROW!")
 end
 
--- =============== ЦИКЛ БРОСКОВ (настраиваемый CYCLE_COUNT) ===============
+-- =============== ЦИКЛ БРОСКОВ ===============
 local function startCycle(count)
     if cycleActive then return end
     cycleActive = true
@@ -244,12 +204,12 @@ task.spawn(function()
     end
 end)
 
--- =============== ТАЙМЕР КОМБО (настраиваемый COMBO_DELAY) ===============
+-- =============== ТАЙМЕР КОМБО ===============
 local function startSpawnTimer()
     if spawnTimer then task.cancel(spawnTimer) spawnTimer = nil end
     spawnTimer = task.spawn(function()
         task.wait(COMBO_DELAY)
-        if lastValue == 39 and comboCounter == ACCOUNT_ID and scorchingActive then
+        if lastValue == 39 and comboCounter == ACCOUNT_ID then
             SpawnCoconut()
             startCycle(CYCLE_COUNT)
         end
@@ -269,7 +229,7 @@ PlayerAbilityEvent.OnClientEvent:Connect(function(data)
                     if value <= 34 then equipCanister() else equipPorcelain() end
                     updateGUI()
                     addLog("Init " .. value)
-                    if value == 39 and comboCounter == ACCOUNT_ID and scorchingActive and canThrow then
+                    if value == 39 and comboCounter == ACCOUNT_ID and canThrow then
                         startSpawnTimer()
                     end
                     return
@@ -280,7 +240,7 @@ PlayerAbilityEvent.OnClientEvent:Connect(function(data)
                     updateGUI()
                     addLog(value .. (value <= 34 and " Can" or " Porc"))
                     if value <= 34 then equipCanister() else equipPorcelain() end
-                    if value == 39 and comboCounter == ACCOUNT_ID and scorchingActive and canThrow and not spawnTimer then
+                    if value == 39 and comboCounter == ACCOUNT_ID and canThrow and not spawnTimer then
                         startSpawnTimer()
                     elseif value < 39 and spawnTimer then
                         task.cancel(spawnTimer)
@@ -311,7 +271,7 @@ task.spawn(function()
     end
     canThrow = true
     addLog("START")
-    if lastValue == 39 and comboCounter == ACCOUNT_ID and scorchingActive and not spawnTimer then
+    if lastValue == 39 and comboCounter == ACCOUNT_ID and not spawnTimer then
         startSpawnTimer()
     end
 end)
