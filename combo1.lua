@@ -1,5 +1,5 @@
 --[[
-   ALT Combo Coconut Thrower (Firebase v5)
+   ALT Combo Coconut Thrower (Firebase v6 - No Logs & Sync Time)
    Delta-совместим, Lua 5.1.
 --]]
 
@@ -74,7 +74,6 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ComboThrower_" .. ACCOUNT_ID
 screenGui.Parent = playerGui
 
--- Кнопка разворачивания (всегда видна)
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Size = UDim2.new(0, 24, 0, 24)
 toggleBtn.Position = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID - 1) * (GUI_FULL_HEIGHT + 10))
@@ -88,7 +87,6 @@ toggleBtn.BorderSizePixel = 0
 toggleBtn.ZIndex = 10
 toggleBtn.Parent = screenGui
 
--- Индикатор на кнопке
 local toggleIndicator = Instance.new("Frame")
 toggleIndicator.Size = UDim2.new(0, 6, 0, 6)
 toggleIndicator.Position = UDim2.new(1, -7, 0, 1)
@@ -97,7 +95,6 @@ toggleIndicator.BorderSizePixel = 0
 toggleIndicator.ZIndex = 11
 toggleIndicator.Parent = toggleBtn
 
--- Основной фрейм
 local frame = Instance.new("Frame")
 frame.Size = UDim2.new(0, 230, 0, GUI_FULL_HEIGHT)
 frame.Position = UDim2.new(0, 38, 0, 10 + (ACCOUNT_ID - 1) * (GUI_FULL_HEIGHT + 10))
@@ -149,7 +146,6 @@ countdownLabel.TextSize = 10
 countdownLabel.TextXAlignment = Enum.TextXAlignment.Left
 countdownLabel.Parent = frame
 
--- Прогресс-бар таймера
 local timerBarBg = Instance.new("Frame")
 timerBarBg.Size = UDim2.new(1, -10, 0, 7)
 timerBarBg.Position = UDim2.new(0, 5, 0, 59)
@@ -198,7 +194,6 @@ logLabel.TextSize = 9
 logLabel.TextXAlignment = Enum.TextXAlignment.Left
 logLabel.Parent = frame
 
--- Кнопки
 local btnReset = Instance.new("TextButton")
 btnReset.Size = UDim2.new(0, 100, 0, 20)
 btnReset.Position = UDim2.new(0, 5, 0, 120)
@@ -221,21 +216,11 @@ btnForce.TextSize = 10
 btnForce.BorderSizePixel = 0
 btnForce.Parent = frame
 
+-- ====================== ЛОГИРОВАНИЕ (БЕЗ ФАЙЛОВ) ======================
 local function addLog(msg)
     logLabel.Text = msg
-    pcall(function()
-        local logFile = "combo_log_" .. ACCOUNT_ID .. ".txt"
-        local ok, content = pcall(readfile, logFile)
-        if ok and content and #content > 50000 then
-            writefile(logFile, "")
-            appendfile(logFile, "[LOG ROTATED]\n")
-        end
-        appendfile(logFile,
-            os.date("[%H:%M:%S] #") .. ACCOUNT_ID .. " " .. msg .. "\n")
-    end)
 end
 
--- Обновляем цвет индикатора на toggleBtn тоже
 local function setIndicatorColor(color)
     indicator.BackgroundColor3 = color
     toggleIndicator.BackgroundColor3 = color
@@ -255,8 +240,7 @@ local function updateGUI()
         if coconutPresent then
             countdownLabel.Text = "WAITING COCONUT..."
         elseif comboTimerActive then
-            local remaining = math.max(0,
-                comboTimerDuration - (tick() - comboTimerStart))
+            local remaining = math.max(0, comboTimerDuration - (tick() - comboTimerStart))
             countdownLabel.Text = string.format("COMBO: %.0fs", remaining)
         else
             countdownLabel.Text = "COMBO IN PROGRESS"
@@ -307,68 +291,52 @@ local function stopGuiTimer()
     timerBarFill.Size  = UDim2.new(1, 0, 1, 0)
 end
 
--- Поток обновления таймера
 task.spawn(function()
     while true do
         task.wait(0.1)
         if comboTimerActive and comboTimerDuration > 0 then
             local elapsed   = tick() - comboTimerStart
             local remaining = math.max(0, comboTimerDuration - elapsed)
-            local progress  = math.max(0, math.min(1,
-                1 - elapsed / comboTimerDuration))
+            local progress  = math.max(0, math.min(1, 1 - elapsed / comboTimerDuration))
 
             timerBarFill.Size = UDim2.new(progress, 0, 1, 0)
 
             if progress > 0.5 then
-                timerBarFill.BackgroundColor3 = Color3.fromRGB(
-                    math.floor((1 - progress) * 2 * 255), 200, 0)
+                timerBarFill.BackgroundColor3 = Color3.fromRGB(math.floor((1 - progress) * 2 * 255), 200, 0)
             else
-                timerBarFill.BackgroundColor3 = Color3.fromRGB(
-                    255, math.floor(progress * 2 * 200), 0)
+                timerBarFill.BackgroundColor3 = Color3.fromRGB(255, math.floor(progress * 2 * 200), 0)
             end
 
             local bars = math.floor(progress * 18)
-            timerLabel.Text = string.format(
-                "[%s%s] %.0fs",
-                string.rep("█", bars),
-                string.rep("░", 18 - bars),
-                remaining)
+            timerLabel.Text = string.format("[%s%s] %.0fs", string.rep("█", bars), string.rep("░", 18 - bars), remaining)
 
-            if not guiMinimized then
-                updateGUI()
-            end
+            if not guiMinimized then updateGUI() end
         end
     end
 end)
 
--- ====================== ПОЛНАЯ МИНИМИЗАЦИЯ GUI ======================
 toggleBtn.MouseButton1Click:Connect(function()
     guiMinimized = not guiMinimized
     frame.Visible = not guiMinimized
-
     if guiMinimized then
         toggleBtn.Text = tostring(ACCOUNT_ID)
     else
         toggleBtn.Text = "×"
-        -- Таймер показываем только если активен
         timerBarBg.Visible = comboTimerActive
         timerLabel.Visible = comboTimerActive
         updateGUI()
     end
 end)
-
--- Начальный текст кнопки
 toggleBtn.Text = "×"
 
--- ====================== FIREBASE ======================
+-- ====================== FIREBASE (С СЕРВЕРНЫМ ВРЕМЕНЕМ) ======================
 local function safeRequest(url, method, body)
     for attempt = 1, 3 do
         local ok, result = pcall(function()
             return request({
                 Url = url,
                 Method = method,
-                Headers = method ~= "GET"
-                    and {["Content-Type"] = "application/json"} or nil,
+                Headers = method ~= "GET" and {["Content-Type"] = "application/json"} or nil,
                 Body = body
             })
         end)
@@ -376,8 +344,7 @@ local function safeRequest(url, method, body)
             fbStatus = "FB: OK"
             return result.Body
         end
-        fbStatus = string.format("FB: ERR%d (code %s)",
-            attempt, tostring(result and result.StatusCode or "?"))
+        fbStatus = string.format("FB: ERR%d (code %s)", attempt, tostring(result and result.StatusCode or "?"))
         task.wait(attempt * 2)
     end
     fbStatus = "FB: FAIL"
@@ -395,10 +362,9 @@ local function readQueue()
 end
 
 local function writeQueue(value)
-    local ok1 = safeRequest(
-        FIREBASE_URL .. "/comboQueue.json", "PUT", tostring(value))
-    safeRequest(
-        FIREBASE_URL .. "/comboQueueLastUpdate.json", "PUT", tostring(os.time()))
+    local ok1 = safeRequest(FIREBASE_URL .. "/comboQueue.json", "PUT", tostring(value))
+    -- Используем серверное время Firebase
+    safeRequest(FIREBASE_URL .. "/comboQueueLastUpdate.json", "PUT", '{"sv": "timestamp"}')
     if ok1 then
         cachedQueue    = value
         lastQueueCheck = tick()
@@ -407,7 +373,10 @@ end
 
 local function readLastUpdateTime()
     local body = safeRequest(FIREBASE_URL .. "/comboQueueLastUpdate.json", "GET")
-    if body and body ~= "null" then return tonumber(body) end
+    if body and body ~= "null" then 
+        local ms = tonumber(body)
+        return ms and math.floor(ms / 1000) or nil -- Конвертируем миллисекунды в секунды
+    end
     return nil
 end
 
@@ -426,14 +395,17 @@ local function readThrownBy()
 end
 
 local function writeLastThrowTime()
-    safeRequest(
-        FIREBASE_URL .. "/lastThrowTime.json", "PUT", tostring(os.time()))
-    lastThrowTime = os.time()
+    -- Используем серверное время Firebase
+    safeRequest(FIREBASE_URL .. "/lastThrowTime.json", "PUT", '{"sv": "timestamp"}')
+    lastThrowTime = os.time() -- Локальный фоллбек до следующего чтения
 end
 
 local function readLastThrowTime()
     local body = safeRequest(FIREBASE_URL .. "/lastThrowTime.json", "GET")
-    if body and body ~= "null" then return tonumber(body) or 0 end
+    if body and body ~= "null" then 
+        local ms = tonumber(body)
+        return ms and math.floor(ms / 1000) or 0 -- Конвертируем миллисекунды в секунды
+    end
     return 0
 end
 
@@ -450,19 +422,14 @@ local function isAccessoryEquipped(exactName)
     local char = LP.Character
     if not char then return false end
     for _, child in ipairs(char:GetChildren()) do
-        if child:IsA("Accessory") and child.Name == exactName then
-            return true
-        end
+        if child:IsA("Accessory") and child.Name == exactName then return true end
     end
     return false
 end
 
 local function equipAccessory(itemType)
     local ok = pcall(function()
-        ItemPackageEvent:InvokeServer("Equip", {
-            Category = "Accessory",
-            Type = itemType,
-        })
+        ItemPackageEvent:InvokeServer("Equip", { Category = "Accessory", Type = itemType })
     end)
     if ok then task.wait(0.5) end
     return ok
@@ -495,7 +462,7 @@ local function SpawnCoconut()
     pcall(function()
         PlayerActivesCommand:FireServer({Name = "Coconut"})
     end)
-    totalThrows   = totalThrows + 1
+    totalThrows = totalThrows + 1
     lastThrowTime = os.time()
     writeLastThrowTime()
     updateGUI()
@@ -525,11 +492,7 @@ end
 
 -- ====================== ПРОПУСК ХОДА ======================
 local function skipTurn()
-    if skipping then return end
-    if comboLock then return end
-    if not canThrow then return end
-    if cachedQueue ~= ACCOUNT_ID then return end
-    if coconutPresent then return end
+    if skipping or comboLock or not canThrow or cachedQueue ~= ACCOUNT_ID or coconutPresent then return end
 
     skipping     = true
     skippingTime = tick()
@@ -538,19 +501,9 @@ local function skipTurn()
 
     task.spawn(function()
         task.wait(SKIP_DELAY)
-
-        if lastValue == 39 then
-            addLog("Skip aborted — got 39!")
-            skipping     = false
-            skippingTime = 0
-            updateGUI()
-            return
-        end
-
-        if coconutPresent then
-            addLog("Skip aborted — coconut appeared")
-            skipping     = false
-            skippingTime = 0
+        if lastValue == 39 or coconutPresent then
+            addLog("Skip aborted")
+            skipping, skippingTime = false, 0
             updateGUI()
             return
         end
@@ -558,8 +511,7 @@ local function skipTurn()
         local current = readQueue()
         if current ~= ACCOUNT_ID then
             addLog("Skip aborted — queue moved")
-            skipping     = false
-            skippingTime = 0
+            skipping, skippingTime = false, 0
             updateGUI()
             return
         end
@@ -568,20 +520,15 @@ local function skipTurn()
         writeQueue(nextQ)
         coconutSeenWhileMyQueue = false
         addLog("No 39, skip → " .. nextQ)
-        skipping     = false
-        skippingTime = 0
+        skipping, skippingTime = false, 0
         updateGUI()
     end)
 end
 
 -- ====================== ОСНОВНОЕ КОМБО ======================
 local function startCombo()
-    if comboLock then return end
-    if not canThrow then return end
-    if lastValue ~= 39 then
-        skipTurn()
-        return
-    end
+    if comboLock or not canThrow then return end
+    if lastValue ~= 39 then skipTurn(); return end
 
     comboLock     = true
     comboLockTime = tick()
@@ -590,28 +537,23 @@ local function startCombo()
 
     comboThread = task.spawn(function()
         local ok, err = pcall(function()
-
-            -- Шаг 1: ждём пока исчезнет кокос если есть
             if coconutPresent then
                 addLog("Waiting coconut to disappear...")
                 while coconutPresent do task.wait(COCONUT_SCAN) end
                 addLog("Coconut gone, starting timer")
             end
 
-            -- Шаг 2: таймер
             startGuiTimer(COMBO_DELAY)
             addLog("Timer " .. COMBO_DELAY .. "s")
             task.wait(COMBO_DELAY)
             stopGuiTimer()
 
-            -- Шаг 3: новый кокос во время таймера
             if coconutPresent then
                 addLog("New coconut during timer, waiting...")
                 while coconutPresent do task.wait(COCONUT_SCAN) end
                 addLog("Coconut gone, throwing now")
             end
 
-            -- Шаг 4: проверки
             if lastValue ~= 39 then
                 addLog("Abort: value changed → pass queue")
                 writeQueue(getNextQueue())
@@ -623,7 +565,6 @@ local function startCombo()
                 return
             end
 
-            -- Шаг 5: бросок
             local nextQ = getNextQueue()
             SpawnCoconut()
             writeThrownBy(ACCOUNT_ID)
@@ -656,9 +597,7 @@ task.spawn(function()
     while true do
         local present = false
         local particles = Workspace:FindFirstChild("Particles")
-        if particles then
-            present = particles:FindFirstChild("ComboCoconut", true) ~= nil
-        end
+        if particles then present = particles:FindFirstChild("ComboCoconut", true) ~= nil end
 
         if present and not coconutPresent then
             coconutPresent = true
@@ -667,18 +606,11 @@ task.spawn(function()
                 addLog("Coconut appeared — watching...")
             end
             updateGUI()
-
         elseif not present and coconutPresent then
             coconutPresent = false
             addLog("Coconut gone")
 
-            if cachedQueue == ACCOUNT_ID
-                and coconutSeenWhileMyQueue
-                and canThrow
-                and not comboLock
-                and not cycleActive
-                and not skipping then
-
+            if cachedQueue == ACCOUNT_ID and coconutSeenWhileMyQueue and canThrow and not comboLock and not cycleActive and not skipping then
                 local prevAcc  = getPrevAccount()
                 local thrownBy = readThrownBy()
 
@@ -686,15 +618,12 @@ task.spawn(function()
                     addLog("Trigger: script coconut → startCombo")
                     startCombo()
                 else
-                    addLog("Ignore: not script coconut (by="
-                        .. tostring(thrownBy) .. ")")
+                    addLog("Ignore: not script coconut (by=" .. tostring(thrownBy) .. ")")
                     coconutSeenWhileMyQueue = false
                 end
             end
-
             updateGUI()
         end
-
         task.wait(COCONUT_SCAN)
     end
 end)
@@ -702,14 +631,11 @@ end)
 -- ====================== ПОЛЛИНГ ОЧЕРЕДИ ======================
 task.spawn(function()
     while not canThrow do task.wait(0.5) end
-
     while true do
         task.wait(QUEUE_POLL_INTERVAL)
-
         if canThrow and not comboLock and not skipping then
             readQueue()
             updateGUI()
-
             if cachedQueue == ACCOUNT_ID then
                 if coconutPresent then
                     coconutSeenWhileMyQueue = true
@@ -733,10 +659,7 @@ end)
 PlayerAbilityEvent.OnClientEvent:Connect(function(data)
     if type(data) ~= "table" then return end
     for tag, info in pairs(data) do
-        if type(info) == "table"
-            and (tag == "Combo Coconuts" or tag == "ComboCoconuts")
-            and info.Action == "Update" then
-
+        if type(info) == "table" and (tag == "Combo Coconuts" or tag == "ComboCoconuts") and info.Action == "Update" then
             local value = info.Values and info.Values[1] or 0
 
             if not firstUpdateReceived then
@@ -801,9 +724,7 @@ task.spawn(function()
     end
 
     local fbLastThrow = readLastThrowTime()
-    if fbLastThrow and fbLastThrow > 0 then
-        lastThrowTime = fbLastThrow
-    end
+    if fbLastThrow and fbLastThrow > 0 then lastThrowTime = fbLastThrow end
 
     canThrow = true
     addLog("START (jitter=" .. startJitter .. "s)")
@@ -815,7 +736,6 @@ task.spawn(function()
     while true do
         task.wait(30)
 
-        -- Мёртвая очередь
         local lastUpdate = readLastUpdateTime()
         if lastUpdate and (os.time() - lastUpdate) > 180 then
             if ACCOUNT_ID == 1 then
@@ -826,59 +746,38 @@ task.spawn(function()
             end
         end
 
-        -- Завис comboLock
-        if comboLock and comboLockTime > 0
-            and (tick() - comboLockTime) > 300 then
+        if comboLock and comboLockTime > 0 and (tick() - comboLockTime) > 300 then
             addLog("WD: comboLock stuck, reset")
-            if comboThread then
-                pcall(task.cancel, comboThread)
-                comboThread = nil
-            end
+            if comboThread then pcall(task.cancel, comboThread); comboThread = nil end
             stopGuiTimer()
-            comboLock     = false
-            comboLockTime = 0
+            comboLock, comboLockTime = false, 0
             task.spawn(function()
                 local current = readQueue()
-                if current == ACCOUNT_ID then
-                    writeQueue(getNextQueue())
-                    addLog("WD: queue released → " .. getNextQueue())
-                end
+                if current == ACCOUNT_ID then writeQueue(getNextQueue()); addLog("WD: queue released → " .. getNextQueue()) end
                 updateGUI()
             end)
         end
 
-        -- Завис cycleActive
         local maxCycleTime = CYCLE_DELAY + (CYCLE_COUNT * COCONUT_INTERVAL) * 2
-        if cycleActive and cycleStartTime > 0
-            and (tick() - cycleStartTime) > maxCycleTime then
+        if cycleActive and cycleStartTime > 0 and (tick() - cycleStartTime) > maxCycleTime then
             addLog("WD: cycleActive stuck, reset")
-            cycleActive    = false
-            cycleStartTime = 0
+            cycleActive, cycleStartTime = false, 0
             updateGUI()
         end
 
-        -- Завис skipping
-        if skipping and skippingTime > 0
-            and (tick() - skippingTime) > 30 then
+        if skipping and skippingTime > 0 and (tick() - skippingTime) > 30 then
             addLog("WD: skipping stuck, reset")
-            skipping     = false
-            skippingTime = 0
+            skipping, skippingTime = false, 0
             updateGUI()
         end
 
-        -- Персонаж мёртв
         local char = LP.Character
-        if not char
-            or not char:FindFirstChild("Humanoid")
-            or char.Humanoid.Health <= 0 then
+        if not char or not char:FindFirstChild("Humanoid") or char.Humanoid.Health <= 0 then
             addLog("WD: char dead/missing")
-            comboLock   = false
-            cycleActive = false
-            skipping    = false
+            comboLock, cycleActive, skipping = false, false, false
             stopGuiTimer()
             updateGUI()
         end
-
         updateGUI()
     end
 end)
@@ -893,20 +792,11 @@ task.spawn(function()
         if not canThrow then break end
 
         local fbLastThrow = readLastThrowTime()
-        if fbLastThrow and fbLastThrow > 0 then
-            lastThrowTime = math.max(lastThrowTime, fbLastThrow)
-        end
+        if fbLastThrow and fbLastThrow > 0 then lastThrowTime = math.max(lastThrowTime, fbLastThrow) end
 
         local timeSinceThrow = os.time() - lastThrowTime
 
-        if timeSinceThrow > CHAIN_TIMEOUT
-            and not comboLock
-            and not cycleActive
-            and not skipping
-            and not chainWatchActive
-            and cachedQueue == ACCOUNT_ID
-            and lastValue == 39 then
-
+        if timeSinceThrow > CHAIN_TIMEOUT and not comboLock and not cycleActive and not skipping and not chainWatchActive and cachedQueue == ACCOUNT_ID and lastValue == 39 then
             chainWatchActive = true
             updateGUI()
             addLog("Chain dead " .. timeSinceThrow .. "s — recovering")
@@ -915,9 +805,7 @@ task.spawn(function()
                 if not coconutPresent then
                     addLog("Chain: waiting for coconut (30s max)...")
                     local waitStart = tick()
-                    while not coconutPresent and tick() - waitStart < 30 do
-                        task.wait(COCONUT_SCAN)
-                    end
+                    while not coconutPresent and tick() - waitStart < 30 do task.wait(COCONUT_SCAN) end
                 end
 
                 if coconutPresent then
@@ -930,11 +818,7 @@ task.spawn(function()
 
                 chainWatchActive = false
 
-                if canThrow
-                    and not comboLock
-                    and not cycleActive
-                    and cachedQueue == ACCOUNT_ID
-                    and lastValue == 39 then
+                if canThrow and not comboLock and not cycleActive and cachedQueue == ACCOUNT_ID and lastValue == 39 then
                     coconutSeenWhileMyQueue = false
                     startCombo()
                 else
@@ -946,18 +830,22 @@ task.spawn(function()
     end
 end)
 
+-- ====================== ОЧИСТКА ПАМЯТИ (GC) ======================
+task.spawn(function()
+    while true do
+        task.wait(600) -- Каждые 10 минут
+        local before = gcinfo()
+        collectgarbage("collect")
+        local after = gcinfo()
+        addLog(string.format("GC: Freed %d KB", before - after))
+    end
+end)
+
 -- ====================== КНОПКИ ======================
 btnReset.MouseButton1Click:Connect(function()
     writeQueue(1)
-    comboLock        = false
-    cycleActive      = false
-    skipping         = false
-    chainWatchActive = false
-    coconutSeenWhileMyQueue = false
-    if comboThread then
-        pcall(task.cancel, comboThread)
-        comboThread = nil
-    end
+    comboLock, cycleActive, skipping, chainWatchActive, coconutSeenWhileMyQueue = false, false, false, false, false
+    if comboThread then pcall(task.cancel, comboThread); comboThread = nil end
     stopGuiTimer()
     addLog("Manual: reset Q=1")
     updateGUI()
