@@ -19,7 +19,7 @@ local COCONUT_INTERVAL   = 10
 local QUEUE_POLL_INTERVAL = 1
 local SKIP_DELAY         = 1
 local COCONUT_SCAN       = 0.1
-local CHAIN_TIMEOUT      = 60
+local CHAIN_TIMEOUT      = 90
 
 local LP = Players.LocalPlayer
 
