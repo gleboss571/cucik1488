@@ -20,9 +20,9 @@ local HEIGHT_ZONES = {
     {min = 115, max = 150, interval = 1.5},                                                           -- pepper
 }
 
-local TP_INTERVAL       = 3.5
+local TP_INTERVAL       = 4
 local SCAN_INTERVAL     = 0.01
-local PETAL_WAIT        = 0.11
+local PETAL_WAIT        = 0.12
 local RED_URGENT        = 4
 local REFRESH_THRESHOLD = 1
 local LOGS              = false
