@@ -23,8 +23,8 @@ local HEIGHT_ZONES = {
 local TP_INTERVAL       = 3.5
 local SCAN_INTERVAL     = 0.01
 local PETAL_WAIT        = 0.11
-local RED_URGENT        = 3
-local REFRESH_THRESHOLD = 2
+local RED_URGENT        = 4
+local REFRESH_THRESHOLD = 1
 local LOGS              = false
 local DEBUG_LOGS        = false
 
