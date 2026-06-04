@@ -10,7 +10,7 @@ local Workspace = game:GetService("Workspace")
 -- ====================== НАСТРОЙКИ ======================
 local FIREBASE_URL       = "https://fuflik1-e9325-default-rtdb.europe-west1.firebasedatabase.app"
 local ACCOUNT_ID         = 1
-local TOTAL_ACCOUNTS     = 4
+local TOTAL_ACCOUNTS     = 3
 local START_DELAY        = 10
 local COMBO_DELAY        = 16
 local CYCLE_COUNT        = 4
