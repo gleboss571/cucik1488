@@ -12,14 +12,14 @@ local FIREBASE_URL       = "https://fuflik1-e9325-default-rtdb.europe-west1.fire
 local ACCOUNT_ID         = 3
 local TOTAL_ACCOUNTS     = 3
 local START_DELAY        = 10
-local COMBO_DELAY        = 16
+local COMBO_DELAY        = 15
 local CYCLE_COUNT        = 4
 local CYCLE_DELAY        = 10
 local COCONUT_INTERVAL   = 10
 local QUEUE_POLL_INTERVAL = 1
 local SKIP_DELAY         = 1
 local COCONUT_SCAN       = 0.1
-local CHAIN_TIMEOUT      = 90
+local CHAIN_TIMEOUT      = 100
 
 local LP = Players.LocalPlayer
 
@@ -49,6 +49,7 @@ local skippingTime            = 0
 
 local coconutPresent          = false
 local coconutSeenWhileMyQueue = false
+local waitingForCoconutAppear = false  -- флаг ожидания появления кокоса
 
 local comboTimerStart         = 0
 local comboTimerDuration      = 0
@@ -216,7 +217,7 @@ btnForce.TextSize = 10
 btnForce.BorderSizePixel = 0
 btnForce.Parent = frame
 
--- ====================== ЛОГИРОВАНИЕ (БЕЗ ФАЙЛОВ) ======================
+-- ====================== ЛОГИРОВАНИЕ ======================
 local function addLog(msg)
     logLabel.Text = msg
 end
@@ -237,11 +238,17 @@ local function updateGUI()
 
     if comboLock then
         setIndicatorColor(Color3.fromRGB(255, 200, 0))
-        if coconutPresent then
-            countdownLabel.Text = "WAITING COCONUT..."
+        -- Приоритет отображения состояний внутри comboLock:
+        if waitingForCoconutAppear then
+            -- Ждём появления кокоса в Particles
+            countdownLabel.Text = "WAIT COCONUT APPEAR..."
+        elseif coconutPresent then
+            -- Кокос есть — ждём его исчезновения
+            countdownLabel.Text = "WAIT COCONUT GONE..."
         elseif comboTimerActive then
+            -- Кокос исчез — идёт таймер COMBO_DELAY
             local remaining = math.max(0, comboTimerDuration - (tick() - comboTimerStart))
-            countdownLabel.Text = string.format("COMBO: %.0fs", remaining)
+            countdownLabel.Text = string.format("COMBO DELAY: %.0fs", remaining)
         else
             countdownLabel.Text = "COMBO IN PROGRESS"
         end
@@ -329,7 +336,7 @@ toggleBtn.MouseButton1Click:Connect(function()
 end)
 toggleBtn.Text = "×"
 
--- ====================== FIREBASE (С СЕРВЕРНЫМ ВРЕМЕНЕМ) ======================
+-- ====================== FIREBASE ======================
 local function safeRequest(url, method, body)
     for attempt = 1, 3 do
         local ok, result = pcall(function()
@@ -363,7 +370,6 @@ end
 
 local function writeQueue(value)
     local ok1 = safeRequest(FIREBASE_URL .. "/comboQueue.json", "PUT", tostring(value))
-    -- Используем серверное время Firebase
     safeRequest(FIREBASE_URL .. "/comboQueueLastUpdate.json", "PUT", '{"sv": "timestamp"}')
     if ok1 then
         cachedQueue    = value
@@ -373,9 +379,9 @@ end
 
 local function readLastUpdateTime()
     local body = safeRequest(FIREBASE_URL .. "/comboQueueLastUpdate.json", "GET")
-    if body and body ~= "null" then 
+    if body and body ~= "null" then
         local ms = tonumber(body)
-        return ms and math.floor(ms / 1000) or nil -- Конвертируем миллисекунды в секунды
+        return ms and math.floor(ms / 1000) or nil
     end
     return nil
 end
@@ -395,16 +401,15 @@ local function readThrownBy()
 end
 
 local function writeLastThrowTime()
-    -- Используем серверное время Firebase
     safeRequest(FIREBASE_URL .. "/lastThrowTime.json", "PUT", '{"sv": "timestamp"}')
-    lastThrowTime = os.time() -- Локальный фоллбек до следующего чтения
+    lastThrowTime = os.time()
 end
 
 local function readLastThrowTime()
     local body = safeRequest(FIREBASE_URL .. "/lastThrowTime.json", "GET")
-    if body and body ~= "null" then 
+    if body and body ~= "null" then
         local ms = tonumber(body)
-        return ms and math.floor(ms / 1000) or 0 -- Конвертируем миллисекунды в секунды
+        return ms and math.floor(ms / 1000) or 0
     end
     return 0
 end
@@ -537,23 +542,46 @@ local function startCombo()
 
     comboThread = task.spawn(function()
         local ok, err = pcall(function()
-            if coconutPresent then
-                addLog("Waiting coconut to disappear...")
-                while coconutPresent do task.wait(COCONUT_SCAN) end
-                addLog("Coconut gone, starting timer")
+
+            -- ШАГ 1: Если кокоса нет — ждём его появления (макс 60 сек)
+            if not coconutPresent then
+                waitingForCoconutAppear = true
+                updateGUI()
+                addLog("Waiting ComboCoconut appear...")
+                local waitStart = tick()
+                while not coconutPresent and (tick() - waitStart) < 60 do
+                    task.wait(COCONUT_SCAN)
+                end
+                waitingForCoconutAppear = false
+
+                if not coconutPresent then
+                    -- За 60 секунд кокос не появился — передаём очередь
+                    addLog("Timeout: no coconut (60s) → skip queue")
+                    writeQueue(getNextQueue())
+                    addLog("Queue → " .. getNextQueue())
+                    return
+                end
             end
 
+            -- ШАГ 2: Кокос есть в Particles — ждём его исчезновения
+            addLog("Coconut present, waiting to disappear...")
+            updateGUI()
+            while coconutPresent do task.wait(COCONUT_SCAN) end
+
+            -- ШАГ 3: Кокос исчез из Particles — ТЕПЕРЬ запускаем COMBO_DELAY
+            addLog("Coconut gone → start COMBO_DELAY " .. COMBO_DELAY .. "s")
             startGuiTimer(COMBO_DELAY)
-            addLog("Timer " .. COMBO_DELAY .. "s")
             task.wait(COMBO_DELAY)
             stopGuiTimer()
 
+            -- ШАГ 4: Если за время таймера появился новый кокос — ждём пока уйдёт
             if coconutPresent then
                 addLog("New coconut during timer, waiting...")
                 while coconutPresent do task.wait(COCONUT_SCAN) end
                 addLog("Coconut gone, throwing now")
             end
 
+            -- ШАГ 5: Финальные проверки перед броском
             if lastValue ~= 39 then
                 addLog("Abort: value changed → pass queue")
                 writeQueue(getNextQueue())
@@ -565,6 +593,7 @@ local function startCombo()
                 return
             end
 
+            -- ШАГ 6: Бросок + передача очереди
             local nextQ = getNextQueue()
             SpawnCoconut()
             writeThrownBy(ACCOUNT_ID)
@@ -574,6 +603,8 @@ local function startCombo()
             startCycle(CYCLE_COUNT)
         end)
 
+        -- Сброс после завершения или ошибки
+        waitingForCoconutAppear = false
         stopGuiTimer()
 
         if not ok then
@@ -682,6 +713,7 @@ PlayerAbilityEvent.OnClientEvent:Connect(function(data)
 
                 if value < 39 and comboLock and comboThread then
                     pcall(task.cancel, comboThread)
+                    waitingForCoconutAppear = false
                     stopGuiTimer()
                     comboThread   = nil
                     comboLock     = false
@@ -749,6 +781,7 @@ task.spawn(function()
         if comboLock and comboLockTime > 0 and (tick() - comboLockTime) > 300 then
             addLog("WD: comboLock stuck, reset")
             if comboThread then pcall(task.cancel, comboThread); comboThread = nil end
+            waitingForCoconutAppear = false
             stopGuiTimer()
             comboLock, comboLockTime = false, 0
             task.spawn(function()
@@ -775,6 +808,7 @@ task.spawn(function()
         if not char or not char:FindFirstChild("Humanoid") or char.Humanoid.Health <= 0 then
             addLog("WD: char dead/missing")
             comboLock, cycleActive, skipping = false, false, false
+            waitingForCoconutAppear = false
             stopGuiTimer()
             updateGUI()
         end
@@ -830,10 +864,10 @@ task.spawn(function()
     end
 end)
 
--- ====================== ОЧИСТКА ПАМЯТИ (GC) ======================
+-- ====================== ОЧИСТКА ПАМЯТИ ======================
 task.spawn(function()
     while true do
-        task.wait(600) -- Каждые 10 минут
+        task.wait(600)
         local before = gcinfo()
         collectgarbage("collect")
         local after = gcinfo()
@@ -845,6 +879,7 @@ end)
 btnReset.MouseButton1Click:Connect(function()
     writeQueue(1)
     comboLock, cycleActive, skipping, chainWatchActive, coconutSeenWhileMyQueue = false, false, false, false, false
+    waitingForCoconutAppear = false
     if comboThread then pcall(task.cancel, comboThread); comboThread = nil end
     stopGuiTimer()
     addLog("Manual: reset Q=1")
