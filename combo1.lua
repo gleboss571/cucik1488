@@ -19,7 +19,7 @@ local COCONUT_INTERVAL    = 10
 local QUEUE_POLL_INTERVAL = 1
 local SKIP_DELAY          = 0.2
 local COCONUT_SCAN        = 0.1
-local CHAIN_TIMEOUT       = 120
+local CHAIN_TIMEOUT       = 100
 local VALUE_HISTORY_SIZE  = 20
 local PREDICT_MIN_POINTS  = 4
 local PREDICT_MAX_NEEDED  = 25
@@ -65,13 +65,13 @@ local chainWatchActive        = false
 
 local guiMinimized            = false
 
-local ACC_ROW_H  = 13
-local GUI_W      = 195
-local GUI_H      = 155 + TOTAL_ACCOUNTS * ACC_ROW_H
+local ACC_ROW_H = 13
+local GUI_W     = 195
+local GUI_H     = 165 + TOTAL_ACCOUNTS * ACC_ROW_H
 
 local cachedQueue    = 0
 local lastQueueCheck = 0
-local fbStatus       = "FB: --"
+local fbStatus       = "--"
 
 local serverTimeDelta = 0
 local isPaused        = false
@@ -128,13 +128,16 @@ task.spawn(function()
 end)
 
 -- ====================== FIREBASE ФУНКЦИИ ======================
+
+-- ✅ Фикс: правильный синтаксис Firebase server timestamp — ".sv" с точкой
+local SV_TIMESTAMP = '{".sv":"timestamp"}'
+
 local function writeThrowBatch(nextQueue)
     local data = string.format(
-        '{"comboQueue":%d,"comboThrownBy":%d,"lastThrowTime":{"sv":"timestamp"}}',
+        '{"comboQueue":%d,"comboThrownBy":%d,"lastThrowTime":{".sv":"timestamp"}}',
         nextQueue, ACCOUNT_ID
     )
     fbWriteAsync(FIREBASE_URL .. "/.json", "PATCH", data)
-    -- ✅ Обновляем кэш СРАЗУ локально не дожидаясь Firebase
     cachedQueue    = nextQueue
     lastQueueCheck = tick()
     comboThrownBy  = ACCOUNT_ID
@@ -161,7 +164,7 @@ end
 
 local function writeQueue(value)
     fbWriteAsync(FIREBASE_URL .. "/comboQueue.json", "PUT", tostring(value))
-    fbWriteAsync(FIREBASE_URL .. "/comboQueueLastUpdate.json", "PUT", '{"sv":"timestamp"}')
+    fbWriteAsync(FIREBASE_URL .. "/comboQueueLastUpdate.json", "PUT", SV_TIMESTAMP)
     cachedQueue    = value
     lastQueueCheck = tick()
 end
@@ -222,7 +225,7 @@ local function readPauseFlag()
 end
 
 local function writeMyStatus(state)
-    local safeVal = (lastValue >= 0) and lastValue or 0
+    local safeVal = math.max(0, lastValue >= 0 and lastValue or 0)
     local data = string.format(
         '{"value":%d,"queue":%s,"lock":%s,"state":"%s"}',
         safeVal,
@@ -244,9 +247,10 @@ end
 
 -- ====================== СИНХРОНИЗАЦИЯ ВРЕМЕНИ ======================
 local function syncServerTime()
+    -- ✅ Фикс: ".sv" с точкой — правильный синтаксис Firebase
     local body = safeRequest(
         FIREBASE_URL .. "/serverTimeSync/" .. ACCOUNT_ID .. ".json",
-        "PUT", '{"sv":"timestamp"}'
+        "PUT", '{".sv":"timestamp"}'
     )
     if body and body ~= "null" then
         local ms = tonumber(body)
@@ -339,6 +343,7 @@ topBar.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
 topBar.BorderSizePixel  = 0
 topBar.Parent           = frame
 
+-- Строка 1: основной статус
 local statusLabel = Instance.new("TextLabel")
 statusLabel.Size               = UDim2.new(1, -6, 0, 13)
 statusLabel.Position           = UDim2.new(0, 4, 0, 3)
@@ -350,6 +355,7 @@ statusLabel.TextSize           = 10
 statusLabel.TextXAlignment     = Enum.TextXAlignment.Left
 statusLabel.Parent             = frame
 
+-- Строка 2: состояние
 local countdownLabel = Instance.new("TextLabel")
 countdownLabel.Size               = UDim2.new(1, -6, 0, 12)
 countdownLabel.Position           = UDim2.new(0, 4, 0, 17)
@@ -361,9 +367,22 @@ countdownLabel.TextSize           = 9
 countdownLabel.TextXAlignment     = Enum.TextXAlignment.Left
 countdownLabel.Parent             = frame
 
+-- Строка 3: throws + FB статус
+local throwsLabel = Instance.new("TextLabel")
+throwsLabel.Size               = UDim2.new(1, -6, 0, 11)
+throwsLabel.Position           = UDim2.new(0, 4, 0, 30)
+throwsLabel.BackgroundTransparency = 1
+throwsLabel.Text               = "Throws: 0 | FB: --"
+throwsLabel.TextColor3         = Color3.fromRGB(180, 210, 180)
+throwsLabel.Font               = Enum.Font.Gotham
+throwsLabel.TextSize           = 9
+throwsLabel.TextXAlignment     = Enum.TextXAlignment.Left
+throwsLabel.Parent             = frame
+
+-- Val прогресс бар
 local valBarBg = Instance.new("Frame")
 valBarBg.Size             = UDim2.new(1, -8, 0, 4)
-valBarBg.Position         = UDim2.new(0, 4, 0, 31)
+valBarBg.Position         = UDim2.new(0, 4, 0, 43)
 valBarBg.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
 valBarBg.BorderSizePixel  = 0
 valBarBg.Parent           = frame
@@ -374,9 +393,10 @@ valBarFill.BackgroundColor3 = Color3.fromRGB(255, 120, 0)
 valBarFill.BorderSizePixel  = 0
 valBarFill.Parent           = valBarBg
 
+-- Таймер бар
 local timerBarBg = Instance.new("Frame")
 timerBarBg.Size             = UDim2.new(1, -8, 0, 4)
-timerBarBg.Position         = UDim2.new(0, 4, 0, 37)
+timerBarBg.Position         = UDim2.new(0, 4, 0, 49)
 timerBarBg.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
 timerBarBg.BorderSizePixel  = 0
 timerBarBg.Visible          = false
@@ -388,17 +408,7 @@ timerBarFill.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
 timerBarFill.BorderSizePixel  = 0
 timerBarFill.Parent           = timerBarBg
 
-local infoLabel = Instance.new("TextLabel")
-infoLabel.Size               = UDim2.new(1, -6, 0, 11)
-infoLabel.Position           = UDim2.new(0, 4, 0, 43)
-infoLabel.BackgroundTransparency = 1
-infoLabel.Text               = "FB:-- | T:0 | dt:0s"
-infoLabel.TextColor3         = Color3.fromRGB(130, 160, 200)
-infoLabel.Font               = Enum.Font.Code
-infoLabel.TextSize           = 8
-infoLabel.TextXAlignment     = Enum.TextXAlignment.Left
-infoLabel.Parent             = frame
-
+-- Предсказание
 local predictLabel = Instance.new("TextLabel")
 predictLabel.Size               = UDim2.new(1, -6, 0, 11)
 predictLabel.Position           = UDim2.new(0, 4, 0, 55)
@@ -410,6 +420,7 @@ predictLabel.TextSize           = 8
 predictLabel.TextXAlignment     = Enum.TextXAlignment.Left
 predictLabel.Parent             = frame
 
+-- 3 строки лога
 local logLabels = {}
 for i = 1, 3 do
     local lbl = Instance.new("TextLabel")
@@ -429,6 +440,7 @@ for i = 1, 3 do
     logLabels[i] = lbl
 end
 
+-- Разделитель
 local divider = Instance.new("Frame")
 divider.Size             = UDim2.new(1, -8, 0, 1)
 divider.Position         = UDim2.new(0, 4, 0, 98)
@@ -520,7 +532,7 @@ local function addLog(msg)
 end
 
 local function setBarColor(color)
-    topBar.BackgroundColor3  = color
+    topBar.BackgroundColor3    = color
     toggleDot.BackgroundColor3 = color
 end
 
@@ -568,25 +580,18 @@ local function updatePredictLabel()
     end
 end
 
-local function updateInfoLine()
-    local timerStr = ""
-    if comboTimerActive then
-        local rem = math.max(0, comboTimerDuration - (tick() - comboTimerStart))
-        timerStr = string.format("T:%.0fs | ", rem)
-    end
-    infoLabel.Text = string.format("%sFB:%s | #%d: %dt | dt:%ds",
-        timerStr, fbStatus, ACCOUNT_ID, totalThrows, serverTimeDelta)
-end
-
 local function updateGUI()
+    local safeVal = lastValue >= 0 and lastValue or 0
+
     statusLabel.Text = string.format("Val:%d | Q:%s | #%d%s",
-        lastValue >= 0 and lastValue or 0,
-        tostring(cachedQueue), ACCOUNT_ID,
+        safeVal, tostring(cachedQueue), ACCOUNT_ID,
         isPaused and " ⏸" or "")
+
+    -- ✅ Throws отдельной строкой + FB статус
+    throwsLabel.Text = string.format("Throws: %d | FB: %s", totalThrows, fbStatus)
 
     updateValBar()
     updatePredictLabel()
-    updateInfoLine()
 
     local isMyQ = (cachedQueue == ACCOUNT_ID)
 
@@ -642,7 +647,6 @@ local function updateGUI()
 end
 
 -- ====================== ОБНОВЛЕНИЕ СТРОК АККАУНТОВ ======================
--- ✅ Фикс 2: правильный парсинг + хартбит каждые 3 сек
 task.spawn(function()
     while true do
         task.wait(2)
@@ -658,7 +662,6 @@ task.spawn(function()
             local section = body:match('"' .. tostring(i) .. '":%s*(%b{})')
 
             if section and #section > 2 then
-                -- ✅ Парсим корректно — Firebase пишет true/false без кавычек
                 local val = tonumber(section:match('"value":%s*(%d+)')) or 0
 
                 local queueRaw = section:match('"queue":%s*([%w"]+)')
@@ -711,8 +714,10 @@ task.spawn(function()
     end
 end)
 
--- ✅ Фикс 2: хартбит — пишем статус каждые 3 сек чтобы не показывало offline
+-- ✅ Фикс offline: хартбит с самого начала, не ждём canThrow
 task.spawn(function()
+    -- Пишем начальный статус сразу при старте
+    writeMyStatus("starting")
     while true do
         task.wait(3)
         local state
@@ -722,6 +727,8 @@ task.spawn(function()
             state = comboTimerActive and "timer" or "lock"
         elseif cycleActive then
             state = "cycle"
+        elseif not canThrow then
+            state = "starting"
         else
             state = "idle"
         end
@@ -932,14 +939,8 @@ local function startCombo()
         local ok, err = pcall(function()
             local timerDone = false
             while not timerDone do
-                if isPaused then
-                    addLog("Abort: paused")
-                    return
-                end
-                if cachedQueue ~= ACCOUNT_ID then
-                    addLog("Abort: Q changed")
-                    return
-                end
+                if isPaused then addLog("Abort: paused"); return end
+                if cachedQueue ~= ACCOUNT_ID then addLog("Abort: Q changed"); return end
                 if lastValue ~= 39 then
                     addLog("Abort: val dropped")
                     writeQueue(findAccountWith39())
@@ -955,26 +956,22 @@ local function startCombo()
 
                 while (tick() - tStart) < COMBO_DELAY do
                     task.wait(COCONUT_SCAN)
-
                     if isPaused then
                         stopGuiTimer()
                         addLog("Abort: paused in timer")
                         writeQueue(findAccountWith39())
                         return
                     end
-
                     if coconutPresent and not ourCycleActive then
                         interrupted = true
                         break
                     end
-
                     if lastValue ~= 39 then
                         stopGuiTimer()
                         addLog("Abort: val dropped in timer")
                         writeQueue(findAccountWith39())
                         return
                     end
-
                     if cachedQueue ~= ACCOUNT_ID then
                         stopGuiTimer()
                         addLog("Abort: Q changed in timer")
@@ -997,12 +994,9 @@ local function startCombo()
             end
 
             local freshQueue = readQueueFresh()
-            if freshQueue ~= ACCOUNT_ID then
-                addLog("Abort final: Q changed")
-                return
-            end
+            if freshQueue ~= ACCOUNT_ID then addLog("Abort final: Q"); return end
             if lastValue ~= 39 then
-                addLog("Abort final: val changed")
+                addLog("Abort final: val")
                 writeQueue(findAccountWith39())
                 return
             end
@@ -1027,9 +1021,7 @@ local function startCombo()
         if not ok then
             addLog("Err: " .. tostring(err):sub(1, 22))
             local cur = readQueueFresh()
-            if cur == ACCOUNT_ID then
-                writeQueue(findAccountWith39())
-            end
+            if cur == ACCOUNT_ID then writeQueue(findAccountWith39()) end
         end
 
         comboLock     = false
@@ -1041,7 +1033,6 @@ local function startCombo()
 end
 
 -- ====================== ДЕТЕКТОР ComboCoconut ======================
--- ✅ Фикс 3: используем кэш сначала, потом fresh если нужно
 task.spawn(function()
     while true do
         local present   = false
@@ -1059,19 +1050,15 @@ task.spawn(function()
             coconutPresent = false
             addLog("Coconut gone")
 
-            -- ШАГ 1: Проверяем локальный кэш сначала
-            -- writeThrowBatch уже обновил cachedQueue локально
+            -- ✅ Фикс: сначала кэш (уже обновлён локально writeThrowBatch)
             local queueToUse = cachedQueue
 
-            -- ШАГ 2: Если кэш говорит что НЕ моя очередь —
-            -- ждём 0.5 сек (fbWriteWorker успеет записать)
-            -- и делаем свежий запрос
+            -- Если кэш не наша очередь — ждём async write и читаем заново
             if queueToUse ~= ACCOUNT_ID then
                 task.wait(0.5)
                 queueToUse = readQueueFresh()
             end
 
-            -- ШАГ 3: Запускаем комбо если условия выполнены
             if queueToUse == ACCOUNT_ID
                 and canThrow
                 and not comboLock
@@ -1083,7 +1070,6 @@ task.spawn(function()
                 addLog("My turn Q=" .. queueToUse .. " → combo")
                 startCombo()
             else
-                -- Лог причины почему не запустили
                 if queueToUse ~= ACCOUNT_ID then
                     addLog("Not my turn Q=" .. tostring(queueToUse))
                 elseif comboLock then
@@ -1216,6 +1202,7 @@ btnPause.MouseButton1Click:Connect(function()
     end
 end)
 
+-- Поллинг глобальной паузы
 task.spawn(function()
     while not canThrow do task.wait(1) end
     while true do
@@ -1271,22 +1258,21 @@ if LP.Character then
 end
 
 -- ====================== ЗАДЕРЖКА СТАРТА ======================
--- ✅ Фикс 1: startTime сбрасывается ПОСЛЕ jitter
 task.spawn(function()
     local jitter = (ACCOUNT_ID - 1) * 3
     task.wait(jitter)
 
-    -- ✅ Сбрасываем startTime ПОСЛЕ jitter чтобы START_DELAY был честным
+    -- ✅ Фикс: startTime после jitter — честный START_DELAY
     startTime = tick()
 
     addLog("Syncing time...")
     if syncServerTime() then
-        addLog("dt=" .. serverTimeDelta .. "s")
+        addLog("Time OK (delta " .. serverTimeDelta .. "s)")
     else
-        addLog("Time sync fail")
+        addLog("Time sync fail — using local")
+        serverTimeDelta = 0
     end
 
-    -- Честный обратный отсчёт START_DELAY
     while tick() - startTime < START_DELAY do
         if tick() - lastQueueCheck > 3 then readQueue() end
         local rem = math.max(0, START_DELAY - (tick() - startTime))
@@ -1322,7 +1308,7 @@ task.spawn(function()
     writeMyStatus("idle")
 
     canThrow = true
-    addLog("Start #" .. ACCOUNT_ID .. " dt=" .. serverTimeDelta .. "s")
+    addLog("Start #" .. ACCOUNT_ID)
     updateGUI()
 end)
 
@@ -1346,9 +1332,7 @@ task.spawn(function()
             resetAllStates("WD lock")
             task.spawn(function()
                 local cur = readQueueFresh()
-                if cur == ACCOUNT_ID then
-                    writeQueue(findAccountWith39())
-                end
+                if cur == ACCOUNT_ID then writeQueue(findAccountWith39()) end
                 updateGUI()
             end)
         end
