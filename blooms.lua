@@ -17,7 +17,7 @@ local HEIGHT_ZONES = {
     {min = 20, max = 30, tpMin = 27, minX = -254.52, maxX = -166.23, minZ = 105.47, maxZ = 244.76},  -- sunflower
     {min = 36, max = 47, tpMin = 43, minX = -403, maxX = -258, minZ = 83, maxZ = 175},               -- rose
     {min = 87, max = 100, tpMin = 94},                                                                -- coconut
-    {min = 115, max = 150, interval = 1.5},                                                           -- pepper
+    {min = 128, max = 150, interval = 1.5},                                                           -- pepper
 }
 
 local TP_INTERVAL       = 4
