@@ -1,4 +1,4 @@
--- Petal TP v9 (Heartbeat/PostSim + Camera Lock)
+-- Petal TP v9 (CFrame + Camera Lock)
 -- R = toggle
 
 local Players = game:GetService("Players")
@@ -11,18 +11,16 @@ local LP = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 local Events = ReplicatedStorage:FindFirstChild("Events")
 
--- min/max = высота ДЕТЕКТА петалей (где они спавнятся)
--- tpMin = высота ТЕЛЕПОРТА персонажа (куда ТП над петалью)
 local HEIGHT_ZONES = {
-    {min = 20, max = 30, tpMin = 27, minX = -254.52, maxX = -166.23, minZ = 105.47, maxZ = 244.76},  -- sunflower
-    {min = 36, max = 47, tpMin = 43, minX = -403, maxX = -258, minZ = 83, maxZ = 175},               -- rose
-    {min = 87, max = 100, tpMin = 94},                                                                -- coconut
-    {min = 128, max = 150, interval = 1.5},                                                           -- pepper
+    {min = 20, max = 30, tpMin = 27, minX = -254.52, maxX = -166.23, minZ = 105.47, maxZ = 244.76},
+    {min = 36, max = 47, tpMin = 43, minX = -403, maxX = -258, minZ = 83, maxZ = 175},
+    {min = 87, max = 100, tpMin = 94},
+    {min = 119, max = 150, interval = 1.5, spawnDelay = 0.3},
 }
 
 local TP_INTERVAL       = 4
 local SCAN_INTERVAL     = 0.01
-local PETAL_WAIT        = 0.12
+local PETAL_WAIT        = 0.1
 local RED_URGENT        = 4
 local REFRESH_THRESHOLD = 1
 local LOGS              = false
@@ -45,33 +43,36 @@ local PETAL_COLORS = {
 }
 
 local COLOR_PRIORITY = {
-    ["Red Petal"] = 1,
-    ["Pink Petal"] = 2,
-    ["Merigold Petal"] = 3,
+    ["Red Petal"]        = 1,
+    ["Pink Petal"]       = 2,
+    ["Merigold Petal"]   = 3,
     ["Periwinkle Petal"] = 4,
-    ["Violet Petal"] = 5,
-    ["Scarlet Petal"] = 6,
-    ["Green Petal"] = 7,
-    ["Yellow Petal"] = 8,
-    ["Black Petal"] = 9,
-    ["Grey Petal"] = 10,
-    ["Blue Petal"] = 11,
-    ["Cyan Petal"] = 12,
-    ["White Petal"] = 13,
+    ["Violet Petal"]     = 5,
+    ["Scarlet Petal"]    = 6,
+    ["Green Petal"]      = 7,
+    ["Yellow Petal"]     = 8,
+    ["Black Petal"]      = 9,
+    ["Grey Petal"]       = 10,
+    ["Blue Petal"]       = 11,
+    ["Cyan Petal"]       = 12,
+    ["White Petal"]      = 13,
 }
 
 local FESTIVE_PETALS = {
-    ["Red Petal"] = true, ["Pink Petal"] = true,
-    ["Periwinkle Petal"] = true, ["Violet Petal"] = true,
-    ["Scarlet Petal"] = true,
+    ["Red Petal"]        = true,
+    ["Pink Petal"]       = true,
+    ["Periwinkle Petal"] = true,
+    ["Violet Petal"]     = true,
+    ["Scarlet Petal"]    = true,
 }
 
-local enabled = false
-local busy = false
-local cachedPetals = {}
+local enabled          = false
+local busy             = false
+local cachedPetals     = {}
 local hasFestiveBlessing = false
-local lastTPTime = 0
+local lastTPTime       = 0
 local lastZoneInterval = TP_INTERVAL
+local petalFirstSeen   = {}
 
 -- ===============================
 -- BUFF TRACKING
@@ -116,7 +117,6 @@ if SBE then
     end)
 end
 
--- InvokeServer backup
 task.spawn(function()
     while true do
         local fn = Events and Events:FindFirstChild("RetrievePlayerStats")
@@ -152,20 +152,21 @@ task.spawn(function()
 end)
 
 -- ===============================
-
+-- HELPERS
+-- ===============================
 local function getHRP()
     local c = LP.Character
     if not c then return nil, nil end
     return c:FindFirstChild("HumanoidRootPart"), c:FindFirstChildOfClass("Humanoid")
 end
 
--- Ищет зону по позиции петали (использует min/max для детекта)
 local function getZoneForPos(pos)
     local y, x, z = pos.Y, pos.X, pos.Z
     for _, zone in ipairs(HEIGHT_ZONES) do
         if y >= zone.min and y <= zone.max then
             if zone.minX then
-                if x >= zone.minX and x <= zone.maxX and z >= zone.minZ and z <= zone.maxZ then
+                if x >= zone.minX and x <= zone.maxX
+                    and z >= zone.minZ and z <= zone.maxZ then
                     return zone
                 end
             else
@@ -182,123 +183,180 @@ end
 
 local function getZoneInterval(pos)
     local zone = getZoneForPos(pos)
-    if zone then
-        return zone.interval or TP_INTERVAL
-    end
-    return TP_INTERVAL
+    return zone and (zone.interval or TP_INTERVAL) or TP_INTERVAL
 end
 
--- Высота ТП: если есть tpMin — используем его, иначе min
 local function getTPHeight(pos)
     local zone = getZoneForPos(pos)
-    if zone then
-        return zone.tpMin or zone.min
-    end
-    return pos.Y + 3
+    return zone and (zone.tpMin or zone.min) or (pos.Y + 3)
 end
 
 local function getColorName(color)
     for name, col in pairs(PETAL_COLORS) do
-        if math.abs(col.R - color.R) < 0.02 and math.abs(col.G - color.G) < 0.02 and math.abs(col.B - color.B) < 0.02 then
+        if math.abs(col.R - color.R) < 0.02
+            and math.abs(col.G - color.G) < 0.02
+            and math.abs(col.B - color.B) < 0.02 then
             return name
         end
     end
     return nil
 end
 
--- Сканер — ищет петали по min/max (старая высота)
+local function isPetalReady(obj)
+    local zone = getZoneForPos(obj.Position)
+    if not zone or not zone.spawnDelay then return true end
+
+    local firstSeen = petalFirstSeen[obj]
+    if not firstSeen then
+        petalFirstSeen[obj] = tick()
+        return false
+    end
+
+    local age   = tick() - firstSeen
+    local ready = age >= zone.spawnDelay
+
+    if DEBUG_LOGS and not ready then
+        print(string.format("[D] PetalReady: age=%.2fs < delay=%.2fs — NOT READY",
+            age, zone.spawnDelay))
+    end
+
+    return ready
+end
+
+-- ===============================
+-- СКАНЕР
+-- ===============================
 task.spawn(function()
     while true do
-        local particles = Workspace:FindFirstChild("Particles")
-        local found = {}
+        local particles  = Workspace:FindFirstChild("Particles")
+        local found      = {}
+        local currentSet = {}
+
         if particles then
             for _, obj in ipairs(particles:GetChildren()) do
-                if obj.Name == "PetalPart" and obj:IsA("BasePart") and isInZone(obj.Position) then
+                if obj.Name == "PetalPart"
+                    and obj:IsA("BasePart")
+                    and isInZone(obj.Position) then
+
                     found[#found + 1] = obj
+                    currentSet[obj]   = true
+
+                    if not petalFirstSeen[obj] then
+                        petalFirstSeen[obj] = tick()
+                        local zone = getZoneForPos(obj.Position)
+                        if zone and zone.spawnDelay and DEBUG_LOGS then
+                            print(string.format(
+                                "[D] New petal in zone Y=%.0f — wait %.2fs",
+                                obj.Position.Y, zone.spawnDelay))
+                        end
+                    end
                 end
             end
         end
+
+        -- Чистим словарь от исчезнувших петалов
+        for obj in pairs(petalFirstSeen) do
+            if not currentSet[obj] then
+                petalFirstSeen[obj] = nil
+            end
+        end
+
         cachedPetals = found
         task.wait(SCAN_INTERVAL)
     end
 end)
 
--- ТП — Heartbeat / PostSimulation + Camera Lock
+-- ===============================
+-- ТП — чистый CFrame
+-- ===============================
 local function tpCollect(petal, colorName)
     if busy then return end
     if not petal or not petal.Parent then return end
+
     local hrp, hum = getHRP()
     if not hrp or not hum then return end
 
     busy = true
+
     local savedCF = hrp.CFrame
-    local camCF = Camera.CFrame
+    local camCF   = Camera.CFrame
     local camType = Camera.CameraType
 
-    -- Фиксация камеры
+    -- Фиксируем камеру
     Camera.CameraType = Enum.CameraType.Scriptable
-    Camera.CFrame = camCF
+    Camera.CFrame     = camCF
     if hum then hum.AutoRotate = false end
 
-    local tpY = getTPHeight(petal.Position)
+    -- Фиксация камеры каждый кадр
+    local camBindName = "TPv9_CamLock"
+    RunService:BindToRenderStep(
+        camBindName,
+        Enum.RenderPriority.Camera.Value + 1,
+        function()
+            Camera.CFrame = camCF
+        end
+    )
+
+    local tpY     = getTPHeight(petal.Position)
     local petalCF = CFrame.new(petal.Position.X, tpY, petal.Position.Z)
 
-    -- Heartbeat: телепорт к петали
-    local hbConn = RunService.Heartbeat:Connect(function()
-        if hrp.Parent then
-            hrp.CFrame = petalCF
-            hrp.AssemblyLinearVelocity = Vector3.zero
-            hrp.AssemblyAngularVelocity = Vector3.zero
-        end
-    end)
-
-    -- PostSimulation: возврат домой
-    local psConn = RunService.PostSimulation:Connect(function()
-        if hrp.Parent then
-            hrp.CFrame = savedCF
-            hrp.AssemblyLinearVelocity = Vector3.zero
-            hrp.AssemblyAngularVelocity = Vector3.zero
-        end
-    end)
-
-    -- Дополнительная страховка камеры каждый кадр
-    local camBindName = "TPv9_CamLock"
-    RunService:BindToRenderStep(camBindName, 0, function()
-        Camera.CFrame = camCF
-    end)
-
-    -- Удержание (PETAL_WAIT)
-    task.wait(PETAL_WAIT)
-
-    -- Очистка
-    hbConn:Disconnect()
-    psConn:Disconnect()
-    RunService:UnbindFromRenderStep(camBindName)
-
-    -- Гарантированное возвращение HRP на место
-    hrp.CFrame = savedCF
-    hrp.AssemblyLinearVelocity = Vector3.zero
+    -- ✅ Чистый CFrame — телепортируемся к петалу и стоим там
+    -- Сервер видит нас у петала всё время PETAL_WAIT
+    -- Нет осцилляции Heartbeat/PostSim которая давала 1/120 сек касания
+    hrp.CFrame                  = petalCF
+    hrp.AssemblyLinearVelocity  = Vector3.zero
     hrp.AssemblyAngularVelocity = Vector3.zero
 
-    -- Восстановление камеры и хуманоида
+    -- Ждём пока сервер зарегистрирует касание
+    local buffBefore = getBuffRemaining(colorName)
+    task.wait(PETAL_WAIT)
+
+    -- ✅ Проверка: если бафф не обновился — пробуем ещё раз
+    -- Это страховка на случай лага сервера
+    if getBuffRemaining(colorName) <= buffBefore and petal.Parent then
+        if DEBUG_LOGS then
+            print("[D] Buff not updated — retry touch " .. colorName)
+        end
+        hrp.CFrame                  = petalCF
+        hrp.AssemblyLinearVelocity  = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+        task.wait(PETAL_WAIT)
+    end
+
+    -- Возвращаемся домой
+    hrp.CFrame                  = savedCF
+    hrp.AssemblyLinearVelocity  = Vector3.zero
+    hrp.AssemblyAngularVelocity = Vector3.zero
+
+    -- Убираем фиксацию камеры
+    RunService:UnbindFromRenderStep(camBindName)
+
     Camera.CameraType = camType
     if hum then
         hum.AutoRotate = true
         hum:ChangeState(Enum.HumanoidStateType.Running)
     end
 
-    lastTPTime = tick()
+    lastTPTime       = tick()
     lastZoneInterval = getZoneInterval(petal.Position)
 
     if LOGS then
-        local fb = hasFestiveBlessing and " [FB]" or ""
-        local zi = lastZoneInterval ~= TP_INTERVAL and (" [zone=" .. lastZoneInterval .. "s]") or ""
-        print("[Petal] " .. colorName .. fb .. zi .. " Y=" .. string.format("%.0f", tpY) .. " (ghost)")
+        local fb       = hasFestiveBlessing and " [FB]" or ""
+        local zi       = lastZoneInterval ~= TP_INTERVAL
+            and (" [zone=" .. lastZoneInterval .. "s]") or ""
+        local zone     = getZoneForPos(petal.Position)
+        local delayStr = (zone and zone.spawnDelay)
+            and (" [delay=" .. zone.spawnDelay .. "s]") or ""
+        print("[Petal] " .. colorName .. fb .. zi .. delayStr
+            .. " Y=" .. string.format("%.0f", tpY))
     end
+
     busy = false
 end
 
+-- ===============================
 -- ВЫБОР ЦЕЛИ
+-- ===============================
 local function selectTarget()
     local hrp = getHRP()
     if not hrp or #cachedPetals == 0 then return nil end
@@ -309,7 +367,14 @@ local function selectTarget()
             local name = getColorName(obj.Color)
             if name and COLOR_PRIORITY[name] then
                 if hasFestiveBlessing and not FESTIVE_PETALS[name] then
-                    -- skip
+                    -- skip non-festive when festive blessing active
+                elseif not isPetalReady(obj) then
+                    if DEBUG_LOGS then
+                        local firstSeen = petalFirstSeen[obj]
+                        local age = firstSeen and (tick() - firstSeen) or 0
+                        print(string.format("[D] Skip %s — spawn delay (age=%.2fs)",
+                            name, age))
+                    end
                 else
                     local dist = (obj.Position - hrp.Position).Magnitude
                     if not byColor[name] or dist < byColor[name].dist then
@@ -320,9 +385,7 @@ local function selectTarget()
         end
     end
 
-    if DEBUG_LOGS then
-        print("[D] --- selectTarget ---")
-    end
+    if DEBUG_LOGS then print("[D] --- selectTarget ---") end
 
     local candidates = {}
     for colorName, data in pairs(byColor) do
@@ -331,11 +394,13 @@ local function selectTarget()
             candidates[#candidates + 1] = data
             if DEBUG_LOGS then
                 local tpY = getTPHeight(data.part.Position)
-                print("[D] + " .. colorName .. " d=" .. math.floor(data.dist) .. " buff=" .. string.format("%.1f", rem) .. "s petalY=" .. string.format("%.0f", data.part.Position.Y) .. " tpY=" .. string.format("%.0f", tpY))
+                print(string.format("[D] + %s d=%d buff=%.1fs petalY=%.0f tpY=%.0f",
+                    colorName, math.floor(data.dist), rem,
+                    data.part.Position.Y, tpY))
             end
         else
             if DEBUG_LOGS then
-                print("[D] - " .. colorName .. " buff=" .. string.format("%.1f", rem) .. "s SKIP")
+                print(string.format("[D] - %s buff=%.1fs SKIP", colorName, rem))
             end
         end
     end
@@ -354,30 +419,42 @@ local function selectTarget()
 
     if DEBUG_LOGS then
         local tpY = getTPHeight(candidates[1].part.Position)
-        print("[D] -> " .. candidates[1].name .. " petalY=" .. string.format("%.0f", candidates[1].part.Position.Y) .. " tpY=" .. string.format("%.0f", tpY))
+        print(string.format("[D] -> %s petalY=%.0f tpY=%.0f",
+            candidates[1].name,
+            candidates[1].part.Position.Y,
+            tpY))
     end
+
     return candidates[1].part, candidates[1].name
 end
 
--- ОДИН ЦИКЛ
+-- ===============================
+-- ОСНОВНОЙ ЦИКЛ
+-- ===============================
 task.spawn(function()
     while true do
         if enabled and not busy then
+            -- Red urgent
             local redRem = getBuffRemaining("Red Petal")
             if redRem > 0 and redRem < RED_URGENT then
                 local hrp = getHRP()
                 if hrp then
                     local best, bestD = nil, math.huge
                     for _, obj in ipairs(cachedPetals) do
-                        if obj and obj.Parent and getColorName(obj.Color) == "Red Petal" then
+                        if obj and obj.Parent
+                            and getColorName(obj.Color) == "Red Petal"
+                            and isPetalReady(obj) then
                             local d = (obj.Position - hrp.Position).Magnitude
-                            if d < bestD then bestD = d best = obj end
+                            if d < bestD then
+                                bestD = d
+                                best  = obj
+                            end
                         end
                     end
                     if best then
                         if DEBUG_LOGS then
-                            local tpY = getTPHeight(best.Position)
-                            print("[D] RED URGENT rem=" .. string.format("%.1f", redRem) .. " petalY=" .. string.format("%.0f", best.Position.Y) .. " tpY=" .. string.format("%.0f", tpY))
+                            print(string.format("[D] RED URGENT rem=%.1f petalY=%.0f tpY=%.0f",
+                                redRem, best.Position.Y, getTPHeight(best.Position)))
                         end
                         tpCollect(best, "Red Petal")
                         task.wait(0.3)
@@ -398,7 +475,9 @@ task.spawn(function()
     end
 end)
 
+-- ===============================
 -- УПРАВЛЕНИЕ
+-- ===============================
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.KeyCode == Enum.KeyCode.R then
@@ -409,50 +488,80 @@ UserInputService.InputBegan:Connect(function(input, gp)
 end)
 
 LP.CharacterAdded:Connect(function()
-    busy = false
-    lastTPTime = 0
-    liveBuffs = {}
+    busy             = false
+    lastTPTime       = 0
+    liveBuffs        = {}
     lastZoneInterval = TP_INTERVAL
+    petalFirstSeen   = {}
 end)
 
+-- ===============================
+-- СТАТУС
+-- ===============================
 local function printStatus()
-    print("=== Petal v9 (Heartbeat/PostSim + CamLock) ===")
+    print("=== Petal v9 (CFrame) ===")
     print("  Wait: " .. PETAL_WAIT .. "s")
     print("  Interval: " .. TP_INTERVAL .. "s (default)")
-    print("  Zones (detect -> tp):")
+    print("  Zones:")
     for i, z in ipairs(HEIGHT_ZONES) do
-        local zi = z.interval or TP_INTERVAL
-        local tpH = z.tpMin or z.min
-        local bounds = ""
+        local zi      = z.interval or TP_INTERVAL
+        local tpH     = z.tpMin or z.min
+        local bounds  = ""
         if z.minX then
-            bounds = " X=" .. z.minX .. ".." .. z.maxX .. " Z=" .. z.minZ .. ".." .. z.maxZ
+            bounds = string.format(" X=%.0f..%.0f Z=%.0f..%.0f",
+                z.minX, z.maxX, z.minZ, z.maxZ)
         end
-        print("    [" .. i .. "] detect Y=" .. z.min .. "-" .. z.max .. " -> tp Y=" .. tpH .. bounds .. " int=" .. zi .. "s")
+        local dStr = z.spawnDelay and (" delay=" .. z.spawnDelay .. "s") or ""
+        print(string.format("    [%d] Y=%d-%d -> tpY=%d%s int=%.1fs%s",
+            i, z.min, z.max, tpH, bounds, zi, dStr))
     end
-    print("  Red urgent: <" .. RED_URGENT .. "s")
-    print("  Refresh: <" .. REFRESH_THRESHOLD .. "s")
-    print("  Festive: " .. tostring(hasFestiveBlessing))
+    print("  Red urgent:  <" .. RED_URGENT .. "s")
+    print("  Refresh:     <" .. REFRESH_THRESHOLD .. "s")
+    print("  Festive:     " .. tostring(hasFestiveBlessing))
     print("  Buffs:")
-    for name, _ in pairs(COLOR_PRIORITY) do
+    for name in pairs(COLOR_PRIORITY) do
         local rem = getBuffRemaining(name)
-        if rem > 0 then print("    " .. name .. " = " .. string.format("%.1f", rem) .. "s") end
+        if rem > 0 then
+            print(string.format("    %s = %.1fs", name, rem))
+        end
     end
-    print("================")
+    print("=========================")
 end
 
 getgenv().PT = {
-    Add = function(min, max) HEIGHT_ZONES[#HEIGHT_ZONES + 1] = {min = min, max = max} printStatus() end,
-    Set = function(...) HEIGHT_ZONES = {} local a = {...} for i = 1, #a, 2 do HEIGHT_ZONES[#HEIGHT_ZONES + 1] = {min = a[i], max = a[i+1]} end printStatus() end,
-    List = printStatus,
-    Speed = function(t) TP_INTERVAL = t printStatus() end,
-    Wait = function(t) PETAL_WAIT = t printStatus() end,
-    Urgent = function(t) RED_URGENT = t printStatus() end,
-    Refresh = function(t) REFRESH_THRESHOLD = t printStatus() end,
-    ZoneSpeed = function(i, t) if HEIGHT_ZONES[i] then HEIGHT_ZONES[i].interval = t end printStatus() end,
-    Log = function(on) LOGS = on == nil and not LOGS or on end,
-    Debug = function(on) DEBUG_LOGS = on == nil and not DEBUG_LOGS or on print("Debug: " .. tostring(DEBUG_LOGS)) end,
+    Add = function(min, max)
+        HEIGHT_ZONES[#HEIGHT_ZONES + 1] = {min = min, max = max}
+        printStatus()
+    end,
+    Set = function(...)
+        HEIGHT_ZONES = {}
+        local a = {...}
+        for i = 1, #a, 2 do
+            HEIGHT_ZONES[#HEIGHT_ZONES + 1] = {min = a[i], max = a[i+1]}
+        end
+        printStatus()
+    end,
+    List      = printStatus,
+    Speed     = function(t) TP_INTERVAL = t; printStatus() end,
+    Wait      = function(t) PETAL_WAIT = t; printStatus() end,
+    Urgent    = function(t) RED_URGENT = t; printStatus() end,
+    Refresh   = function(t) REFRESH_THRESHOLD = t; printStatus() end,
+    ZoneSpeed = function(i, t)
+        if HEIGHT_ZONES[i] then HEIGHT_ZONES[i].interval = t end
+        printStatus()
+    end,
+    SpawnDelay = function(i, t)
+        if HEIGHT_ZONES[i] then HEIGHT_ZONES[i].spawnDelay = t end
+        print("SpawnDelay zone[" .. i .. "] = " .. tostring(t) .. "s")
+        printStatus()
+    end,
+    Log   = function(on) LOGS = (on == nil) and not LOGS or on end,
+    Debug = function(on)
+        DEBUG_LOGS = (on == nil) and not DEBUG_LOGS or on
+        print("Debug: " .. tostring(DEBUG_LOGS))
+    end,
     Buffs = printStatus,
 }
 
 printStatus()
-print("R = toggle | PT.Debug() | PT.Buffs()")
+print("R = toggle | PT.Debug() | PT.Buffs() | PT.SpawnDelay(4, 0.3) | PT.Wait(0.15)")
