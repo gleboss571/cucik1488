@@ -10,9 +10,9 @@ local Workspace         = game:GetService("Workspace")
 -- ====================== НАСТРОЙКИ ======================
 local FIREBASE_URL        = "https://fuflik1-e9325-default-rtdb.europe-west1.firebasedatabase.app"
 local ACCOUNT_ID          = 2
-local TOTAL_ACCOUNTS      = 2
+local TOTAL_ACCOUNTS      = 3
 local START_DELAY         = 10
-local COMBO_DELAY         = 18
+local COMBO_DELAY         = 17
 local CYCLE_COUNT         = 4
 local CYCLE_DELAY         = 10
 local COCONUT_INTERVAL    = 10
@@ -65,9 +65,9 @@ local chainWatchActive        = false
 
 local guiMinimized            = false
 
-local ACC_ROW_H = 13
-local GUI_W     = 195
-local GUI_H     = 165 + TOTAL_ACCOUNTS * ACC_ROW_H
+-- GUI размеры — без строк аккаунтов
+local GUI_W = 200
+local GUI_H = 122  -- точно под контент без дыр
 
 local cachedQueue    = 0
 local lastQueueCheck = 0
@@ -128,8 +128,6 @@ task.spawn(function()
 end)
 
 -- ====================== FIREBASE ФУНКЦИИ ======================
-
--- ✅ Фикс: правильный синтаксис Firebase server timestamp — ".sv" с точкой
 local SV_TIMESTAMP = '{".sv":"timestamp"}'
 
 local function writeThrowBatch(nextQueue)
@@ -236,18 +234,12 @@ local function writeMyStatus(state)
     fbWriteAsync(FIREBASE_URL .. "/status/" .. ACCOUNT_ID .. ".json", "PUT", data)
 end
 
-local function readAllStatuses()
-    local body = safeRequest(FIREBASE_URL .. "/status.json", "GET")
-    return (body and body ~= "null") and body or nil
-end
-
 local function getNextQueue()
     return (ACCOUNT_ID % TOTAL_ACCOUNTS) + 1
 end
 
 -- ====================== СИНХРОНИЗАЦИЯ ВРЕМЕНИ ======================
 local function syncServerTime()
-    -- ✅ Фикс: ".sv" с точкой — правильный синтаксис Firebase
     local body = safeRequest(
         FIREBASE_URL .. "/serverTimeSync/" .. ACCOUNT_ID .. ".json",
         "PUT", '{".sv":"timestamp"}'
@@ -303,30 +295,10 @@ screenGui.Name         = "ComboThrower_" .. ACCOUNT_ID
 screenGui.ResetOnSpawn = false
 screenGui.Parent       = playerGui
 
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Size                   = UDim2.new(0, 18, 0, 18)
-toggleBtn.Position               = UDim2.new(0, 4, 0, 4 + (ACCOUNT_ID - 1) * (GUI_H + 6))
-toggleBtn.BackgroundColor3       = Color3.fromRGB(40, 40, 40)
-toggleBtn.BackgroundTransparency = 0.3
-toggleBtn.Text                   = "×"
-toggleBtn.TextColor3             = Color3.fromRGB(255, 255, 255)
-toggleBtn.Font                   = Enum.Font.GothamBold
-toggleBtn.TextSize               = 10
-toggleBtn.BorderSizePixel        = 0
-toggleBtn.ZIndex                 = 10
-toggleBtn.Parent                 = screenGui
-
-local toggleDot = Instance.new("Frame")
-toggleDot.Size             = UDim2.new(0, 5, 0, 5)
-toggleDot.Position         = UDim2.new(1, -6, 0, 1)
-toggleDot.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-toggleDot.BorderSizePixel  = 0
-toggleDot.ZIndex           = 11
-toggleDot.Parent           = toggleBtn
-
+-- Основная панель (без отдельной toggle кнопки слева)
 local frame = Instance.new("Frame")
 frame.Size                   = UDim2.new(0, GUI_W, 0, GUI_H)
-frame.Position               = UDim2.new(0, 26, 0, 4 + (ACCOUNT_ID - 1) * (GUI_H + 6))
+frame.Position               = UDim2.new(0, 8, 0, 8 + (ACCOUNT_ID - 1) * (GUI_H + 6))
 frame.BackgroundColor3       = Color3.fromRGB(22, 22, 28)
 frame.BackgroundTransparency = 0.15
 frame.BorderSizePixel        = 0
@@ -336,6 +308,7 @@ frame.ClipsDescendants       = true
 frame.Visible                = true
 frame.Parent                 = screenGui
 
+-- Цветная полоска сверху
 local topBar = Instance.new("Frame")
 topBar.Size             = UDim2.new(1, 0, 0, 2)
 topBar.Position         = UDim2.new(0, 0, 0, 0)
@@ -343,9 +316,23 @@ topBar.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
 topBar.BorderSizePixel  = 0
 topBar.Parent           = frame
 
--- Строка 1: основной статус
+-- ✅ Кнопка × — справа сверху внутри frame
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size                   = UDim2.new(0, 16, 0, 14)
+toggleBtn.Position               = UDim2.new(1, -18, 0, 3)
+toggleBtn.BackgroundColor3       = Color3.fromRGB(180, 50, 50)
+toggleBtn.BackgroundTransparency = 0.3
+toggleBtn.Text                   = "×"
+toggleBtn.TextColor3             = Color3.fromRGB(255, 255, 255)
+toggleBtn.Font                   = Enum.Font.GothamBold
+toggleBtn.TextSize               = 11
+toggleBtn.BorderSizePixel        = 0
+toggleBtn.ZIndex                 = 10
+toggleBtn.Parent                 = frame
+
+-- Статус строка (не перекрывается кнопкой — оставляем место справа)
 local statusLabel = Instance.new("TextLabel")
-statusLabel.Size               = UDim2.new(1, -6, 0, 13)
+statusLabel.Size               = UDim2.new(1, -24, 0, 14)
 statusLabel.Position           = UDim2.new(0, 4, 0, 3)
 statusLabel.BackgroundTransparency = 1
 statusLabel.Text               = "Val:-- | Q:-- | #" .. ACCOUNT_ID
@@ -355,10 +342,10 @@ statusLabel.TextSize           = 10
 statusLabel.TextXAlignment     = Enum.TextXAlignment.Left
 statusLabel.Parent             = frame
 
--- Строка 2: состояние
+-- Состояние
 local countdownLabel = Instance.new("TextLabel")
-countdownLabel.Size               = UDim2.new(1, -6, 0, 12)
-countdownLabel.Position           = UDim2.new(0, 4, 0, 17)
+countdownLabel.Size               = UDim2.new(1, -8, 0, 12)
+countdownLabel.Position           = UDim2.new(0, 4, 0, 19)
 countdownLabel.BackgroundTransparency = 1
 countdownLabel.Text               = "Initializing..."
 countdownLabel.TextColor3         = Color3.fromRGB(255, 200, 80)
@@ -367,13 +354,13 @@ countdownLabel.TextSize           = 9
 countdownLabel.TextXAlignment     = Enum.TextXAlignment.Left
 countdownLabel.Parent             = frame
 
--- Строка 3: throws + FB статус
+-- Throws + FB
 local throwsLabel = Instance.new("TextLabel")
-throwsLabel.Size               = UDim2.new(1, -6, 0, 11)
-throwsLabel.Position           = UDim2.new(0, 4, 0, 30)
+throwsLabel.Size               = UDim2.new(1, -8, 0, 11)
+throwsLabel.Position           = UDim2.new(0, 4, 0, 33)
 throwsLabel.BackgroundTransparency = 1
 throwsLabel.Text               = "Throws: 0 | FB: --"
-throwsLabel.TextColor3         = Color3.fromRGB(180, 210, 180)
+throwsLabel.TextColor3         = Color3.fromRGB(160, 200, 160)
 throwsLabel.Font               = Enum.Font.Gotham
 throwsLabel.TextSize           = 9
 throwsLabel.TextXAlignment     = Enum.TextXAlignment.Left
@@ -382,7 +369,7 @@ throwsLabel.Parent             = frame
 -- Val прогресс бар
 local valBarBg = Instance.new("Frame")
 valBarBg.Size             = UDim2.new(1, -8, 0, 4)
-valBarBg.Position         = UDim2.new(0, 4, 0, 43)
+valBarBg.Position         = UDim2.new(0, 4, 0, 46)
 valBarBg.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
 valBarBg.BorderSizePixel  = 0
 valBarBg.Parent           = frame
@@ -396,7 +383,7 @@ valBarFill.Parent           = valBarBg
 -- Таймер бар
 local timerBarBg = Instance.new("Frame")
 timerBarBg.Size             = UDim2.new(1, -8, 0, 4)
-timerBarBg.Position         = UDim2.new(0, 4, 0, 49)
+timerBarBg.Position         = UDim2.new(0, 4, 0, 52)
 timerBarBg.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
 timerBarBg.BorderSizePixel  = 0
 timerBarBg.Visible          = false
@@ -410,8 +397,8 @@ timerBarFill.Parent           = timerBarBg
 
 -- Предсказание
 local predictLabel = Instance.new("TextLabel")
-predictLabel.Size               = UDim2.new(1, -6, 0, 11)
-predictLabel.Position           = UDim2.new(0, 4, 0, 55)
+predictLabel.Size               = UDim2.new(1, -8, 0, 11)
+predictLabel.Position           = UDim2.new(0, 4, 0, 58)
 predictLabel.BackgroundTransparency = 1
 predictLabel.Text               = "Pred: --"
 predictLabel.TextColor3         = Color3.fromRGB(180, 180, 100)
@@ -424,8 +411,8 @@ predictLabel.Parent             = frame
 local logLabels = {}
 for i = 1, 3 do
     local lbl = Instance.new("TextLabel")
-    lbl.Size               = UDim2.new(1, -6, 0, 10)
-    lbl.Position           = UDim2.new(0, 4, 0, 67 + (i - 1) * 10)
+    lbl.Size               = UDim2.new(1, -8, 0, 10)
+    lbl.Position           = UDim2.new(0, 4, 0, 70 + (i - 1) * 10)
     lbl.BackgroundTransparency = 1
     lbl.Text               = ""
     lbl.Font               = Enum.Font.Code
@@ -440,58 +427,13 @@ for i = 1, 3 do
     logLabels[i] = lbl
 end
 
--- Разделитель
-local divider = Instance.new("Frame")
-divider.Size             = UDim2.new(1, -8, 0, 1)
-divider.Position         = UDim2.new(0, 4, 0, 98)
-divider.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-divider.BorderSizePixel  = 0
-divider.Parent           = frame
-
--- Строки аккаунтов
-local accountRows = {}
-for i = 1, TOTAL_ACCOUNTS do
-    local y = 101 + (i - 1) * ACC_ROW_H
-
-    local dot = Instance.new("Frame")
-    dot.Size             = UDim2.new(0, 5, 0, 5)
-    dot.Position         = UDim2.new(0, 4, 0, y + 4)
-    dot.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-    dot.BorderSizePixel  = 0
-    dot.Parent           = frame
-
-    local lbl = Instance.new("TextLabel")
-    lbl.Size               = UDim2.new(0, 100, 0, ACC_ROW_H)
-    lbl.Position           = UDim2.new(0, 13, 0, y)
-    lbl.BackgroundTransparency = 1
-    lbl.Text               = "#" .. i .. " val:--"
-    lbl.TextColor3         = Color3.fromRGB(170, 170, 170)
-    lbl.Font               = Enum.Font.Code
-    lbl.TextSize           = 8
-    lbl.TextXAlignment     = Enum.TextXAlignment.Left
-    lbl.Parent             = frame
-
-    local barBg = Instance.new("Frame")
-    barBg.Size             = UDim2.new(0, 72, 0, 4)
-    barBg.Position         = UDim2.new(0, 118, 0, y + 4)
-    barBg.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-    barBg.BorderSizePixel  = 0
-    barBg.Parent           = frame
-
-    local barFill = Instance.new("Frame")
-    barFill.Size             = UDim2.new(0, 0, 1, 0)
-    barFill.BackgroundColor3 = Color3.fromRGB(80, 160, 80)
-    barFill.BorderSizePixel  = 0
-    barFill.Parent           = barBg
-
-    accountRows[i] = {dot = dot, lbl = lbl, barFill = barFill}
-end
-
-local btnY = 101 + TOTAL_ACCOUNTS * ACC_ROW_H + 3
+-- Кнопки — ровно под логом без дыры
+-- Лог заканчивается на 70 + 2*10 + 10 = 100
+local BTN_Y = 102
 
 local btnReset = Instance.new("TextButton")
-btnReset.Size             = UDim2.new(0, 58, 0, 14)
-btnReset.Position         = UDim2.new(0, 4, 0, btnY)
+btnReset.Size             = UDim2.new(0, 58, 0, 16)
+btnReset.Position         = UDim2.new(0, 4, 0, BTN_Y)
 btnReset.BackgroundColor3 = Color3.fromRGB(160, 45, 45)
 btnReset.Text             = "Reset Q→1"
 btnReset.TextColor3       = Color3.fromRGB(255, 255, 255)
@@ -501,8 +443,8 @@ btnReset.BorderSizePixel  = 0
 btnReset.Parent           = frame
 
 local btnForce = Instance.new("TextButton")
-btnForce.Size             = UDim2.new(0, 52, 0, 14)
-btnForce.Position         = UDim2.new(0, 66, 0, btnY)
+btnForce.Size             = UDim2.new(0, 52, 0, 16)
+btnForce.Position         = UDim2.new(0, 66, 0, BTN_Y)
 btnForce.BackgroundColor3 = Color3.fromRGB(40, 130, 40)
 btnForce.Text             = "Force Me"
 btnForce.TextColor3       = Color3.fromRGB(255, 255, 255)
@@ -512,8 +454,8 @@ btnForce.BorderSizePixel  = 0
 btnForce.Parent           = frame
 
 local btnPause = Instance.new("TextButton")
-btnPause.Size             = UDim2.new(0, 62, 0, 14)
-btnPause.Position         = UDim2.new(0, 122, 0, btnY)
+btnPause.Size             = UDim2.new(0, 62, 0, 16)
+btnPause.Position         = UDim2.new(0, 122, 0, BTN_Y)
 btnPause.BackgroundColor3 = Color3.fromRGB(40, 80, 180)
 btnPause.Text             = "⏸ Pause"
 btnPause.TextColor3       = Color3.fromRGB(255, 255, 255)
@@ -532,8 +474,7 @@ local function addLog(msg)
 end
 
 local function setBarColor(color)
-    topBar.BackgroundColor3    = color
-    toggleDot.BackgroundColor3 = color
+    topBar.BackgroundColor3 = color
 end
 
 -- ====================== GUI ОБНОВЛЕНИЕ ======================
@@ -583,12 +524,10 @@ end
 local function updateGUI()
     local safeVal = lastValue >= 0 and lastValue or 0
 
-    statusLabel.Text = string.format("Val:%d | Q:%s | #%d%s",
+    statusLabel.Text  = string.format("Val:%d | Q:%s | #%d%s",
         safeVal, tostring(cachedQueue), ACCOUNT_ID,
         isPaused and " ⏸" or "")
-
-    -- ✅ Throws отдельной строкой + FB статус
-    throwsLabel.Text = string.format("Throws: %d | FB: %s", totalThrows, fbStatus)
+    throwsLabel.Text  = string.format("Throws: %d | FB: %s", totalThrows, fbStatus)
 
     updateValBar()
     updatePredictLabel()
@@ -646,77 +585,8 @@ local function updateGUI()
     end
 end
 
--- ====================== ОБНОВЛЕНИЕ СТРОК АККАУНТОВ ======================
+-- ====================== ХАРТБИТ ======================
 task.spawn(function()
-    while true do
-        task.wait(2)
-        if guiMinimized then continue end
-
-        local body = readAllStatuses()
-        if not body then continue end
-
-        for i = 1, TOTAL_ACCOUNTS do
-            local row = accountRows[i]
-            if not row then continue end
-
-            local section = body:match('"' .. tostring(i) .. '":%s*(%b{})')
-
-            if section and #section > 2 then
-                local val = tonumber(section:match('"value":%s*(%d+)')) or 0
-
-                local queueRaw = section:match('"queue":%s*([%w"]+)')
-                local queue    = (queueRaw == "true" or queueRaw == '"true"')
-
-                local lockRaw  = section:match('"lock":%s*([%w"]+)')
-                local lock     = (lockRaw == "true" or lockRaw == '"true"')
-
-                local state = section:match('"state":%s*"([^"]*)"') or "idle"
-
-                if lock then
-                    row.dot.BackgroundColor3 = Color3.fromRGB(255, 190, 0)
-                elseif queue then
-                    row.dot.BackgroundColor3 = Color3.fromRGB(0, 220, 0)
-                else
-                    row.dot.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
-                end
-
-                local qStr = queue and " Q" or "  "
-                local sStr = ""
-                if lock or state == "lock" then
-                    sStr = "[lock]"
-                elseif state == "timer" then
-                    sStr = "[tmr]"
-                elseif state == "threw" then
-                    sStr = "[thr]"
-                elseif state == "cycle" then
-                    sStr = "[cyc]"
-                elseif state == "paused" then
-                    sStr = "[pau]"
-                end
-
-                row.lbl.Text = string.format("#%d v:%d%s %s", i, val, qStr, sStr)
-
-                local prog = math.max(0, math.min(1, val / 39))
-                row.barFill.Size = UDim2.new(prog, 0, 1, 0)
-                if prog >= 1 then
-                    row.barFill.BackgroundColor3 = Color3.fromRGB(50, 220, 50)
-                elseif prog > 0.7 then
-                    row.barFill.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
-                else
-                    row.barFill.BackgroundColor3 = Color3.fromRGB(80, 120, 220)
-                end
-            else
-                row.dot.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-                row.lbl.Text             = "#" .. i .. " offline"
-                row.barFill.Size         = UDim2.new(0, 0, 1, 0)
-            end
-        end
-    end
-end)
-
--- ✅ Фикс offline: хартбит с самого начала, не ждём canThrow
-task.spawn(function()
-    -- Пишем начальный статус сразу при старте
     writeMyStatus("starting")
     while true do
         task.wait(3)
@@ -770,11 +640,20 @@ task.spawn(function()
     end
 end)
 
+-- ✅ Кнопка × справа сверху
 toggleBtn.MouseButton1Click:Connect(function()
-    guiMinimized  = not guiMinimized
-    frame.Visible = not guiMinimized
-    toggleBtn.Text = guiMinimized and tostring(ACCOUNT_ID) or "×"
-    if not guiMinimized then updateGUI() end
+    guiMinimized = not guiMinimized
+    if guiMinimized then
+        -- Показываем только шапку
+        frame.Size = UDim2.new(0, GUI_W, 0, 18)
+        toggleBtn.Text = "▼"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 100, 40)
+    else
+        frame.Size = UDim2.new(0, GUI_W, 0, GUI_H)
+        toggleBtn.Text = "×"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        updateGUI()
+    end
 end)
 
 -- ====================== ЭКИПИРОВКА ======================
@@ -1050,10 +929,8 @@ task.spawn(function()
             coconutPresent = false
             addLog("Coconut gone")
 
-            -- ✅ Фикс: сначала кэш (уже обновлён локально writeThrowBatch)
             local queueToUse = cachedQueue
 
-            -- Если кэш не наша очередь — ждём async write и читаем заново
             if queueToUse ~= ACCOUNT_ID then
                 task.wait(0.5)
                 queueToUse = readQueueFresh()
@@ -1176,12 +1053,12 @@ btnPause.MouseButton1Click:Connect(function()
         btnPause.Text             = "▶ Resume"
         if comboThread then pcall(task.cancel, comboThread); comboThread = nil end
         stopGuiTimer()
-        comboLock      = false
-        comboStarting  = false
-        comboLockTime  = 0
-        cycleActive    = false
-        ourCycleActive = false
-        skipping       = false
+        comboLock          = false
+        comboStarting      = false
+        comboLockTime      = 0
+        cycleActive        = false
+        ourCycleActive     = false
+        skipping           = false
         waitingCoconutGone = false
         task.spawn(function()
             local cur = readQueueFresh()
@@ -1202,7 +1079,6 @@ btnPause.MouseButton1Click:Connect(function()
     end
 end)
 
--- Поллинг глобальной паузы
 task.spawn(function()
     while not canThrow do task.wait(1) end
     while true do
@@ -1262,14 +1138,13 @@ task.spawn(function()
     local jitter = (ACCOUNT_ID - 1) * 3
     task.wait(jitter)
 
-    -- ✅ Фикс: startTime после jitter — честный START_DELAY
     startTime = tick()
 
     addLog("Syncing time...")
     if syncServerTime() then
         addLog("Time OK (delta " .. serverTimeDelta .. "s)")
     else
-        addLog("Time sync fail — using local")
+        addLog("Time sync fail — local time")
         serverTimeDelta = 0
     end
 
