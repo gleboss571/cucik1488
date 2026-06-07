@@ -1,5 +1,5 @@
 --[[
-   ALT Combo Coconut Thrower (Firebase v7 - Full Featured)
+   ALT Combo Coconut Thrower (Firebase v7 - Compact GUI)
    Delta-совместим, Lua 5.1.
 --]]
 
@@ -12,7 +12,7 @@ local FIREBASE_URL        = "https://fuflik1-e9325-default-rtdb.europe-west1.fir
 local ACCOUNT_ID          = 3
 local TOTAL_ACCOUNTS      = 3
 local START_DELAY         = 10
-local COMBO_DELAY         = 16
+local COMBO_DELAY         = 17
 local CYCLE_COUNT         = 4
 local CYCLE_DELAY         = 10
 local COCONUT_INTERVAL    = 10
@@ -20,9 +20,9 @@ local QUEUE_POLL_INTERVAL = 1
 local SKIP_DELAY          = 0.2
 local COCONUT_SCAN        = 0.1
 local CHAIN_TIMEOUT       = 100
-local VALUE_HISTORY_SIZE  = 20   -- сколько точек хранить для предсказания
-local PREDICT_MIN_POINTS  = 4    -- минимум точек для предсказания
-local PREDICT_MAX_NEEDED  = 25   -- если нужно больше N сек — скипаем
+local VALUE_HISTORY_SIZE  = 20
+local PREDICT_MIN_POINTS  = 4
+local PREDICT_MAX_NEEDED  = 25
 
 local LP = Players.LocalPlayer
 
@@ -44,13 +44,13 @@ local canThrow                = false
 local startTime               = tick()
 local skipping                = false
 local comboLock               = false
-local comboStarting           = false   -- семафор против двойного запуска
+local comboStarting           = false
 local lastEquipTime           = 0
 local comboThrownBy           = 0
 local comboLockTime           = 0
 local cycleStartTime          = 0
 local skippingTime            = 0
-local ourCycleActive          = false   -- наш цикл кидает кокосы
+local ourCycleActive          = false
 
 local coconutPresent          = false
 local coconutSeenWhileMyQueue = false
@@ -64,27 +64,23 @@ local lastThrowTime           = os.time()
 local chainWatchActive        = false
 
 local guiMinimized            = false
-local GUI_FULL_HEIGHT         = 230
-local statusPanelOpen         = false
+
+-- GUI размеры — без строк аккаунтов
+local GUI_W = 200
+local GUI_H = 122  -- точно под контент без дыр
 
 local cachedQueue    = 0
 local lastQueueCheck = 0
-local fbStatus       = "FB: --"
+local fbStatus       = "--"
 
--- Серверное время
-local serverTimeDelta = 0  -- разница между серверным и локальным временем
+local serverTimeDelta = 0
+local isPaused        = false
 
--- Пауза
-local isPaused = false
-
--- Предсказание val=39
-local valueHistory    = {}   -- {t=tick(), v=value}
+local valueHistory     = {}
 local lastWrittenValue = -1
 
--- Лог 5 строк
-local logLines = {"", "", "", "", ""}
+local logLines = {"", "", ""}
 
--- Firebase async worker
 local fbWriteQueue = {}
 
 -- ====================== СЕРВЕРНОЕ ВРЕМЯ ======================
@@ -92,10 +88,7 @@ local function serverNow()
     return os.time() + serverTimeDelta
 end
 
--- ====================== FIREBASE ASYNC WORKER ======================
--- Записи в Firebase НЕ блокируют основные потоки
--- Читаем синхронно но с коротким таймаутом
-
+-- ====================== FIREBASE WORKER ======================
 local function safeRequest(url, method, body)
     local result = nil
     for attempt = 1, 3 do
@@ -108,23 +101,21 @@ local function safeRequest(url, method, body)
             })
         end)
         if ok and res and res.StatusCode == 200 and res.Body then
-            fbStatus = "FB: OK"
-            result = res.Body
+            fbStatus = "OK"
+            result   = res.Body
             break
         end
-        fbStatus = string.format("FB: ERR%d(%s)", attempt, tostring(res and res.StatusCode or "?"))
+        fbStatus = "ERR" .. attempt
         task.wait(attempt * 1.5)
     end
-    if not result then fbStatus = "FB: FAIL" end
+    if not result then fbStatus = "FAIL" end
     return result
 end
 
--- Асинхронная запись — добавляем в очередь и не ждём
 local function fbWriteAsync(url, method, body)
     table.insert(fbWriteQueue, {url = url, method = method, body = body})
 end
 
--- Воркер обрабатывает очередь записей в фоне
 task.spawn(function()
     while true do
         if #fbWriteQueue > 0 then
@@ -136,23 +127,21 @@ task.spawn(function()
     end
 end)
 
--- ====================== FIREBASE БАТЧИНГ ======================
--- Один запрос вместо нескольких при броске
+-- ====================== FIREBASE ФУНКЦИИ ======================
+local SV_TIMESTAMP = '{".sv":"timestamp"}'
+
 local function writeThrowBatch(nextQueue)
     local data = string.format(
-        '{"comboQueue":%d,"comboThrownBy":%d,"lastThrowTime":{"sv":"timestamp"}}',
+        '{"comboQueue":%d,"comboThrownBy":%d,"lastThrowTime":{".sv":"timestamp"}}',
         nextQueue, ACCOUNT_ID
     )
-    -- Батч — один запрос
     fbWriteAsync(FIREBASE_URL .. "/.json", "PATCH", data)
-    -- Обновляем кэш локально сразу не дожидаясь ответа
     cachedQueue    = nextQueue
     lastQueueCheck = tick()
     comboThrownBy  = ACCOUNT_ID
     lastThrowTime  = serverNow()
 end
 
--- ====================== FIREBASE ФУНКЦИИ ======================
 local function readQueue()
     local body = safeRequest(FIREBASE_URL .. "/comboQueue.json", "GET")
     if body and body ~= "null" then
@@ -163,19 +152,17 @@ local function readQueue()
             return cachedQueue
         end
     end
-    -- Кэш устарел но Firebase недоступен — используем кэш
     return cachedQueue > 0 and cachedQueue or nil
 end
 
--- Свежее чтение очереди с инвалидацией кэша
 local function readQueueFresh()
-    lastQueueCheck = 0  -- принудительно инвалидируем кэш
+    lastQueueCheck = 0
     return readQueue()
 end
 
 local function writeQueue(value)
     fbWriteAsync(FIREBASE_URL .. "/comboQueue.json", "PUT", tostring(value))
-    fbWriteAsync(FIREBASE_URL .. "/comboQueueLastUpdate.json", "PUT", '{"sv":"timestamp"}')
+    fbWriteAsync(FIREBASE_URL .. "/comboQueueLastUpdate.json", "PUT", SV_TIMESTAMP)
     cachedQueue    = value
     lastQueueCheck = tick()
 end
@@ -198,24 +185,20 @@ local function readLastThrowTime()
     return 0
 end
 
--- Умная очередь — пишем своё value в Firebase
 local function writeMyValue(value)
     fbWriteAsync(
         FIREBASE_URL .. "/accountValues/" .. ACCOUNT_ID .. ".json",
-        "PUT",
-        tostring(value)
+        "PUT", tostring(value)
     )
     lastWrittenValue = value
 end
 
 local function writeMyValueIfSignificant(value)
-    local significant = (value == 39)
+    local sig = (value == 39)
         or (lastWrittenValue == 39 and value ~= 39)
         or (math.abs(value - lastWrittenValue) >= 5)
         or (lastWrittenValue == -1)
-    if significant then
-        writeMyValue(value)
-    end
+    if sig then writeMyValue(value) end
 end
 
 local function readAllValues()
@@ -230,64 +213,41 @@ local function readAllValues()
     return nil
 end
 
--- Пауза через Firebase — все аккаунты читают этот флаг
 local function writePauseFlag(paused)
-    fbWriteAsync(
-        FIREBASE_URL .. "/globalPause.json",
-        "PUT",
-        paused and "true" or "false"
-    )
+    fbWriteAsync(FIREBASE_URL .. "/globalPause.json", "PUT", paused and "true" or "false")
 end
 
 local function readPauseFlag()
     local body = safeRequest(FIREBASE_URL .. "/globalPause.json", "GET")
-    if body and body ~= "null" then
-        return body == "true"
-    end
-    return false
+    return body == "true"
 end
 
--- Статус аккаунта для панели
 local function writeMyStatus(state)
+    local safeVal = math.max(0, lastValue >= 0 and lastValue or 0)
     local data = string.format(
         '{"value":%d,"queue":%s,"lock":%s,"state":"%s"}',
-        lastValue,
+        safeVal,
         tostring(cachedQueue == ACCOUNT_ID),
         tostring(comboLock),
         state or "idle"
     )
-    fbWriteAsync(
-        FIREBASE_URL .. "/status/" .. ACCOUNT_ID .. ".json",
-        "PUT",
-        data
-    )
-end
-
-local function readAllStatuses()
-    local body = safeRequest(FIREBASE_URL .. "/status.json", "GET")
-    if body and body ~= "null" then
-        return body
-    end
-    return nil
+    fbWriteAsync(FIREBASE_URL .. "/status/" .. ACCOUNT_ID .. ".json", "PUT", data)
 end
 
 local function getNextQueue()
     return (ACCOUNT_ID % TOTAL_ACCOUNTS) + 1
 end
 
--- ====================== СИНХРОНИЗАЦИЯ СЕРВЕРНОГО ВРЕМЕНИ ======================
+-- ====================== СИНХРОНИЗАЦИЯ ВРЕМЕНИ ======================
 local function syncServerTime()
-    -- Пишем timestamp и читаем обратно чтобы узнать серверное время
     local body = safeRequest(
         FIREBASE_URL .. "/serverTimeSync/" .. ACCOUNT_ID .. ".json",
-        "PUT",
-        '{"sv":"timestamp"}'
+        "PUT", '{".sv":"timestamp"}'
     )
     if body and body ~= "null" then
-        local serverMs = tonumber(body)
-        if serverMs then
-            local serverSec  = math.floor(serverMs / 1000)
-            serverTimeDelta  = serverSec - os.time()
+        local ms = tonumber(body)
+        if ms then
+            serverTimeDelta = math.floor(ms / 1000) - os.time()
             return true
         end
     end
@@ -297,57 +257,32 @@ end
 -- ====================== УМНАЯ ОЧЕРЕДЬ ======================
 local function findAccountWith39()
     local values = readAllValues()
-    if not values then
-        -- Firebase недоступен — обычная очередь
-        return getNextQueue()
-    end
-
-    -- Обходим по кругу начиная со следующего после нас
+    if not values then return getNextQueue() end
     for i = 1, TOTAL_ACCOUNTS - 1 do
         local checkId = (ACCOUNT_ID - 1 + i) % TOTAL_ACCOUNTS + 1
-        if values[checkId] == 39 then
-            return checkId
-        end
+        if values[checkId] == 39 then return checkId end
     end
-
-    -- Никто не имеет 39 — следующий по порядку
     return getNextQueue()
 end
 
--- ====================== ПРЕДСКАЗАНИЕ val=39 ======================
+-- ====================== ПРЕДСКАЗАНИЕ ======================
 local function addValueHistory(value)
     table.insert(valueHistory, {t = tick(), v = value})
-    -- Держим только последние N точек
     while #valueHistory > VALUE_HISTORY_SIZE do
         table.remove(valueHistory, 1)
     end
 end
 
--- Вернёт true если предположительно успеем набрать 39
--- Вернёт true если недостаточно данных (не скипаем без уверенности)
 local function predictWillReach39()
     if lastValue >= 39 then return true end
     if #valueHistory < PREDICT_MIN_POINTS then return true end
-
-    -- Считаем среднюю скорость роста по всей истории
-    local oldest = valueHistory[1]
-    local newest = valueHistory[#valueHistory]
+    local oldest   = valueHistory[1]
+    local newest   = valueHistory[#valueHistory]
     local timeDiff = newest.t - oldest.t
-
-    if timeDiff < 1 then return true end  -- слишком мало времени — не скипаем
-
-    local rate = (newest.v - oldest.v) / timeDiff  -- единиц в секунду
-
-    if rate <= 0 then
-        -- Value не растёт или падает — точно не успеем
-        return false
-    end
-
-    local needed    = 39 - lastValue
-    local timeNeeded = needed / rate
-
-    -- Скипаем только если нужно явно больше PREDICT_MAX_NEEDED секунд
-    return timeNeeded < PREDICT_MAX_NEEDED
+    if timeDiff < 1 then return true end
+    local rate = (newest.v - oldest.v) / timeDiff
+    if rate <= 0 then return false end
+    return ((39 - lastValue) / rate) < PREDICT_MAX_NEEDED
 end
 
 -- ====================== GUI ======================
@@ -356,469 +291,319 @@ local oldGui = playerGui:FindFirstChild("ComboThrower_" .. ACCOUNT_ID)
 if oldGui then oldGui:Destroy() end
 
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name        = "ComboThrower_" .. ACCOUNT_ID
+screenGui.Name         = "ComboThrower_" .. ACCOUNT_ID
 screenGui.ResetOnSpawn = false
-screenGui.Parent      = playerGui
+screenGui.Parent       = playerGui
 
--- Кнопка сворачивания
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Size                  = UDim2.new(0, 24, 0, 24)
-toggleBtn.Position              = UDim2.new(0, 10, 0, 10 + (ACCOUNT_ID - 1) * (GUI_FULL_HEIGHT + 10))
-toggleBtn.BackgroundColor3      = Color3.fromRGB(40, 40, 40)
-toggleBtn.BackgroundTransparency = 0.2
-toggleBtn.Text                  = "×"
-toggleBtn.TextColor3            = Color3.fromRGB(255, 255, 255)
-toggleBtn.Font                  = Enum.Font.GothamBold
-toggleBtn.TextSize              = 12
-toggleBtn.BorderSizePixel       = 0
-toggleBtn.ZIndex                = 10
-toggleBtn.Parent                = screenGui
-
-local toggleIndicator = Instance.new("Frame")
-toggleIndicator.Size            = UDim2.new(0, 6, 0, 6)
-toggleIndicator.Position        = UDim2.new(1, -7, 0, 1)
-toggleIndicator.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-toggleIndicator.BorderSizePixel = 0
-toggleIndicator.ZIndex          = 11
-toggleIndicator.Parent          = toggleBtn
-
--- Основная панель
+-- Основная панель (без отдельной toggle кнопки слева)
 local frame = Instance.new("Frame")
-frame.Size                  = UDim2.new(0, 230, 0, GUI_FULL_HEIGHT)
-frame.Position              = UDim2.new(0, 38, 0, 10 + (ACCOUNT_ID - 1) * (GUI_FULL_HEIGHT + 10))
-frame.BackgroundColor3      = Color3.fromRGB(30, 30, 30)
-frame.BackgroundTransparency = 0.3
-frame.BorderSizePixel       = 0
-frame.Active                = true
-frame.Draggable             = true
-frame.ClipsDescendants      = true
-frame.Visible               = true
-frame.Parent                = screenGui
+frame.Size                   = UDim2.new(0, GUI_W, 0, GUI_H)
+frame.Position               = UDim2.new(0, 8, 0, 8 + (ACCOUNT_ID - 1) * (GUI_H + 6))
+frame.BackgroundColor3       = Color3.fromRGB(22, 22, 28)
+frame.BackgroundTransparency = 0.15
+frame.BorderSizePixel        = 0
+frame.Active                 = true
+frame.Draggable              = true
+frame.ClipsDescendants       = true
+frame.Visible                = true
+frame.Parent                 = screenGui
 
-local indicator = Instance.new("Frame")
-indicator.Size            = UDim2.new(0, 8, 0, 8)
-indicator.Position        = UDim2.new(1, -12, 0, 6)
-indicator.BorderSizePixel = 0
-indicator.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-indicator.Parent          = frame
+-- Цветная полоска сверху
+local topBar = Instance.new("Frame")
+topBar.Size             = UDim2.new(1, 0, 0, 2)
+topBar.Position         = UDim2.new(0, 0, 0, 0)
+topBar.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+topBar.BorderSizePixel  = 0
+topBar.Parent           = frame
 
+-- ✅ Кнопка × — справа сверху внутри frame
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size                   = UDim2.new(0, 16, 0, 14)
+toggleBtn.Position               = UDim2.new(1, -18, 0, 3)
+toggleBtn.BackgroundColor3       = Color3.fromRGB(180, 50, 50)
+toggleBtn.BackgroundTransparency = 0.3
+toggleBtn.Text                   = "×"
+toggleBtn.TextColor3             = Color3.fromRGB(255, 255, 255)
+toggleBtn.Font                   = Enum.Font.GothamBold
+toggleBtn.TextSize               = 11
+toggleBtn.BorderSizePixel        = 0
+toggleBtn.ZIndex                 = 10
+toggleBtn.Parent                 = frame
+
+-- Статус строка (не перекрывается кнопкой — оставляем место справа)
 local statusLabel = Instance.new("TextLabel")
-statusLabel.Size               = UDim2.new(1, -22, 0, 20)
-statusLabel.Position           = UDim2.new(0, 5, 0, 3)
+statusLabel.Size               = UDim2.new(1, -24, 0, 14)
+statusLabel.Position           = UDim2.new(0, 4, 0, 3)
 statusLabel.BackgroundTransparency = 1
-statusLabel.TextColor3         = Color3.fromRGB(255, 255, 255)
-statusLabel.Font               = Enum.Font.Gotham
-statusLabel.TextSize           = 11
+statusLabel.Text               = "Val:-- | Q:-- | #" .. ACCOUNT_ID
+statusLabel.TextColor3         = Color3.fromRGB(220, 220, 220)
+statusLabel.Font               = Enum.Font.GothamBold
+statusLabel.TextSize           = 10
 statusLabel.TextXAlignment     = Enum.TextXAlignment.Left
 statusLabel.Parent             = frame
 
-local throwLabel = Instance.new("TextLabel")
-throwLabel.Size               = UDim2.new(1, -10, 0, 14)
-throwLabel.Position           = UDim2.new(0, 5, 0, 24)
-throwLabel.BackgroundTransparency = 1
-throwLabel.Text               = "Throws: 0"
-throwLabel.TextColor3         = Color3.fromRGB(200, 200, 200)
-throwLabel.Font               = Enum.Font.Gotham
-throwLabel.TextSize           = 10
-throwLabel.TextXAlignment     = Enum.TextXAlignment.Left
-throwLabel.Parent             = frame
-
+-- Состояние
 local countdownLabel = Instance.new("TextLabel")
-countdownLabel.Size               = UDim2.new(1, -10, 0, 14)
-countdownLabel.Position           = UDim2.new(0, 5, 0, 39)
+countdownLabel.Size               = UDim2.new(1, -8, 0, 12)
+countdownLabel.Position           = UDim2.new(0, 4, 0, 19)
 countdownLabel.BackgroundTransparency = 1
-countdownLabel.Text               = "Wait " .. START_DELAY .. "s"
-countdownLabel.TextColor3         = Color3.fromRGB(255, 200, 100)
+countdownLabel.Text               = "Initializing..."
+countdownLabel.TextColor3         = Color3.fromRGB(255, 200, 80)
 countdownLabel.Font               = Enum.Font.Gotham
-countdownLabel.TextSize           = 10
+countdownLabel.TextSize           = 9
 countdownLabel.TextXAlignment     = Enum.TextXAlignment.Left
 countdownLabel.Parent             = frame
 
--- Прогресс val к 39
+-- Throws + FB
+local throwsLabel = Instance.new("TextLabel")
+throwsLabel.Size               = UDim2.new(1, -8, 0, 11)
+throwsLabel.Position           = UDim2.new(0, 4, 0, 33)
+throwsLabel.BackgroundTransparency = 1
+throwsLabel.Text               = "Throws: 0 | FB: --"
+throwsLabel.TextColor3         = Color3.fromRGB(160, 200, 160)
+throwsLabel.Font               = Enum.Font.Gotham
+throwsLabel.TextSize           = 9
+throwsLabel.TextXAlignment     = Enum.TextXAlignment.Left
+throwsLabel.Parent             = frame
+
+-- Val прогресс бар
 local valBarBg = Instance.new("Frame")
-valBarBg.Size            = UDim2.new(1, -10, 0, 5)
-valBarBg.Position        = UDim2.new(0, 5, 0, 55)
-valBarBg.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-valBarBg.BorderSizePixel = 0
-valBarBg.Parent          = frame
+valBarBg.Size             = UDim2.new(1, -8, 0, 4)
+valBarBg.Position         = UDim2.new(0, 4, 0, 46)
+valBarBg.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+valBarBg.BorderSizePixel  = 0
+valBarBg.Parent           = frame
 
 local valBarFill = Instance.new("Frame")
-valBarFill.Size            = UDim2.new(0, 0, 1, 0)
-valBarFill.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
-valBarFill.BorderSizePixel = 0
-valBarFill.Parent          = valBarBg
-
-local valBarLabel = Instance.new("TextLabel")
-valBarLabel.Size               = UDim2.new(1, -10, 0, 12)
-valBarLabel.Position           = UDim2.new(0, 5, 0, 62)
-valBarLabel.BackgroundTransparency = 1
-valBarLabel.Text               = "val: 0/39"
-valBarLabel.TextColor3         = Color3.fromRGB(180, 180, 180)
-valBarLabel.Font               = Enum.Font.Code
-valBarLabel.TextSize           = 9
-valBarLabel.TextXAlignment     = Enum.TextXAlignment.Left
-valBarLabel.Parent             = frame
+valBarFill.Size             = UDim2.new(0, 0, 1, 0)
+valBarFill.BackgroundColor3 = Color3.fromRGB(255, 120, 0)
+valBarFill.BorderSizePixel  = 0
+valBarFill.Parent           = valBarBg
 
 -- Таймер бар
 local timerBarBg = Instance.new("Frame")
-timerBarBg.Size            = UDim2.new(1, -10, 0, 6)
-timerBarBg.Position        = UDim2.new(0, 5, 0, 76)
-timerBarBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-timerBarBg.BorderSizePixel = 0
-timerBarBg.Visible         = false
-timerBarBg.Parent          = frame
+timerBarBg.Size             = UDim2.new(1, -8, 0, 4)
+timerBarBg.Position         = UDim2.new(0, 4, 0, 52)
+timerBarBg.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+timerBarBg.BorderSizePixel  = 0
+timerBarBg.Visible          = false
+timerBarBg.Parent           = frame
 
 local timerBarFill = Instance.new("Frame")
-timerBarFill.Size            = UDim2.new(1, 0, 1, 0)
+timerBarFill.Size             = UDim2.new(1, 0, 1, 0)
 timerBarFill.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
-timerBarFill.BorderSizePixel = 0
-timerBarFill.Parent          = timerBarBg
+timerBarFill.BorderSizePixel  = 0
+timerBarFill.Parent           = timerBarBg
 
-local timerLabel = Instance.new("TextLabel")
-timerLabel.Size               = UDim2.new(1, -10, 0, 12)
-timerLabel.Position           = UDim2.new(0, 5, 0, 84)
-timerLabel.BackgroundTransparency = 1
-timerLabel.Text               = ""
-timerLabel.TextColor3         = Color3.fromRGB(255, 220, 100)
-timerLabel.Font               = Enum.Font.Code
-timerLabel.TextSize           = 9
-timerLabel.TextXAlignment     = Enum.TextXAlignment.Left
-timerLabel.Visible            = false
-timerLabel.Parent             = frame
-
-local fbLabel = Instance.new("TextLabel")
-fbLabel.Size               = UDim2.new(1, -10, 0, 12)
-fbLabel.Position           = UDim2.new(0, 5, 0, 98)
-fbLabel.BackgroundTransparency = 1
-fbLabel.Text               = "FB: --"
-fbLabel.TextColor3         = Color3.fromRGB(150, 200, 255)
-fbLabel.Font               = Enum.Font.Code
-fbLabel.TextSize           = 9
-fbLabel.TextXAlignment     = Enum.TextXAlignment.Left
-fbLabel.Parent             = frame
-
+-- Предсказание
 local predictLabel = Instance.new("TextLabel")
-predictLabel.Size               = UDim2.new(1, -10, 0, 12)
-predictLabel.Position           = UDim2.new(0, 5, 0, 111)
+predictLabel.Size               = UDim2.new(1, -8, 0, 11)
+predictLabel.Position           = UDim2.new(0, 4, 0, 58)
 predictLabel.BackgroundTransparency = 1
-predictLabel.Text               = "Predict: --"
-predictLabel.TextColor3         = Color3.fromRGB(200, 200, 100)
+predictLabel.Text               = "Pred: --"
+predictLabel.TextColor3         = Color3.fromRGB(180, 180, 100)
 predictLabel.Font               = Enum.Font.Code
-predictLabel.TextSize           = 9
+predictLabel.TextSize           = 8
 predictLabel.TextXAlignment     = Enum.TextXAlignment.Left
 predictLabel.Parent             = frame
 
--- Лог 5 строк
+-- 3 строки лога
 local logLabels = {}
-for i = 1, 5 do
+for i = 1, 3 do
     local lbl = Instance.new("TextLabel")
-    lbl.Size               = UDim2.new(1, -10, 0, 11)
-    lbl.Position           = UDim2.new(0, 5, 0, 123 + (i - 1) * 11)
+    lbl.Size               = UDim2.new(1, -8, 0, 10)
+    lbl.Position           = UDim2.new(0, 4, 0, 70 + (i - 1) * 10)
     lbl.BackgroundTransparency = 1
     lbl.Text               = ""
     lbl.Font               = Enum.Font.Code
-    lbl.TextSize           = 9
+    lbl.TextSize           = 8
     lbl.TextXAlignment     = Enum.TextXAlignment.Left
     lbl.TextColor3         = Color3.fromRGB(
-        180 - (i - 1) * 25,
-        255 - (i - 1) * 35,
-        180 - (i - 1) * 25
+        160 - (i - 1) * 30,
+        220 - (i - 1) * 40,
+        160 - (i - 1) * 30
     )
-    lbl.Parent = frame
+    lbl.Parent  = frame
     logLabels[i] = lbl
 end
 
--- Кнопки
+-- Кнопки — ровно под логом без дыры
+-- Лог заканчивается на 70 + 2*10 + 10 = 100
+local BTN_Y = 102
+
 local btnReset = Instance.new("TextButton")
-btnReset.Size            = UDim2.new(0, 70, 0, 18)
-btnReset.Position        = UDim2.new(0, 5, 0, 180)
-btnReset.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-btnReset.Text            = "Reset Q→1"
-btnReset.TextColor3      = Color3.fromRGB(255, 255, 255)
-btnReset.Font            = Enum.Font.Gotham
-btnReset.TextSize        = 9
-btnReset.BorderSizePixel = 0
-btnReset.Parent          = frame
+btnReset.Size             = UDim2.new(0, 58, 0, 16)
+btnReset.Position         = UDim2.new(0, 4, 0, BTN_Y)
+btnReset.BackgroundColor3 = Color3.fromRGB(160, 45, 45)
+btnReset.Text             = "Reset Q→1"
+btnReset.TextColor3       = Color3.fromRGB(255, 255, 255)
+btnReset.Font             = Enum.Font.Gotham
+btnReset.TextSize         = 8
+btnReset.BorderSizePixel  = 0
+btnReset.Parent           = frame
 
 local btnForce = Instance.new("TextButton")
-btnForce.Size            = UDim2.new(0, 65, 0, 18)
-btnForce.Position        = UDim2.new(0, 80, 0, 180)
-btnForce.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
-btnForce.Text            = "Force Me"
-btnForce.TextColor3      = Color3.fromRGB(255, 255, 255)
-btnForce.Font            = Enum.Font.Gotham
-btnForce.TextSize        = 9
-btnForce.BorderSizePixel = 0
-btnForce.Parent          = frame
+btnForce.Size             = UDim2.new(0, 52, 0, 16)
+btnForce.Position         = UDim2.new(0, 66, 0, BTN_Y)
+btnForce.BackgroundColor3 = Color3.fromRGB(40, 130, 40)
+btnForce.Text             = "Force Me"
+btnForce.TextColor3       = Color3.fromRGB(255, 255, 255)
+btnForce.Font             = Enum.Font.Gotham
+btnForce.TextSize         = 8
+btnForce.BorderSizePixel  = 0
+btnForce.Parent           = frame
 
 local btnPause = Instance.new("TextButton")
-btnPause.Size            = UDim2.new(0, 70, 0, 18)
-btnPause.Position        = UDim2.new(0, 150, 0, 180)
-btnPause.BackgroundColor3 = Color3.fromRGB(50, 100, 200)
-btnPause.Text            = "Pause"
-btnPause.TextColor3      = Color3.fromRGB(255, 255, 255)
-btnPause.Font            = Enum.Font.Gotham
-btnPause.TextSize        = 9
-btnPause.BorderSizePixel = 0
-btnPause.Parent          = frame
-
-local btnStatus = Instance.new("TextButton")
-btnStatus.Size            = UDim2.new(1, -10, 0, 18)
-btnStatus.Position        = UDim2.new(0, 5, 0, 203)
-btnStatus.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-btnStatus.Text            = "▼ All Accounts Status"
-btnStatus.TextColor3      = Color3.fromRGB(200, 200, 255)
-btnStatus.Font            = Enum.Font.Gotham
-btnStatus.TextSize        = 9
-btnStatus.BorderSizePixel = 0
-btnStatus.Parent          = frame
-
--- ====================== ПАНЕЛЬ СТАТУСОВ ВСЕХ АККАУНТОВ ======================
-local statusPanel = Instance.new("Frame")
-statusPanel.Size                  = UDim2.new(0, 250, 0, 30 + TOTAL_ACCOUNTS * 28)
-statusPanel.Position              = UDim2.new(0, 38, 0, 10 + TOTAL_ACCOUNTS * (GUI_FULL_HEIGHT + 10) + 10)
-statusPanel.BackgroundColor3      = Color3.fromRGB(20, 20, 30)
-statusPanel.BackgroundTransparency = 0.2
-statusPanel.BorderSizePixel       = 0
-statusPanel.Visible               = false
-statusPanel.Active                = true
-statusPanel.Draggable             = true
-statusPanel.Parent                = screenGui
-
-local statusPanelTitle = Instance.new("TextLabel")
-statusPanelTitle.Size               = UDim2.new(1, 0, 0, 20)
-statusPanelTitle.Position           = UDim2.new(0, 0, 0, 0)
-statusPanelTitle.BackgroundColor3   = Color3.fromRGB(40, 40, 60)
-statusPanelTitle.BackgroundTransparency = 0
-statusPanelTitle.Text               = "ALL ACCOUNTS"
-statusPanelTitle.TextColor3         = Color3.fromRGB(200, 200, 255)
-statusPanelTitle.Font               = Enum.Font.GothamBold
-statusPanelTitle.TextSize           = 10
-statusPanelTitle.BorderSizePixel    = 0
-statusPanelTitle.Parent             = statusPanel
-
--- Строки для каждого аккаунта в панели
-local accountRows = {}
-for i = 1, TOTAL_ACCOUNTS do
-    local row = Instance.new("Frame")
-    row.Size            = UDim2.new(1, -10, 0, 24)
-    row.Position        = UDim2.new(0, 5, 0, 22 + (i - 1) * 26)
-    row.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
-    row.BackgroundTransparency = 0.3
-    row.BorderSizePixel = 0
-    row.Parent          = statusPanel
-
-    local dot = Instance.new("Frame")
-    dot.Size            = UDim2.new(0, 8, 0, 8)
-    dot.Position        = UDim2.new(0, 4, 0.5, -4)
-    dot.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-    dot.BorderSizePixel = 0
-    dot.Parent          = row
-
-    local label = Instance.new("TextLabel")
-    label.Size               = UDim2.new(0, 120, 1, 0)
-    label.Position           = UDim2.new(0, 16, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text               = "#" .. i .. " val:-- Q:--"
-    label.TextColor3         = Color3.fromRGB(200, 200, 200)
-    label.Font               = Enum.Font.Code
-    label.TextSize           = 9
-    label.TextXAlignment     = Enum.TextXAlignment.Left
-    label.Parent             = row
-
-    local barBg = Instance.new("Frame")
-    barBg.Size            = UDim2.new(0, 80, 0, 5)
-    barBg.Position        = UDim2.new(0, 140, 0.5, -2)
-    barBg.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    barBg.BorderSizePixel = 0
-    barBg.Parent          = row
-
-    local barFill = Instance.new("Frame")
-    barFill.Size            = UDim2.new(0, 0, 1, 0)
-    barFill.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
-    barFill.BorderSizePixel = 0
-    barFill.Parent          = barBg
-
-    accountRows[i] = {row = row, dot = dot, label = label, barFill = barFill}
-end
+btnPause.Size             = UDim2.new(0, 62, 0, 16)
+btnPause.Position         = UDim2.new(0, 122, 0, BTN_Y)
+btnPause.BackgroundColor3 = Color3.fromRGB(40, 80, 180)
+btnPause.Text             = "⏸ Pause"
+btnPause.TextColor3       = Color3.fromRGB(255, 255, 255)
+btnPause.Font             = Enum.Font.Gotham
+btnPause.TextSize         = 8
+btnPause.BorderSizePixel  = 0
+btnPause.Parent           = frame
 
 -- ====================== ЛОГ ======================
 local function addLog(msg)
     table.insert(logLines, 1, msg)
-    if #logLines > 5 then
-        table.remove(logLines, 6)
-    end
-    for i = 1, 5 do
+    if #logLines > 3 then table.remove(logLines, 4) end
+    for i = 1, 3 do
         logLabels[i].Text = logLines[i] or ""
     end
 end
 
-local function setIndicatorColor(color)
-    indicator.BackgroundColor3      = color
-    toggleIndicator.BackgroundColor3 = color
+local function setBarColor(color)
+    topBar.BackgroundColor3 = color
 end
 
 -- ====================== GUI ОБНОВЛЕНИЕ ======================
 local function updateValBar()
-    local progress = math.max(0, math.min(1, lastValue / 39))
-    valBarFill.Size = UDim2.new(progress, 0, 1, 0)
-
-    if progress < 0.5 then
-        valBarFill.BackgroundColor3 = Color3.fromRGB(255, math.floor(progress * 2 * 200), 0)
-    elseif progress < 0.9 then
+    local p = math.max(0, math.min(1, (lastValue >= 0 and lastValue or 0) / 39))
+    valBarFill.Size = UDim2.new(p, 0, 1, 0)
+    if p >= 1 then
+        valBarFill.BackgroundColor3 = Color3.fromRGB(50, 230, 50)
+    elseif p > 0.7 then
         valBarFill.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
     else
-        valBarFill.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
+        valBarFill.BackgroundColor3 = Color3.fromRGB(255, 120, 0)
     end
-
-    valBarLabel.Text = string.format("val: %d/39", lastValue)
 end
 
 local function updatePredictLabel()
     if lastValue >= 39 then
-        predictLabel.Text      = "Predict: READY ✓"
-        predictLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
+        predictLabel.Text       = "Pred: READY ✓"
+        predictLabel.TextColor3 = Color3.fromRGB(50, 220, 50)
         return
     end
     if #valueHistory < PREDICT_MIN_POINTS then
-        predictLabel.Text      = "Predict: collecting..."
-        predictLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+        predictLabel.Text       = "Pred: collecting..."
+        predictLabel.TextColor3 = Color3.fromRGB(120, 120, 120)
         return
     end
-
     local oldest   = valueHistory[1]
     local newest   = valueHistory[#valueHistory]
     local timeDiff = newest.t - oldest.t
-    if timeDiff < 1 then
-        predictLabel.Text = "Predict: --"
-        return
-    end
-
+    if timeDiff < 1 then predictLabel.Text = "Pred: --"; return end
     local rate = (newest.v - oldest.v) / timeDiff
     if rate <= 0 then
-        predictLabel.Text       = "Predict: NOT growing ✗"
-        predictLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+        predictLabel.Text       = "Pred: not growing ✗"
+        predictLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
         return
     end
-
-    local needed     = 39 - lastValue
-    local timeNeeded = needed / rate
-    if timeNeeded < PREDICT_MAX_NEEDED then
-        predictLabel.Text       = string.format("Predict: ~%.0fs to 39 ✓", timeNeeded)
-        predictLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+    local secs = (39 - lastValue) / rate
+    if secs < PREDICT_MAX_NEEDED then
+        predictLabel.Text       = string.format("Pred: ~%.0fs to 39 ✓", secs)
+        predictLabel.TextColor3 = Color3.fromRGB(100, 220, 100)
     else
-        predictLabel.Text       = string.format("Predict: ~%.0fs — SKIP ✗", timeNeeded)
-        predictLabel.TextColor3 = Color3.fromRGB(255, 150, 50)
+        predictLabel.Text       = string.format("Pred: ~%.0fs SKIP ✗", secs)
+        predictLabel.TextColor3 = Color3.fromRGB(255, 140, 40)
     end
 end
 
 local function updateGUI()
-    statusLabel.Text = string.format(
-        "Val:%d | Q:%s | #%d%s",
-        lastValue, tostring(cachedQueue), ACCOUNT_ID,
-        isPaused and " [PAUSED]" or ""
-    )
-    throwLabel.Text = "Throws: " .. totalThrows
-    fbLabel.Text    = fbStatus
+    local safeVal = lastValue >= 0 and lastValue or 0
+
+    statusLabel.Text  = string.format("Val:%d | Q:%s | #%d%s",
+        safeVal, tostring(cachedQueue), ACCOUNT_ID,
+        isPaused and " ⏸" or "")
+    throwsLabel.Text  = string.format("Throws: %d | FB: %s", totalThrows, fbStatus)
 
     updateValBar()
     updatePredictLabel()
 
-    local isMyQueue = (cachedQueue == ACCOUNT_ID)
+    local isMyQ = (cachedQueue == ACCOUNT_ID)
 
     if isPaused then
-        setIndicatorColor(Color3.fromRGB(100, 100, 200))
-        countdownLabel.Text = "⏸ PAUSED — waiting Resume"
+        setBarColor(Color3.fromRGB(80, 80, 200))
+        countdownLabel.Text       = "⏸ PAUSED"
+        countdownLabel.TextColor3 = Color3.fromRGB(150, 150, 255)
     elseif comboLock then
-        setIndicatorColor(Color3.fromRGB(255, 200, 0))
+        setBarColor(Color3.fromRGB(255, 190, 0))
+        countdownLabel.TextColor3 = Color3.fromRGB(255, 210, 80)
         if waitingCoconutGone then
-            countdownLabel.Text = "COCONUT — WAIT GONE..."
+            countdownLabel.Text = "Coconut — waiting gone..."
         elseif comboTimerActive then
-            local remaining = math.max(0, comboTimerDuration - (tick() - comboTimerStart))
-            countdownLabel.Text = string.format("COMBO DELAY: %.0fs", remaining)
+            local rem = math.max(0, comboTimerDuration - (tick() - comboTimerStart))
+            countdownLabel.Text = string.format("Combo delay: %.0fs", rem)
         else
-            countdownLabel.Text = "COMBO IN PROGRESS"
+            countdownLabel.Text = "Combo in progress"
         end
     elseif chainWatchActive then
-        setIndicatorColor(Color3.fromRGB(255, 50, 50))
-        countdownLabel.Text = "CHAIN DEAD — RECOVERING"
+        setBarColor(Color3.fromRGB(220, 40, 40))
+        countdownLabel.Text       = "Chain dead — recovering"
+        countdownLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
     elseif skipping then
-        setIndicatorColor(Color3.fromRGB(255, 100, 0))
-        countdownLabel.Text = "SKIPPING..."
+        setBarColor(Color3.fromRGB(255, 100, 0))
+        countdownLabel.Text       = "Skipping..."
+        countdownLabel.TextColor3 = Color3.fromRGB(255, 160, 60)
     elseif cycleActive then
-        setIndicatorColor(Color3.fromRGB(0, 150, 255))
-        countdownLabel.Text = "CYCLE ACTIVE"
-    elseif isMyQueue and coconutPresent then
-        setIndicatorColor(Color3.fromRGB(255, 200, 0))
-        countdownLabel.Text = "WATCHING COCONUT..."
-    elseif isMyQueue and lastValue == 39 then
-        setIndicatorColor(Color3.fromRGB(0, 255, 0))
-        countdownLabel.Text = "MY TURN — READY"
-    elseif isMyQueue then
-        setIndicatorColor(Color3.fromRGB(255, 150, 0))
-        countdownLabel.Text = "MY TURN (no 39)"
+        setBarColor(Color3.fromRGB(0, 130, 255))
+        countdownLabel.Text       = "Cycle active"
+        countdownLabel.TextColor3 = Color3.fromRGB(80, 180, 255)
+    elseif isMyQ and coconutPresent then
+        setBarColor(Color3.fromRGB(255, 190, 0))
+        countdownLabel.Text       = "Watching coconut..."
+        countdownLabel.TextColor3 = Color3.fromRGB(255, 210, 80)
+    elseif isMyQ and lastValue == 39 then
+        setBarColor(Color3.fromRGB(0, 220, 0))
+        countdownLabel.Text       = "My turn — ready!"
+        countdownLabel.TextColor3 = Color3.fromRGB(80, 255, 80)
+    elseif isMyQ then
+        setBarColor(Color3.fromRGB(255, 140, 0))
+        countdownLabel.Text       = "My turn (no 39)"
+        countdownLabel.TextColor3 = Color3.fromRGB(255, 170, 60)
     elseif not canThrow then
-        setIndicatorColor(Color3.fromRGB(150, 150, 150))
-        local remaining = math.max(0, START_DELAY - (tick() - startTime))
-        countdownLabel.Text = "Wait " .. math.ceil(remaining) .. "s"
+        setBarColor(Color3.fromRGB(100, 100, 100))
+        local rem = math.max(0, START_DELAY - (tick() - startTime))
+        countdownLabel.Text       = "Wait " .. math.ceil(rem) .. "s"
+        countdownLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
     else
-        setIndicatorColor(Color3.fromRGB(100, 100, 100))
-        countdownLabel.Text = "Watching (Q=" .. tostring(cachedQueue) .. ")"
+        setBarColor(Color3.fromRGB(70, 70, 80))
+        countdownLabel.Text       = "Watching Q=" .. tostring(cachedQueue)
+        countdownLabel.TextColor3 = Color3.fromRGB(140, 140, 150)
     end
 end
 
--- ====================== ОБНОВЛЕНИЕ ПАНЕЛИ СТАТУСОВ ======================
+-- ====================== ХАРТБИТ ======================
 task.spawn(function()
+    writeMyStatus("starting")
     while true do
-        task.wait(2)
-        if not statusPanelOpen then continue end
-
-        local body = readAllStatuses()
-        if not body then continue end
-
-        for i = 1, TOTAL_ACCOUNTS do
-            local row = accountRows[i]
-            if not row then continue end
-
-            -- Парсим JSON для аккаунта i
-            local section = body:match('"' .. i .. '":%s*(%b{})')
-            if section then
-                local val   = tonumber(section:match('"value":(%d+)')) or 0
-                local queue = section:match('"queue":"?(%w+)"?') == "true"
-                local lock  = section:match('"lock":"?(%w+)"?') == "true"
-                local state = section:match('"state":"([^"]+)"') or "idle"
-
-                -- Цвет индикатора
-                local dotColor
-                if lock then
-                    dotColor = Color3.fromRGB(255, 200, 0)
-                elseif queue then
-                    dotColor = Color3.fromRGB(0, 255, 0)
-                else
-                    dotColor = Color3.fromRGB(100, 100, 100)
-                end
-                row.dot.BackgroundColor3 = dotColor
-
-                -- Текст
-                local qMark = queue and " Q" or "  "
-                row.label.Text = string.format("#%d val:%d%s [%s]", i, val, qMark, state)
-
-                -- Прогресс бар
-                local prog = math.max(0, math.min(1, val / 39))
-                row.barFill.Size = UDim2.new(prog, 0, 1, 0)
-                if prog >= 1 then
-                    row.barFill.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
-                elseif prog > 0.7 then
-                    row.barFill.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
-                else
-                    row.barFill.BackgroundColor3 = Color3.fromRGB(100, 150, 255)
-                end
-            else
-                row.label.Text               = "#" .. i .. " offline"
-                row.dot.BackgroundColor3     = Color3.fromRGB(60, 60, 60)
-                row.barFill.Size             = UDim2.new(0, 0, 1, 0)
-            end
+        task.wait(3)
+        local state
+        if isPaused then
+            state = "paused"
+        elseif comboLock then
+            state = comboTimerActive and "timer" or "lock"
+        elseif cycleActive then
+            state = "cycle"
+        elseif not canThrow then
+            state = "starting"
+        else
+            state = "idle"
         end
+        writeMyStatus(state)
+        writeMyValueIfSignificant(lastValue >= 0 and lastValue or 0)
     end
 end)
 
@@ -827,16 +612,12 @@ local function startGuiTimer(duration)
     comboTimerStart    = tick()
     comboTimerDuration = duration
     comboTimerActive   = true
-    if not guiMinimized then
-        timerBarBg.Visible = true
-        timerLabel.Visible = true
-    end
+    timerBarBg.Visible = true
 end
 
 local function stopGuiTimer()
     comboTimerActive   = false
     timerBarBg.Visible = false
-    timerLabel.Visible = false
     timerBarFill.Size  = UDim2.new(1, 0, 1, 0)
 end
 
@@ -844,50 +625,43 @@ task.spawn(function()
     while true do
         task.wait(0.1)
         if comboTimerActive and comboTimerDuration > 0 then
-            local elapsed   = tick() - comboTimerStart
-            local remaining = math.max(0, comboTimerDuration - elapsed)
-            local progress  = math.max(0, math.min(1, 1 - elapsed / comboTimerDuration))
-
+            local elapsed  = tick() - comboTimerStart
+            local progress = math.max(0, math.min(1, 1 - elapsed / comboTimerDuration))
             timerBarFill.Size = UDim2.new(progress, 0, 1, 0)
             if progress > 0.5 then
-                timerBarFill.BackgroundColor3 = Color3.fromRGB(math.floor((1 - progress) * 2 * 255), 200, 0)
+                timerBarFill.BackgroundColor3 = Color3.fromRGB(
+                    math.floor((1 - progress) * 2 * 255), 200, 0)
             else
-                timerBarFill.BackgroundColor3 = Color3.fromRGB(255, math.floor(progress * 2 * 200), 0)
+                timerBarFill.BackgroundColor3 = Color3.fromRGB(
+                    255, math.floor(progress * 2 * 200), 0)
             end
-
-            local bars = math.floor(progress * 18)
-            timerLabel.Text = string.format("[%s%s] %.0fs",
-                string.rep("█", bars), string.rep("░", 18 - bars), remaining)
-
             if not guiMinimized then updateGUI() end
         end
     end
 end)
 
--- ====================== GUI КНОПКИ ======================
+-- ✅ Кнопка × справа сверху
 toggleBtn.MouseButton1Click:Connect(function()
-    guiMinimized  = not guiMinimized
-    frame.Visible = not guiMinimized
-    toggleBtn.Text = guiMinimized and tostring(ACCOUNT_ID) or "×"
-    if not guiMinimized then
-        timerBarBg.Visible = comboTimerActive
-        timerLabel.Visible = comboTimerActive
+    guiMinimized = not guiMinimized
+    if guiMinimized then
+        -- Показываем только шапку
+        frame.Size = UDim2.new(0, GUI_W, 0, 18)
+        toggleBtn.Text = "▼"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 100, 40)
+    else
+        frame.Size = UDim2.new(0, GUI_W, 0, GUI_H)
+        toggleBtn.Text = "×"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
         updateGUI()
     end
 end)
 
-btnStatus.MouseButton1Click:Connect(function()
-    statusPanelOpen        = not statusPanelOpen
-    statusPanel.Visible    = statusPanelOpen
-    btnStatus.Text         = statusPanelOpen and "▲ All Accounts Status" or "▼ All Accounts Status"
-end)
-
 -- ====================== ЭКИПИРОВКА ======================
-local function isAccessoryEquipped(exactName)
+local function isAccessoryEquipped(name)
     local char = LP.Character
     if not char then return false end
-    for _, child in ipairs(char:GetChildren()) do
-        if child:IsA("Accessory") and child.Name == exactName then return true end
+    for _, c in ipairs(char:GetChildren()) do
+        if c:IsA("Accessory") and c.Name == name then return true end
     end
     return false
 end
@@ -922,7 +696,7 @@ local function equipPorcelain()
     end
 end
 
--- ====================== СБРОС СОСТОЯНИЙ ======================
+-- ====================== СБРОС ======================
 local function resetAllStates(reason)
     if comboThread then pcall(task.cancel, comboThread); comboThread = nil end
     comboLock               = false
@@ -937,7 +711,7 @@ local function resetAllStates(reason)
     waitingCoconutGone      = false
     coconutSeenWhileMyQueue = false
     stopGuiTimer()
-    addLog("RESET: " .. (reason or "manual"))
+    addLog("Reset: " .. (reason or "?"))
     updateGUI()
 end
 
@@ -949,7 +723,7 @@ local function SpawnCoconut()
     totalThrows   = totalThrows + 1
     lastThrowTime = serverNow()
     updateGUI()
-    addLog("THROW! #" .. totalThrows)
+    addLog("Throw! #" .. totalThrows)
 end
 
 -- ====================== ЦИКЛ ======================
@@ -959,7 +733,6 @@ local function startCycle(count)
     ourCycleActive = true
     cycleStartTime = tick()
     updateGUI()
-
     task.spawn(function()
         local ok, err = pcall(function()
             task.wait(CYCLE_DELAY)
@@ -981,8 +754,7 @@ end
 local function skipTurn()
     if skipping or comboLock or not canThrow then return end
     if cachedQueue ~= ACCOUNT_ID then return end
-    if coconutPresent then return end
-    if isPaused then return end
+    if coconutPresent or isPaused then return end
 
     skipping     = true
     skippingTime = tick()
@@ -990,34 +762,23 @@ local function skipTurn()
 
     task.spawn(function()
         task.wait(SKIP_DELAY)
-
-        if lastValue == 39 then
-            addLog("Skip aborted — got 39")
+        if lastValue == 39 or coconutPresent then
+            addLog("Skip abort — got 39")
             skipping, skippingTime = false, 0
             updateGUI()
             return
         end
-        if coconutPresent then
-            addLog("Skip aborted — coconut appeared")
-            skipping, skippingTime = false, 0
-            updateGUI()
-            return
-        end
-
-        -- Свежая проверка очереди перед записью
         local current = readQueueFresh()
         if current ~= ACCOUNT_ID then
-            addLog("Skip aborted — queue moved")
+            addLog("Skip abort — Q moved")
             skipping, skippingTime = false, 0
             updateGUI()
             return
         end
-
-        -- Умная очередь — ищем у кого есть 39
         local targetQ = findAccountWith39()
         writeQueue(targetQ)
         coconutSeenWhileMyQueue = false
-        addLog("Skip → Acc" .. targetQ .. " (smart)")
+        addLog("Skip → Acc" .. targetQ)
         skipping, skippingTime = false, 0
         updateGUI()
     end)
@@ -1025,31 +786,23 @@ end
 
 -- ====================== ОСНОВНОЕ КОМБО ======================
 local function startCombo()
-    -- Семафор — защита от двойного запуска
-    if comboStarting or comboLock or not canThrow then return end
-    if isPaused then return end
+    if comboStarting or comboLock or not canThrow or isPaused then return end
 
-    -- Предсказание — если точно не успеем набрать 39 — скипаем
     if lastValue ~= 39 then
         if not predictWillReach39() then
-            addLog("Predict: skip — won't reach 39")
-            skipTurn()
-            return
+            addLog("Pred: skip (won't reach 39)")
+        else
+            addLog("No 39 (val=" .. lastValue .. ") → skip")
         end
-        -- Если предсказание говорит что успеем — всё равно скипаем
-        -- потому что сейчас нет 39 (только ждём если predict уверен)
-        addLog("No 39 (val=" .. lastValue .. ") → skip")
         skipTurn()
         return
     end
 
-    -- Атомарно устанавливаем семафор ДО любых async операций
     comboStarting = true
 
-    -- Свежая проверка очереди
     local freshQ = readQueueFresh()
     if freshQ ~= ACCOUNT_ID then
-        addLog("startCombo: queue changed → abort")
+        addLog("Combo abort: Q=" .. tostring(freshQ))
         comboStarting = false
         return
     end
@@ -1058,67 +811,49 @@ local function startCombo()
     comboStarting           = false
     comboLockTime           = tick()
     coconutSeenWhileMyQueue = false
+    writeMyStatus("lock")
     updateGUI()
 
     comboThread = task.spawn(function()
         local ok, err = pcall(function()
-
             local timerDone = false
             while not timerDone do
-
-                -- Проверки перед запуском таймера
-                if isPaused then
-                    addLog("Abort: paused before timer")
-                    return
-                end
-                if cachedQueue ~= ACCOUNT_ID then
-                    addLog("Abort: queue changed before timer")
-                    return
-                end
+                if isPaused then addLog("Abort: paused"); return end
+                if cachedQueue ~= ACCOUNT_ID then addLog("Abort: Q changed"); return end
                 if lastValue ~= 39 then
-                    addLog("Abort: value dropped before timer")
+                    addLog("Abort: val dropped")
                     writeQueue(findAccountWith39())
                     return
                 end
 
-                -- Запускаем COMBO_DELAY
-                addLog("Coconut gone → COMBO_DELAY " .. COMBO_DELAY .. "s")
+                addLog("Combo delay " .. COMBO_DELAY .. "s")
                 writeMyStatus("timer")
                 startGuiTimer(COMBO_DELAY)
 
-                local timerStart  = tick()
+                local tStart      = tick()
                 local interrupted = false
 
-                while (tick() - timerStart) < COMBO_DELAY do
+                while (tick() - tStart) < COMBO_DELAY do
                     task.wait(COCONUT_SCAN)
-
-                    -- Пауза — отменяем
                     if isPaused then
                         stopGuiTimer()
-                        addLog("Abort: paused during timer")
+                        addLog("Abort: paused in timer")
                         writeQueue(findAccountWith39())
                         return
                     end
-
-                    -- Кокос появился — прерываем таймер
-                    -- НО только если это НЕ наш цикл
                     if coconutPresent and not ourCycleActive then
                         interrupted = true
                         break
                     end
-
-                    -- Value упало — abort
                     if lastValue ~= 39 then
                         stopGuiTimer()
-                        addLog("Abort: value dropped during timer")
+                        addLog("Abort: val dropped in timer")
                         writeQueue(findAccountWith39())
                         return
                     end
-
-                    -- Очередь ушла — abort
                     if cachedQueue ~= ACCOUNT_ID then
                         stopGuiTimer()
-                        addLog("Abort: queue changed during timer")
+                        addLog("Abort: Q changed in timer")
                         return
                     end
                 end
@@ -1126,26 +861,21 @@ local function startCombo()
                 stopGuiTimer()
 
                 if interrupted then
-                    -- Чужой кокос во время таймера — ждём пока уйдёт и перезапускаем
                     waitingCoconutGone = true
                     updateGUI()
-                    addLog("Coconut mid-timer → wait then restart")
+                    addLog("Coconut mid-timer → restart")
                     while coconutPresent do task.wait(COCONUT_SCAN) end
                     waitingCoconutGone = false
-                    addLog("Coconut gone → RESTART COMBO_DELAY")
+                    addLog("Gone → restart delay")
                 else
                     timerDone = true
                 end
             end
 
-            -- Финальные проверки — свежее чтение очереди перед броском
             local freshQueue = readQueueFresh()
-            if freshQueue ~= ACCOUNT_ID then
-                addLog("Abort final: queue changed")
-                return
-            end
+            if freshQueue ~= ACCOUNT_ID then addLog("Abort final: Q"); return end
             if lastValue ~= 39 then
-                addLog("Abort final: value changed")
+                addLog("Abort final: val")
                 writeQueue(findAccountWith39())
                 return
             end
@@ -1155,13 +885,12 @@ local function startCombo()
                 return
             end
 
-            -- Бросок — один батч запрос вместо трёх
             local nextQ = findAccountWith39()
             SpawnCoconut()
             writeThrowBatch(nextQ)
             coconutSeenWhileMyQueue = false
             writeMyStatus("threw")
-            addLog("Threw! Queue → Acc" .. nextQ)
+            addLog("Threw! → Acc" .. nextQ)
             startCycle(CYCLE_COUNT)
         end)
 
@@ -1169,12 +898,9 @@ local function startCombo()
         stopGuiTimer()
 
         if not ok then
-            addLog("Combo err: " .. tostring(err))
-            local current = readQueueFresh()
-            if current == ACCOUNT_ID then
-                writeQueue(findAccountWith39())
-                addLog("Err fallback → Acc" .. getNextQueue())
-            end
+            addLog("Err: " .. tostring(err):sub(1, 22))
+            local cur = readQueueFresh()
+            if cur == ACCOUNT_ID then writeQueue(findAccountWith39()) end
         end
 
         comboLock     = false
@@ -1196,9 +922,6 @@ task.spawn(function()
 
         if present and not coconutPresent then
             coconutPresent = true
-            if cachedQueue == ACCOUNT_ID then
-                coconutSeenWhileMyQueue = true
-            end
             addLog("Coconut appeared")
             updateGUI()
 
@@ -1206,7 +929,14 @@ task.spawn(function()
             coconutPresent = false
             addLog("Coconut gone")
 
-            if cachedQueue == ACCOUNT_ID
+            local queueToUse = cachedQueue
+
+            if queueToUse ~= ACCOUNT_ID then
+                task.wait(0.5)
+                queueToUse = readQueueFresh()
+            end
+
+            if queueToUse == ACCOUNT_ID
                 and canThrow
                 and not comboLock
                 and not comboStarting
@@ -1214,8 +944,20 @@ task.spawn(function()
                 and not skipping
                 and not isPaused
             then
-                addLog("My turn → startCombo")
+                addLog("My turn Q=" .. queueToUse .. " → combo")
                 startCombo()
+            else
+                if queueToUse ~= ACCOUNT_ID then
+                    addLog("Not my turn Q=" .. tostring(queueToUse))
+                elseif comboLock then
+                    addLog("Skip: comboLock")
+                elseif cycleActive then
+                    addLog("Skip: cycleActive")
+                elseif not canThrow then
+                    addLog("Skip: canThrow=false")
+                elseif isPaused then
+                    addLog("Skip: paused")
+                end
             end
 
             coconutSeenWhileMyQueue = false
@@ -1232,15 +974,16 @@ task.spawn(function()
     while true do
         task.wait(QUEUE_POLL_INTERVAL)
         if isPaused then continue end
-        if canThrow and not comboLock and not comboStarting and not skipping and not cycleActive then
+        if canThrow and not comboLock and not comboStarting
+            and not skipping and not cycleActive then
             readQueue()
             updateGUI()
             if cachedQueue == ACCOUNT_ID then
                 if coconutPresent then
                     coconutSeenWhileMyQueue = true
-                    addLog("My turn, coconut — watching...")
+                    addLog("My turn, coconut — watch")
                 elseif lastValue == 39 then
-                    addLog("My turn, no coconut, val=39 → startCombo")
+                    addLog("My turn val=39 → combo")
                     startCombo()
                 else
                     skipTurn()
@@ -1259,7 +1002,6 @@ PlayerAbilityEvent.OnClientEvent:Connect(function(data)
             and info.Action == "Update"
         then
             local value = info.Values and info.Values[1] or 0
-
             if not firstUpdateReceived then
                 firstUpdateReceived = true
                 lastValue           = value
@@ -1271,17 +1013,13 @@ PlayerAbilityEvent.OnClientEvent:Connect(function(data)
                 addLog("Init val=" .. value)
                 return
             end
-
             if value ~= lastValue then
                 lastValue           = value
                 lastValueChangeTime = tick()
                 addValueHistory(value)
                 writeMyValueIfSignificant(value)
                 updateGUI()
-
                 if value <= 34 then equipCanister() else equipPorcelain() end
-
-                -- Value упало ниже 39 во время комбо — отменяем
                 if value < 39 and comboLock and comboThread then
                     pcall(task.cancel, comboThread)
                     waitingCoconutGone = false
@@ -1290,11 +1028,11 @@ PlayerAbilityEvent.OnClientEvent:Connect(function(data)
                     comboLock     = false
                     comboLockTime = 0
                     task.spawn(function()
-                        local current = readQueueFresh()
-                        if current == ACCOUNT_ID then
-                            local target = findAccountWith39()
-                            writeQueue(target)
-                            addLog("Val<39 cancelled → Acc" .. target)
+                        local cur = readQueueFresh()
+                        if cur == ACCOUNT_ID then
+                            local t = findAccountWith39()
+                            writeQueue(t)
+                            addLog("Val<39 → Acc" .. t)
                         end
                         coconutSeenWhileMyQueue = false
                         updateGUI()
@@ -1311,43 +1049,36 @@ btnPause.MouseButton1Click:Connect(function()
     writePauseFlag(isPaused)
 
     if isPaused then
-        btnPause.BackgroundColor3 = Color3.fromRGB(200, 150, 0)
-        btnPause.Text             = "Resume"
-
-        -- Отменяем всё активное
+        btnPause.BackgroundColor3 = Color3.fromRGB(180, 130, 0)
+        btnPause.Text             = "▶ Resume"
         if comboThread then pcall(task.cancel, comboThread); comboThread = nil end
         stopGuiTimer()
-        comboLock      = false
-        comboStarting  = false
-        comboLockTime  = 0
-        cycleActive    = false
-        ourCycleActive = false
-        skipping       = false
+        comboLock          = false
+        comboStarting      = false
+        comboLockTime      = 0
+        cycleActive        = false
+        ourCycleActive     = false
+        skipping           = false
         waitingCoconutGone = false
-
-        -- Если наша очередь — передаём следующему
         task.spawn(function()
-            local current = readQueueFresh()
-            if current == ACCOUNT_ID then
+            local cur = readQueueFresh()
+            if cur == ACCOUNT_ID then
                 writeQueue(getNextQueue())
-                addLog("Paused → queue released to Acc" .. getNextQueue())
+                addLog("Paused → Acc" .. getNextQueue())
             end
             writeMyStatus("paused")
             updateGUI()
         end)
-
-        addLog("⏸ PAUSED — all throws stopped")
+        addLog("Paused — all stopped")
     else
-        btnPause.BackgroundColor3 = Color3.fromRGB(50, 100, 200)
-        btnPause.Text             = "Pause"
-        addLog("▶ RESUMED")
+        btnPause.BackgroundColor3 = Color3.fromRGB(40, 80, 180)
+        btnPause.Text             = "⏸ Pause"
+        addLog("Resumed")
         writeMyStatus("idle")
         updateGUI()
     end
 end)
 
--- ====================== ПОЛЛИНГ ГЛОБАЛЬНОЙ ПАУЗЫ ======================
--- Все аккаунты читают флаг паузы с Firebase
 task.spawn(function()
     while not canThrow do task.wait(1) end
     while true do
@@ -1356,7 +1087,6 @@ task.spawn(function()
         if serverPaused ~= isPaused then
             isPaused = serverPaused
             if isPaused then
-                -- Другой аккаунт нажал паузу
                 if comboThread then pcall(task.cancel, comboThread); comboThread = nil end
                 stopGuiTimer()
                 comboLock      = false
@@ -1364,42 +1094,32 @@ task.spawn(function()
                 cycleActive    = false
                 ourCycleActive = false
                 skipping       = false
-                btnPause.BackgroundColor3 = Color3.fromRGB(200, 150, 0)
-                btnPause.Text             = "Resume"
-                addLog("⏸ Remote pause received")
+                btnPause.BackgroundColor3 = Color3.fromRGB(180, 130, 0)
+                btnPause.Text             = "▶ Resume"
+                addLog("Remote pause")
             else
-                btnPause.BackgroundColor3 = Color3.fromRGB(50, 100, 200)
-                btnPause.Text             = "Pause"
-                addLog("▶ Remote resume received")
+                btnPause.BackgroundColor3 = Color3.fromRGB(40, 80, 180)
+                btnPause.Text             = "⏸ Pause"
+                addLog("Remote resume")
             end
             updateGUI()
         end
     end
 end)
 
--- ====================== CHARACTERADDED — МГНОВЕННЫЙ СБРОС ======================
-local function onCharacterAdded(char)
-    addLog("Respawn detected — resetting states")
+-- ====================== CHARACTERADDED ======================
+local function onCharacterAdded()
+    addLog("Respawn — reset")
     resetAllStates("respawn")
-
-    -- Ждём загрузки персонажа
     task.wait(2)
-
-    -- Переэкипируем аксессуар
     hasCanister  = false
     hasPorcelain = false
-    if lastValue <= 34 then
-        equipCanister()
-    else
-        equipPorcelain()
-    end
-
-    -- Если очередь была наша — передаём
+    if lastValue <= 34 then equipCanister() else equipPorcelain() end
     task.spawn(function()
-        local current = readQueueFresh()
-        if current == ACCOUNT_ID then
+        local cur = readQueueFresh()
+        if cur == ACCOUNT_ID then
             writeQueue(getNextQueue())
-            addLog("Respawn: queue released → Acc" .. getNextQueue())
+            addLog("Respawn: Q → Acc" .. getNextQueue())
         end
         updateGUI()
     end)
@@ -1407,7 +1127,6 @@ end
 
 LP.CharacterAdded:Connect(onCharacterAdded)
 if LP.Character then
-    -- Персонаж уже есть при запуске
     task.spawn(function()
         task.wait(1)
         if lastValue <= 34 then equipCanister() else equipPorcelain() end
@@ -1416,20 +1135,24 @@ end
 
 -- ====================== ЗАДЕРЖКА СТАРТА ======================
 task.spawn(function()
-    local startJitter = (ACCOUNT_ID - 1) * 3
-    task.wait(startJitter)
+    local jitter = (ACCOUNT_ID - 1) * 3
+    task.wait(jitter)
 
-    -- Синхронизация серверного времени
-    addLog("Syncing server time...")
+    startTime = tick()
+
+    addLog("Syncing time...")
     if syncServerTime() then
-        addLog("Time delta: " .. serverTimeDelta .. "s")
+        addLog("Time OK (delta " .. serverTimeDelta .. "s)")
     else
-        addLog("Time sync failed — using local time")
+        addLog("Time sync fail — local time")
+        serverTimeDelta = 0
     end
 
     while tick() - startTime < START_DELAY do
         if tick() - lastQueueCheck > 3 then readQueue() end
-        updateGUI()
+        local rem = math.max(0, START_DELAY - (tick() - startTime))
+        countdownLabel.Text       = "Wait " .. math.ceil(rem) .. "s"
+        countdownLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
         task.wait(0.5)
     end
 
@@ -1440,28 +1163,27 @@ task.spawn(function()
     if lastUpdate and (serverNow() - lastUpdate) > 300 then
         if ACCOUNT_ID == 1 then
             writeQueue(1)
-            addLog("Queue idle >5min — reset to 1")
+            addLog("Queue idle >5m → reset")
         end
     end
 
-    local fbLastThrow = readLastThrowTime()
-    if fbLastThrow and fbLastThrow > 0 then
-        lastThrowTime = math.max(lastThrowTime, fbLastThrow)
+    local fbLast = readLastThrowTime()
+    if fbLast and fbLast > 0 then
+        lastThrowTime = math.max(lastThrowTime, fbLast)
     end
 
-    -- Проверяем глобальную паузу при старте
     isPaused = readPauseFlag()
     if isPaused then
-        btnPause.BackgroundColor3 = Color3.fromRGB(200, 150, 0)
-        btnPause.Text             = "Resume"
-        addLog("Started in PAUSED state")
+        btnPause.BackgroundColor3 = Color3.fromRGB(180, 130, 0)
+        btnPause.Text             = "▶ Resume"
+        addLog("Started paused")
     end
 
-    writeMyValue(lastValue)
+    writeMyValue(lastValue >= 0 and lastValue or 0)
     writeMyStatus("idle")
 
     canThrow = true
-    addLog("START — jitter=" .. startJitter .. "s | delta=" .. serverTimeDelta .. "s")
+    addLog("Start #" .. ACCOUNT_ID)
     updateGUI()
 end)
 
@@ -1476,28 +1198,23 @@ task.spawn(function()
         if lastUpdate and (serverNow() - lastUpdate) > 180 then
             if ACCOUNT_ID == 1 then
                 writeQueue(1)
-                addLog("WD: queue dead → reset to 1")
-            else
-                addLog("WD: queue dead → wait #1")
+                addLog("WD: Q dead → reset")
             end
         end
 
         if comboLock and comboLockTime > 0 and (tick() - comboLockTime) > 300 then
-            addLog("WD: comboLock stuck → reset")
-            resetAllStates("WD comboLock")
+            addLog("WD: lock stuck")
+            resetAllStates("WD lock")
             task.spawn(function()
-                local current = readQueueFresh()
-                if current == ACCOUNT_ID then
-                    writeQueue(findAccountWith39())
-                    addLog("WD: queue released")
-                end
+                local cur = readQueueFresh()
+                if cur == ACCOUNT_ID then writeQueue(findAccountWith39()) end
                 updateGUI()
             end)
         end
 
-        local maxCycleTime = CYCLE_DELAY + (CYCLE_COUNT * COCONUT_INTERVAL) * 2
-        if cycleActive and cycleStartTime > 0 and (tick() - cycleStartTime) > maxCycleTime then
-            addLog("WD: cycleActive stuck → reset")
+        local maxCycle = CYCLE_DELAY + (CYCLE_COUNT * COCONUT_INTERVAL) * 2
+        if cycleActive and cycleStartTime > 0 and (tick() - cycleStartTime) > maxCycle then
+            addLog("WD: cycle stuck")
             cycleActive    = false
             ourCycleActive = false
             cycleStartTime = 0
@@ -1505,71 +1222,59 @@ task.spawn(function()
         end
 
         if skipping and skippingTime > 0 and (tick() - skippingTime) > 30 then
-            addLog("WD: skipping stuck → reset")
+            addLog("WD: skip stuck")
             skipping, skippingTime = false, 0
             updateGUI()
         end
 
-        -- Переписываем статус и своё value периодически
-        writeMyValue(lastValue)
-        writeMyStatus(comboLock and "lock" or cycleActive and "cycle" or "idle")
-
         local char = LP.Character
-        if not char or not char:FindFirstChild("Humanoid") or char.Humanoid.Health <= 0 then
-            addLog("WD: char dead/missing")
-            resetAllStates("WD char dead")
+        if not char or not char:FindFirstChild("Humanoid")
+            or char.Humanoid.Health <= 0 then
+            addLog("WD: char dead")
+            resetAllStates("WD dead")
         end
-
         updateGUI()
     end
 end)
 
--- ====================== ДЕТЕКТОР ЗАВИСАНИЯ ЦЕПОЧКИ ======================
+-- ====================== ДЕТЕКТОР ЦЕПОЧКИ ======================
 task.spawn(function()
     while not canThrow do task.wait(1) end
     task.wait(15)
-
     while true do
         task.wait(10)
         if not canThrow or isPaused then continue end
 
-        local fbLastThrow = readLastThrowTime()
-        if fbLastThrow and fbLastThrow > 0 then
-            lastThrowTime = math.max(lastThrowTime, fbLastThrow)
+        local fbLast = readLastThrowTime()
+        if fbLast and fbLast > 0 then
+            lastThrowTime = math.max(lastThrowTime, fbLast)
         end
 
-        local timeSinceThrow = serverNow() - lastThrowTime
+        local since = serverNow() - lastThrowTime
 
-        if timeSinceThrow > CHAIN_TIMEOUT
-            and not comboLock
-            and not comboStarting
-            and not cycleActive
-            and not skipping
-            and not chainWatchActive
-            and not isPaused
-            and cachedQueue == ACCOUNT_ID
-            and lastValue == 39
+        if since > CHAIN_TIMEOUT
+            and not comboLock and not comboStarting
+            and not cycleActive and not skipping
+            and not chainWatchActive and not isPaused
+            and cachedQueue == ACCOUNT_ID and lastValue == 39
         then
             chainWatchActive = true
             updateGUI()
-            addLog("Chain dead " .. timeSinceThrow .. "s → recovering")
+            addLog("Chain dead " .. since .. "s")
 
             task.spawn(function()
                 if coconutPresent then
-                    addLog("Chain: waiting coconut gone...")
                     while coconutPresent do task.wait(COCONUT_SCAN) end
                 end
-
                 chainWatchActive = false
-
                 if canThrow and not comboLock and not cycleActive
                     and cachedQueue == ACCOUNT_ID and lastValue == 39 and not isPaused
                 then
                     coconutSeenWhileMyQueue = false
-                    addLog("Chain: → startCombo")
+                    addLog("Chain recover → combo")
                     startCombo()
                 else
-                    addLog("Chain: conditions changed — abort")
+                    addLog("Chain: abort")
                     updateGUI()
                 end
             end)
@@ -1581,24 +1286,23 @@ end)
 task.spawn(function()
     while true do
         task.wait(600)
-        local before = gcinfo()
+        local b = gcinfo()
         collectgarbage("collect")
-        local after = gcinfo()
-        addLog(string.format("GC: freed %d KB", before - after))
+        addLog(string.format("GC: -%dKB", b - gcinfo()))
     end
 end)
 
 -- ====================== КНОПКИ ======================
 btnReset.MouseButton1Click:Connect(function()
-    resetAllStates("manual reset")
+    resetAllStates("manual")
     writeQueue(1)
-    addLog("Manual: reset Q=1")
+    addLog("Reset Q=1")
     updateGUI()
 end)
 
 btnForce.MouseButton1Click:Connect(function()
     writeQueue(ACCOUNT_ID)
-    addLog("Manual: force Q=" .. ACCOUNT_ID)
+    addLog("Force Q=" .. ACCOUNT_ID)
     updateGUI()
 end)
 
@@ -1606,4 +1310,4 @@ end)
 equipCanister()
 readQueue()
 updateGUI()
-addLog("Wait " .. START_DELAY .. "s | #" .. ACCOUNT_ID)
+addLog("Init #" .. ACCOUNT_ID)
