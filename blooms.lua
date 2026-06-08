@@ -12,9 +12,9 @@ local Camera = Workspace.CurrentCamera
 local Events = ReplicatedStorage:FindFirstChild("Events")
 
 local HEIGHT_ZONES = {
-    {min = 20, max = 30, tpMin = 27, minX = -254.52, maxX = -166.23, minZ = 105.47, maxZ = 244.76},
-    {min = 36, max = 47, tpMin = 43, minX = -403, maxX = -258, minZ = 83, maxZ = 175},
-    {min = 87, max = 100, tpMin = 94},
+    {min = 20, max = 30, tpMin = 30, minX = -254.52, maxX = -166.23, minZ = 105.47, maxZ = 244.76},
+    {min = 36, max = 47, tpMin = 46, minX = -403, maxX = -258, minZ = 83, maxZ = 175},
+    {min = 87, max = 100, tpMin = 96},
     {min = 119, max = 150, interval = 1.5, spawnDelay = 0.3},
 }
 
