@@ -1,4 +1,4 @@
--- BSS AI v12.7 safe + исправления: спидхак, патруль в поле, последовательные CH, форсированный смайл
+-- BSS AI v12.8 safe + детектор поля, адаптивный спидхак, мгновенный TL, Target Practice группы, смайл в AreaRing
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
@@ -10,10 +10,12 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local LP = Players.LocalPlayer
 local PGui = LP:WaitForChild("PlayerGui")
 
-local Q_VERSION = "12.7"
+local Q_VERSION = "12.8"
 local ENABLED = true
 
-local SPEED = 70
+-- Адаптивный спидхак: скорость зависит от фазы Precision
+local SPEED_BASE = {NABOR = 70, X10 = 90, REFRESH = 75}
+local SPEED_JITTER = 3
 local ABILITY_MULT = 1.2
 local DIG_BEE_LVL = 22
 local FIELD_MARGIN = 3
@@ -27,7 +29,7 @@ local PURPLE = Color3.fromRGB(119, 85, 255)
 local PURPLE_TOL = 12
 local PURPLE_STAND = 1
 local SMILE_TOKEN_ID = 5877939956
-local SMILE_REACT_TIME = 10
+local SMILE_REACT_TIME = 15
 local TOKEN_STAND_DUR = 1.1
 local CH_AVOID_RADIUS = 28
 local CH_AVOID_STEER = 20
@@ -162,13 +164,14 @@ local hpsMeterLabel = nil
 local patternFile = "bss_ai_pattern_v12.json"
 
 local QTable = {}
-local hasTL = false
 local lastMoveTime = tick()
 local stuckWarning = false
 local xflameEmergency = false
 local xflameCircle = nil
 local scytheCircle = nil
 local lastPenaltyTime = 0
+local lastSpeedJitter = 0
+local currentSpeed = SPEED_BASE.NABOR
 
 -- ===================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====================
 local function getHRP()
@@ -198,6 +201,93 @@ local function getPhase()
     if not prec.isX10 then return "НАБОР"
     elseif prec.needRefresh then return "REFRESH"
     else return "X10" end
+end
+
+-- ===================== ДЕТЕКТОР ПОЛЯ (curField auto-detect) =====================
+local function findCurrentField()
+    local r = getHRP()
+    if not r then return curField end
+    local myPos = r.Position
+
+    -- Способ 1: FlowerZones (основной)
+    local zones = Workspace:FindFirstChild("FlowerZones")
+    if zones then
+        local best = nil
+        local bestDist = math.huge
+        for _, zone in ipairs(zones:GetChildren()) do
+            if zone:IsA("BasePart") then
+                local d = dist3(myPos, zone.Position)
+                local s = zone.Size
+                local hw = s.X / 2
+                local hd = s.Z / 2
+                if math.abs(myPos.X - zone.Position.X) <= hw + 20 and
+                   math.abs(myPos.Z - zone.Position.Z) <= hd + 20 then
+                    if d < bestDist then
+                        bestDist = d
+                        best = zone
+                    end
+                end
+            end
+        end
+        if best then
+            curField = {part = best}
+            return curField
+        end
+    end
+
+    -- Способ 2: Flowers (запасной)
+    local flowers = Workspace:FindFirstChild("Flowers")
+    if flowers then
+        local fParts = {}
+        for _, f in ipairs(flowers:GetChildren()) do
+            if f:IsA("BasePart") then
+                table.insert(fParts, f.Position)
+            end
+        end
+        if #fParts > 0 then
+            local minX, maxX, minZ, maxZ = math.huge, -math.huge, math.huge, -math.huge
+            for _, p in ipairs(fParts) do
+                if p.X < minX then minX = p.X end
+                if p.X > maxX then maxX = p.X end
+                if p.Z < minZ then minZ = p.Z end
+                if p.Z > maxZ then maxZ = p.Z end
+            end
+            local cx = (minX + maxX) / 2
+            local cz = (minZ + maxZ) / 2
+            local sx = math.abs(maxX - minX) + 10
+            local sz = math.abs(maxZ - minZ) + 10
+            local virtualPart = {Position = Vector3.new(cx, myPos.Y, cz), Size = Vector3.new(sx, 1, sz)}
+            curField = {part = virtualPart}
+            return curField
+        end
+    end
+
+    -- Способ 3: по AreaRing
+    if areaRing then
+        local virtualPart = {Position = areaRing.Position, Size = Vector3.new(areaRingRadius * 3, 1, areaRingRadius * 3)}
+        curField = {part = virtualPart}
+        return curField
+    end
+
+    return curField
+end
+task.spawn(function()
+    while true do
+        task.wait(3)
+        if ENABLED then findCurrentField() end
+    end
+end)
+
+-- ===================== АДАПТИВНЫЙ СПИДХАК =====================
+local function getAdaptiveSpeed()
+    local phase = getPhase()
+    local base = SPEED_BASE[phase] or SPEED_BASE.NABOR
+    local now = tick()
+    if now - lastSpeedJitter >= 0.5 then
+        lastSpeedJitter = now
+        currentSpeed = base + (math.random() * 2 - 1) * SPEED_JITTER
+    end
+    return currentSpeed
 end
 
 local function getFieldCenter()
@@ -283,7 +373,6 @@ end
 local function addCH(obj)
     if obj.Name ~= "Crosshair" or not obj:IsA("BasePart") then return end
     for _, ch in ipairs(chQueue) do if ch.part == obj then return end end
-    task.wait(0.06)
     if not obj.Parent then return end
     table.insert(chQueue, {part = obj, spawnTime = tick(), collected = false, isPurple = isPurple(obj)})
 end
@@ -308,9 +397,36 @@ local function getCH(onlyP, onlyR)
             end
         end
     end
-    -- Сортируем по времени появления (FIFO)
+    -- Сортируем по времени появления (FIFO) — нужно для Target Practice
     table.sort(list, function(a, b) return a.spawnTime < b.spawnTime end)
     return list
+end
+
+-- ===================== TARGET PRACTICE: группы из 3 CH =====================
+-- Target Practice спавнит 3 кросхеира подряд (FIFO). Третий — фиолетовый.
+-- На X10 нужно собрать только 3-й (фиолетовый), обходя первые два.
+local function getTargetPracticeGroups()
+    if not prec.isX10 or prec.needRefresh then return nil end
+    local all = getCH(false, false)
+    if #all < 3 then return nil end
+    -- Ищем группы: 2 не-фиолетовых + 1 фиолетовый подряд по spawnTime
+    local groups = {}
+    local i = 1
+    while i <= #all - 2 do
+        local a, b, c = all[i], all[i+1], all[i+2]
+        if not a.isPurple and not b.isPurple and c.isPurple then
+            -- Проверяем что spawnTime близки (в пределах 2 сек)
+            if c.spawnTime - a.spawnTime <= 2 then
+                table.insert(groups, {regular1 = a, regular2 = b, purple = c})
+                i = i + 3
+            else
+                i = i + 1
+            end
+        else
+            i = i + 1
+        end
+    end
+    return #groups > 0 and groups or nil
 end
 
 -- ===================== ИЗБЕГАНИЕ CH =====================
@@ -420,7 +536,7 @@ local function goTo(targetPos, radius, timeout, skipClamp)
     return false
 end
 
--- ===================== SMILE TOKEN =====================
+-- ===================== SMILE TOKEN (только в зоне AreaRing, как duped) =====================
 task.spawn(function()
     while true do
         task.wait(0.05)
@@ -433,16 +549,19 @@ task.spawn(function()
         local br = 0
         local r = getHRP()
         if not r then return end
-        local hp = activeBuffs.PollenMark.active
         local rp = areaRing and areaRing.Position
         for part, t in pairs(activeTokens) do
             if not t.collected and part.Parent and t.id == SMILE_TOKEN_ID then
                 local rem = t.life - (n - t.spawn)
                 if rem <= SMILE_REACT_TIME and rem > 0 then
+                    -- Смайл токен всегда сверху (duped). Лутаем только если в радиусе AreaRing.
                     local take = false
-                    if hp and rp then
-                        if dist3(part.Position, rp) <= areaRingRadius * 1.5 then take = true end
+                    if rp then
+                        if dist3(part.Position, rp) <= areaRingRadius * 1.5 then
+                            take = true
+                        end
                     else
+                        -- Если AreaRing не найден, берём любой смайл
                         take = true
                     end
                     if take then
@@ -808,16 +927,6 @@ local function setQ(s, a, v)
     QTable[s][a] = v
 end
 
-task.spawn(function()
-    while true do
-        task.wait(0.2)
-        hasTL = false
-        for _, t in pairs(activeTokens) do
-            if not t.collected and t.prio >= 90 then hasTL = true break end
-        end
-    end
-end)
-
 local function getDupTargetPractice()
     local n = tick()
     for part, t in pairs(activeTokens) do
@@ -850,6 +959,14 @@ local function getSmileOrDupInArea()
         end
     end
     return bp
+end
+
+-- ===================== МГНОВЕННЫЙ ДЕТЕКТ TOKEN LINK =====================
+local function hasTokenLink()
+    for _, t in pairs(activeTokens) do
+        if not t.collected and t.prio >= 90 then return true end
+    end
+    return false
 end
 
 local function encodeState()
@@ -904,7 +1021,8 @@ local function getActionsWithBuffs()
     local phase = getPhase()
     local now = tick()
 
-    if hasTL then return {"go_tokenlink"} end
+    -- МГНОВЕННЫЙ Token Link: проверка без задержки
+    if hasTokenLink() then return {"go_tokenlink"} end
 
     if phase ~= "НАБОР" then
         for part, t in pairs(activeTokens) do
@@ -915,7 +1033,8 @@ local function getActionsWithBuffs()
         end
     end
 
-    if smileTarget and getDupedTokenCount() > 6 then
+    -- Смайл: только если duped-токенов достаточно (>= 3 вместо 6) для уверенности что в зоне
+    if smileTarget and getDupedTokenCount() >= 3 then
         return {"go_smile"}
     end
 
@@ -923,8 +1042,8 @@ local function getActionsWithBuffs()
         local target = getSmileOrDupInArea()
         if target then
             local t = activeTokens[target]
-            if t.id == SMILE_TOKEN_ID then table.insert(baseActions, 1, "go_smile_area")
-            elseif t.id == TARGET_PRACTICE_ID and t.duped then table.insert(baseActions, 1, "go_dup_area") end
+            if t and t.id == SMILE_TOKEN_ID then table.insert(baseActions, 1, "go_smile_area")
+            elseif t and t.id == TARGET_PRACTICE_ID and t.duped then table.insert(baseActions, 1, "go_dup_area") end
         end
     end
 
@@ -950,9 +1069,16 @@ local function getActionsWithBuffs()
         return baseActions
     end
 
+    -- X10: Target Practice — собираем только 3-й (фиолетовый) CH из группы
     if phase == "X10" then
-        local purps = getCH(true, false)
-        if #purps > 0 then table.insert(baseActions, "go_purple") end
+        local tpGroups = getTargetPracticeGroups()
+        if tpGroups then
+            -- Есть группы Target Practice: идём к фиолетовому, обходя первые два
+            table.insert(baseActions, "go_target_practice_purple")
+        else
+            local purps = getCH(true, false)
+            if #purps > 0 then table.insert(baseActions, "go_purple") end
+        end
     end
 
     if phase == "X10" or phase == "НАБОР" then
@@ -1125,7 +1251,35 @@ local function executeAction(action)
     local r = getHRP()
     if not r then return -1 end
 
-    if action == "go_smile_area" then
+    if action == "go_target_practice_purple" then
+        -- Target Practice: собираем только 3-й фиолетовый CH из группы
+        local tpGroups = getTargetPracticeGroups()
+        if not tpGroups then return -1 end
+        local reward = 0
+        INTERRUPT = false
+        for _, group in ipairs(tpGroups) do
+            if group.purple.part.Parent and not group.purple.collected then
+                taskLabel = "🎯 TP фиолетовый"
+                -- Идём к фиолетовому CH (3-й в группе), обход обычных CH работает через calcAvoidTarget в goTo
+                local ok = goTo(group.purple.part.Position, 4, 5)
+                if ok and group.purple.part.Parent then
+                    group.purple.collected = true
+                    group.regular1.collected = true -- помечаем как "пропущенные" чтобы не собирать
+                    group.regular2.collected = true
+                    lastPurple = group.purple.part
+                    stats.purple = stats.purple + 1
+                    taskLabel = "🟣 TP Precise Mark"
+                    local t0 = tick()
+                    while tick() - t0 < PURPLE_STAND do
+                        task.wait(0.05)
+                        if smileTarget or prec.needRefresh or not ENABLED then break end
+                    end
+                    reward = reward + 40
+                end
+            end
+        end
+        return reward > 0 and reward or -2
+    elseif action == "go_smile_area" then
         local target = getSmileOrDupInArea()
         if not target then return -1 end
         local t = activeTokens[target]
@@ -1133,8 +1287,17 @@ local function executeAction(action)
         taskLabel = "😊 Smile (AreaRing)"
         INTERRUPT = false
         local edge = getEdgePoint(target.Position)
-        local ok = goTo(edge, 4, 4)
-        if ok and target.Parent then
+        -- Для смайла используем прямой MoveTo без обхода CH
+        local h = getHumanoid()
+        if h then h:MoveTo(Vector3.new(edge.X, target.Position.Y, edge.Z)) end
+        local t0 = tick()
+        while tick() - t0 < 5 do
+            task.wait(0.1)
+            if not target.Parent or INTERRUPT then break end
+            local hrp = getHRP()
+            if hrp and dist3(hrp.Position, target.Position) <= 5 then break end
+        end
+        if target.Parent and not INTERRUPT then
             local start = tick()
             while tick() - start < TOKEN_STAND_DUR do
                 task.wait(0.1)
@@ -1177,8 +1340,18 @@ local function executeAction(action)
         isCollectingSmile = true
         taskLabel = "😊 Smile"
         INTERRUPT = false
-        local ok = goTo(target.Position, 4, math.min(2.5, smileTargetRem - 0.2))
-        if ok and target.Parent then
+        -- Прямой MoveTo без обхода CH
+        local h = getHumanoid()
+        if h then h:MoveTo(target.Position) end
+        local t0 = tick()
+        local deadline = math.min(5, smileTargetRem - 0.3)
+        while tick() - t0 < deadline do
+            task.wait(0.1)
+            if not target.Parent or not ENABLED then break end
+            local hrp = getHRP()
+            if hrp and dist3(hrp.Position, target.Position) <= 4 then break end
+        end
+        if target.Parent then
             local start = tick()
             while tick() - start < TOKEN_STAND_DUR do
                 task.wait(0.1)
@@ -1225,7 +1398,6 @@ local function executeAction(action)
             end
             return 0
         end
-        -- Берем первый (самый старый) CH из отсортированного списка
         local target = all[1]
         taskLabel = "🔄 REFRESH"
         INTERRUPT = false
@@ -1271,39 +1443,16 @@ local function executeAction(action)
             end
         end
         return reward > 0 and reward or -2
-    elseif action == "go_purple_fire" then
-        local purps = getCH(true, false)
-        if #purps == 0 then return -1 end
-        local reward = 0
-        local fc = getFireClusterCenter()
-        for _, ch in ipairs(purps) do
-            if ch.part.Parent and not ch.collected and not smileTarget and not prec.needRefresh then
-                local ok = goTo(ch.part.Position, 4, 5)
-                if ok and ch.part.Parent then
-                    ch.collected = true; lastPurple = ch.part; stats.purple = stats.purple + 1
-                    taskLabel = "🟣 1с"
-                    local t0 = tick()
-                    while tick() - t0 < PURPLE_STAND do
-                        task.wait(0.05)
-                        if smileTarget or prec.needRefresh or not ENABLED then break end
-                    end
-                    reward = reward + 30
-                    if fc then taskLabel = "🔥 возврат"; goTo(fc, 6, 3) end
-                end
-            end
-        end
-        return reward > 0 and reward or -2
-    elseif action == "stay_purple" then
-        if lastPurple and lastPurple.Parent and prec.isX10 and lastPurple:IsDescendantOf(workspace) then
-            taskLabel = "🟣 стою"; INTERRUPT = false; goTo(lastPurple.Position, 3, 2); return 5
-        else lastPurple = nil; return -1 end
     elseif action == "go_tokenlink" then
         for part, t in pairs(activeTokens) do
             if not t.collected and part.Parent and t.prio >= 90 then
-                taskLabel = "💎🔴 Link"; INTERRUPT = false
+                taskLabel = "💎🔴 Link"
+                INTERRUPT = false
                 local ok = goTo(part.Position, 5, 5)
                 if ok and part.Parent then
-                    t.collected = true; ignoreNewTokensUntil = tick() + TOKEN_LINK_COOLDOWN; return 50
+                    t.collected = true
+                    ignoreNewTokensUntil = tick() + TOKEN_LINK_COOLDOWN
+                    return 50
                 end
                 return -5
             end
@@ -1312,7 +1461,7 @@ local function executeAction(action)
     elseif action == "go_crosshair" then
         local all = getCH(false, false)
         if #all == 0 then return -1 end
-        local target = all[1] -- самый старый
+        local target = all[1]
         local reward = 0
         INTERRUPT = false
         if target.part.Parent and not target.collected and not smileTarget and not prec.needRefresh then
@@ -1343,24 +1492,6 @@ local function executeAction(action)
             taskLabel = "🏠 возврат в AreaRing"; goTo(activeBuffs.PollenMark.pos, 6, 4)
         end
         return reward > 0 and reward or -2
-    elseif action == "go_crosshair_all" then
-        local all = getCH(false, false)
-        if #all == 0 then return -1 end
-        local reward = 0
-        for _, ch in ipairs(all) do
-            if not ch.collected and ch.part.Parent then
-                local ok = goTo(ch.part.Position, 4, 5)
-                if ok then
-                    ch.collected = true
-                    if ch.isPurple then stats.purple = stats.purple + 1; lastPurple = ch.part; reward = reward + 10
-                    else stats.ch = stats.ch + 1; reward = reward + 8 end
-                end
-            end
-        end
-        if reward > 0 and activeBuffs.PollenMark.active and activeBuffs.PollenMark.pos then
-            taskLabel = "🏠 возврат в AreaRing"; goTo(activeBuffs.PollenMark.pos, 6, 4)
-        end
-        return reward
     elseif action == "go_dup_tp" then
         local part, t = getDupTargetPractice()
         if not part then return -1 end
@@ -1487,31 +1618,6 @@ local function executeAction(action)
         if not center then return -1 end
         if dist3(r.Position, center) <= 5 then taskLabel = "🔥 Scorching (центр)"; INTERRUPT = false; task.wait(0.2); return 2
         else taskLabel = "🔥 Scorching центр"; INTERRUPT = false; goTo(center, 5, 5); return 2 end
-    elseif action == "go_fire_center" then
-        local center = getFireClusterCenter()
-        if center then taskLabel = "🔥 центр огня"; goTo(center, 8, 3); return 0 end
-        return -1
-    elseif action == "go_field_center" then
-        local center = getFieldCenter()
-        if center and center ~= Vector3.zero then taskLabel = "🎯 центр поля"; goTo(center, 10, 3); return 0 end
-        return -1
-    elseif action == "go_field_center_strict" then
-        local center = getFieldCenter()
-        if center and center ~= Vector3.zero then taskLabel = "🎯 центр (строгий)"; goTo(center, 5, 3); return 0 end
-        return -1
-    elseif action == "go_nearest_center_ch" then
-        local center = getFieldCenter()
-        if center == Vector3.zero then center = r.Position end
-        local bestCH = nil
-        local bestDist = math.huge
-        for _, ch in ipairs(chQueue) do
-            if not ch.collected and ch.part.Parent then
-                local d = dist3(ch.part.Position, center)
-                if d < bestDist then bestDist = d; bestCH = ch end
-            end
-        end
-        if bestCH and bestDist <= 10 then taskLabel = "🎯 CH центр"; goTo(bestCH.part.Position, 4, 5); return 5 end
-        return -1
     elseif action == "go_xflame_center" then
         local center = getFieldCenter()
         if center == Vector3.zero then return -1 end
@@ -1534,12 +1640,17 @@ local function executeAction(action)
 end
 
 -- ===================== ГЛАВНЫЙ ЦИКЛ =====================
--- Принудительная установка скорости каждые 0.1 секунды
+-- Принудительная установка адаптивной скорости
 task.spawn(function()
     while true do
-        task.wait(0.1)
+        task.wait(0.15)
         local h = getHumanoid()
-        if h and h.WalkSpeed ~= SPEED then h.WalkSpeed = SPEED end
+        if h then
+            local targetSpeed = getAdaptiveSpeed()
+            if math.abs(h.WalkSpeed - targetSpeed) > 0.5 then
+                h.WalkSpeed = targetSpeed
+            end
+        end
     end
 end)
 
@@ -1585,8 +1696,8 @@ task.spawn(function() while true do task.wait(300) saveQ() end end)
 -- ===================== ЗАПУСК =====================
 task.spawn(function() loadPatterns(); while true do task.wait(HPS_READ_INTERVAL); if ENABLED then pcall(updateHPSBuffers) end end end)
 task.spawn(function()
-    task.wait(4); loadQ(); findAreaRing()
-    print("✅ BSS AI v12.7 safe+ (FIFO CH, поле, спидхак, смайл) готов.")
+    task.wait(4); loadQ(); findAreaRing(); findCurrentField()
+    print("✅ BSS AI v12.8 safe+ (адаптивный спидхак, детектор поля, мгновенный TL, TP группы, смайл в AreaRing) готов.")
     taskLabel = "инициализация"; lastMoveTime = tick()
     while true do
         task.wait(0.03)
@@ -1598,7 +1709,9 @@ task.spawn(function()
             if r then
                 local vel = r.AssemblyLinearVelocity
                 local hSpeed = (Vector3.new(vel.X, 0, vel.Z)).Magnitude
-                if hSpeed > 0.2 then lastMoveTime = tick()
+                if hSpeed > 0.2 then
+                    lastMoveTime = tick()
+                    stuckWarning = false  -- сбрасываем при движении
                 elseif tick() - lastMoveTime > 5 and not stuckWarning then
                     stuckWarning = true; INTERRUPT = true; taskLabel = "⏳ сброс"
                     if lastPurple and not lastPurple.Parent then lastPurple = nil end
@@ -1606,7 +1719,10 @@ task.spawn(function()
                     INTERRUPT = false; lastMoveTime = tick()
                 end
             end
-            if INTERRUPT and not smileTarget and not prec.needRefresh and not xflameEmergency then INTERRUPT = false end
+            -- Автосброс INTERRUPT по таймауту
+            if INTERRUPT and not smileTarget and not prec.needRefresh and not xflameEmergency then
+                INTERRUPT = false
+            end
             local state = encodeState()
             local action = chooseActionWithBuffs(state)
             local ok, reward = pcall(executeAction, action)
@@ -1619,11 +1735,11 @@ end)
 
 -- ===================== GUI =====================
 local sg = Instance.new("ScreenGui", PGui) sg.Name = "BSSAI_GUI"
-local frame = Instance.new("Frame", sg) frame.Size = UDim2.new(0, 220, 0, 80) frame.Position = UDim2.new(0, 10, 0, 10)
+local frame = Instance.new("Frame", sg) frame.Size = UDim2.new(0, 240, 0, 90) frame.Position = UDim2.new(0, 10, 0, 10)
 frame.BackgroundColor3 = Color3.fromRGB(20, 20, 30) frame.BackgroundTransparency = 0.15 frame.BorderSizePixel = 0
 frame.Active = true frame.Draggable = true Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
 local title = Instance.new("TextLabel", frame) title.Size = UDim2.new(1, 0, 0, 20) title.Position = UDim2.new(0, 0, 0, 2)
-title.BackgroundTransparency = 1 title.Text = "🧠 BSS AI v12.7 safe+ FIFO" title.TextColor3 = Color3.fromRGB(100, 200, 255)
+title.BackgroundTransparency = 1 title.Text = "🧠 BSS AI v12.8 safe+ adaptive" title.TextColor3 = Color3.fromRGB(100, 200, 255)
 title.Font = Enum.Font.GothamBold title.TextSize = 12 title.TextXAlignment = Enum.TextXAlignment.Center
 local label = Instance.new("TextLabel", frame) label.Size = UDim2.new(1, 0, 0, 18) label.Position = UDim2.new(0, 0, 0, 24)
 label.BackgroundTransparency = 1 label.Text = "Действие: старт" label.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1631,10 +1747,14 @@ label.Font = Enum.Font.Gotham label.TextSize = 13 label.TextXAlignment = Enum.Te
 local hpsLabel = Instance.new("TextLabel", frame) hpsLabel.Size = UDim2.new(1, 0, 0, 18) hpsLabel.Position = UDim2.new(0, 0, 0, 44)
 hpsLabel.BackgroundTransparency = 1 hpsLabel.Text = "HPS: -- | Рекорд: --" hpsLabel.TextColor3 = Color3.fromRGB(150, 255, 150)
 hpsLabel.Font = Enum.Font.Gotham hpsLabel.TextSize = 12 hpsLabel.TextXAlignment = Enum.TextXAlignment.Center
+local speedLabel = Instance.new("TextLabel", frame) speedLabel.Size = UDim2.new(1, 0, 0, 18) speedLabel.Position = UDim2.new(0, 0, 0, 64)
+speedLabel.BackgroundTransparency = 1 speedLabel.Text = "⚡ --" speedLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+speedLabel.Font = Enum.Font.Gotham speedLabel.TextSize = 11 speedLabel.TextXAlignment = Enum.TextXAlignment.Center
 task.spawn(function() while true do task.wait(0.3) label.Text = "🎯 " .. taskLabel
     local cur = getHoneyPerSecond(); local hpsStr = cur > 0 and string.format("%.0f", cur) or "--"
     local bestStr = bestAvgHPS > 0 and string.format("%.0f", bestAvgHPS) or "--"
     hpsLabel.Text = "HPS: " .. hpsStr .. " | Рекорд: " .. bestStr
+    speedLabel.Text = "⚡ фаза: " .. getPhase() .. " | спид: " .. string.format("%.0f", currentSpeed)
 end end)
 UserInputService.InputBegan:Connect(function(input, gp) if gp then return end
     if input.KeyCode == Enum.KeyCode.T then ENABLED = not ENABLED; sg.Enabled = ENABLED
