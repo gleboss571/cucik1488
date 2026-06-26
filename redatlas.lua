@@ -1,4 +1,4 @@
--- BSS AI v12.9 safe + GUI ошибок, REFRESH все 3 CH, адаптивный спидхак
+-- BSS AI v12.9 safe + Heartbeat-оптимизация, кольцо каждый кадр, Scorch roam 4s от флеймов
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
@@ -13,7 +13,7 @@ local PGui = LP:WaitForChild("PlayerGui")
 local Q_VERSION = "12.9"
 local ENABLED = true
 
--- ===================== GUI ОШИБОК (запускается ПЕРВЫМ) =====================
+-- ===================== GUI ОШИБОК (ПЕРВЫМ) =====================
 local errorLog = {}
 local errorGui = nil
 local errorLabel = nil
@@ -27,7 +27,6 @@ local function createErrorGUI()
         errorGui.Name = "BSSAI_ErrorGUI"
         errorGui.ResetOnSpawn = false
         errorGui.Parent = PGui
-
         local bg = Instance.new("Frame")
         bg.Name = "ErrorPanel"
         bg.Size = UDim2.new(0, 360, 0, 220)
@@ -37,10 +36,8 @@ local function createErrorGUI()
         bg.BorderSizePixel = 0
         bg.Active = true
         bg.Draggable = true
-        bg.ClipsDescendants = false
         bg.Parent = errorGui
         Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 8)
-
         local title = Instance.new("TextLabel")
         title.Size = UDim2.new(1, -16, 0, 24)
         title.Position = UDim2.new(0, 8, 0, 8)
@@ -51,14 +48,12 @@ local function createErrorGUI()
         title.TextSize = 14
         title.TextXAlignment = Enum.TextXAlignment.Left
         title.Parent = bg
-
         local line = Instance.new("Frame")
         line.Size = UDim2.new(1, -16, 0, 1)
         line.Position = UDim2.new(0, 8, 0, 36)
         line.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
         line.BorderSizePixel = 0
         line.Parent = bg
-
         errorLabel = Instance.new("TextLabel")
         errorLabel.Size = UDim2.new(1, -16, 0, 120)
         errorLabel.Position = UDim2.new(0, 8, 0, 42)
@@ -72,7 +67,6 @@ local function createErrorGUI()
         errorLabel.TextWrapped = true
         errorLabel.RichText = true
         errorLabel.Parent = bg
-
         errorCopyBtn = Instance.new("TextButton")
         errorCopyBtn.Size = UDim2.new(0, 100, 0, 28)
         errorCopyBtn.Position = UDim2.new(0, 8, 0, 170)
@@ -84,7 +78,6 @@ local function createErrorGUI()
         errorCopyBtn.TextSize = 11
         errorCopyBtn.Parent = bg
         Instance.new("UICorner", errorCopyBtn).CornerRadius = UDim.new(0, 4)
-
         local closeBtn = Instance.new("TextButton")
         closeBtn.Size = UDim2.new(0, 80, 0, 28)
         closeBtn.Position = UDim2.new(0, 116, 0, 170)
@@ -96,13 +89,11 @@ local function createErrorGUI()
         closeBtn.TextSize = 11
         closeBtn.Parent = bg
         Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 4)
-
         closeBtn.MouseButton1Click:Connect(function()
             errorGui.Enabled = false
             errorGui:Destroy()
             errorGui = nil
         end)
-
         errorCopyBtn.MouseButton1Click:Connect(function()
             local txt = table.concat(errorLog, "\n")
             if #txt == 0 then txt = "Нет ошибок" end
@@ -111,8 +102,6 @@ local function createErrorGUI()
             task.wait(1.5)
             errorCopyBtn.Text = "📋 Копировать"
         end)
-
-        -- Скрываем если нет ошибок через 4 сек
         task.spawn(function()
             task.wait(4)
             if errorGui and errorCount == 0 then
@@ -149,19 +138,8 @@ local function logInfo(msg)
     end
 end
 
--- Создаём GUI ошибок сразу
 createErrorGUI()
 logInfo("GUI ошибок запущен")
-
--- ===================== ГЛОБАЛЬНЫЙ safeSpawn =====================
-local function safeSpawn(fn, name)
-    return task.spawn(function()
-        local ok, err = pcall(fn)
-        if not ok then
-            logError(name .. ": " .. tostring(err))
-        end
-    end)
-end
 
 -- ===================== КОНФИГУРАЦИЯ =====================
 local SPEED_BASE = {["НАБОР"] = 70, ["X10"] = 90, ["REFRESH"] = 75}
@@ -194,20 +172,12 @@ local TARGET_PRACTICE_ID = 8173559749
 local TOKEN_LINK_COOLDOWN = 2
 local PATROL_TIMEOUT = 8
 local XFLAME_CENTER_RADIUS = 12
-
-local HPS_READ_INTERVAL = 0.5
-local HPS_ANALYZE_INTERVAL = 10
-local HPS_WINDOW = 120
-local HPS_RECORD_THRESHOLD = 0.03
-local PATTERN_BONUS = 15
-local PATTERN_COORD_TOLERANCE = 10
-local MAX_PATTERNS = 30
+local SCORCH_ROAM_DIST = 4
 
 local ALPHA = 0.5
 local GAMMA = 0.95
 local EPSILON = 0.3
 local EPSILON_DECAY = 0.9995
-
 local POLLEN_MARK_BUFF_ID = 2499540966
 
 local TOKENS = {
@@ -322,6 +292,21 @@ local scytheCircle = nil
 local lastPenaltyTime = 0
 local lastSpeedJitter = 0
 local currentSpeed = SPEED_BASE["НАБОР"]
+local lastScorchMove = 0
+
+-- ===================== HEARTBEAT-СЧЁТЧИКИ =====================
+local hbFrame = 0
+local lastFieldScan = 0
+local lastAreaRingScan = 0
+local lastBuffScan = 0
+local lastPrecScan = 0
+local lastFlameScan = 0
+local lastPetalScan = 0
+local lastHPSRead = 0
+local lastHPSSave = 0
+local lastSpeedUpdate = 0
+local lastSmileScan = 0
+local lastQSave = 0
 
 -- ===================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====================
 local function getHRP()
@@ -360,12 +345,10 @@ local function findCurrentField()
     local myPos = r.Position
     local zones = Workspace:FindFirstChild("FlowerZones")
     if zones then
-        local best = nil
-        local bestDist = math.huge
+        local best = nil; local bestDist = math.huge
         for _, zone in ipairs(zones:GetChildren()) do
             if zone:IsA("BasePart") then
-                local d = dist3(myPos, zone.Position)
-                local s = zone.Size
+                local d = dist3(myPos, zone.Position); local s = zone.Size
                 if math.abs(myPos.X - zone.Position.X) <= s.X/2 + 20 and
                    math.abs(myPos.Z - zone.Position.Z) <= s.Z/2 + 20 then
                     if d < bestDist then bestDist = d; best = zone end
@@ -383,21 +366,15 @@ local function findCurrentField()
         if #fParts > 0 then
             local minX, maxX, minZ, maxZ = math.huge, -math.huge, math.huge, -math.huge
             for _, p in ipairs(fParts) do
-                if p.X < minX then minX = p.X end
-                if p.X > maxX then maxX = p.X end
-                if p.Z < minZ then minZ = p.Z end
-                if p.Z > maxZ then maxZ = p.Z end
+                if p.X < minX then minX = p.X end; if p.X > maxX then maxX = p.X end
+                if p.Z < minZ then minZ = p.Z end; if p.Z > maxZ then maxZ = p.Z end
             end
-            local cx = (minX + maxX) / 2
-            local cz = (minZ + maxZ) / 2
-            local virtualPart = {Position = Vector3.new(cx, myPos.Y, cz), Size = Vector3.new(math.abs(maxX-minX)+10, 1, math.abs(maxZ-minZ)+10)}
-            curField = {part = virtualPart}
+            curField = {part = {Position = Vector3.new((minX+maxX)/2, myPos.Y, (minZ+maxZ)/2), Size = Vector3.new(math.abs(maxX-minX)+10, 1, math.abs(maxZ-minZ)+10)}}
             return curField
         end
     end
     if areaRing then
-        local virtualPart = {Position = areaRing.Position, Size = Vector3.new(areaRingRadius*3, 1, areaRingRadius*3)}
-        curField = {part = virtualPart}
+        curField = {part = {Position = areaRing.Position, Size = Vector3.new(areaRingRadius*3, 1, areaRingRadius*3)}}
         return curField
     end
     return curField
@@ -407,9 +384,7 @@ end
 local function getAdaptiveSpeed()
     local phase = getPhase()
     local base = SPEED_BASE[phase] or SPEED_BASE["НАБОР"]
-    local now = tick()
-    if now - lastSpeedJitter >= 0.5 then
-        lastSpeedJitter = now
+    if hbFrame % 30 == 0 then -- каждые ~0.5 сек (60 fps * 0.5 = 30 кадров)
         currentSpeed = base + (math.random() * 2 - 1) * SPEED_JITTER
     end
     return currentSpeed
@@ -417,29 +392,20 @@ end
 
 local function getFieldCenter()
     if curField and curField.part then return curField.part.Position end
-    local r = getHRP()
-    return r and r.Position or Vector3.zero
+    local r = getHRP(); return r and r.Position or Vector3.zero
 end
 
 local function clampPos(pos, skipClamp)
     if skipClamp then return pos end
     if not curField then return pos end
-    local c = curField.part.Position
-    local s = curField.part.Size
-    local mx = math.max(s.X / 2 - FIELD_MARGIN, 1)
-    local mz = math.max(s.Z / 2 - FIELD_MARGIN, 1)
-    local cl = Vector3.new(
-        math.clamp(pos.X, c.X - mx, c.X + mx),
-        pos.Y,
-        math.clamp(pos.Z, c.Z - mz, c.Z + mz)
-    )
+    local c = curField.part.Position; local s = curField.part.Size
+    local mx = math.max(s.X/2 - FIELD_MARGIN, 1); local mz = math.max(s.Z/2 - FIELD_MARGIN, 1)
+    local cl = Vector3.new(math.clamp(pos.X, c.X-mx, c.X+mx), pos.Y, math.clamp(pos.Z, c.Z-mz, c.Z+mz))
     if activeBuffs.XFlame.stacks >= 20 then
-        local dx = cl.X - c.X
-        local dz = cl.Z - c.Z
-        local dist = math.sqrt(dx * dx + dz * dz)
+        local dx = cl.X - c.X; local dz = cl.Z - c.Z
+        local dist = math.sqrt(dx*dx + dz*dz)
         if dist > XFLAME_CENTER_RADIUS then
-            local scale = XFLAME_CENTER_RADIUS / dist
-            cl = Vector3.new(c.X + dx * scale, cl.Y, c.Z + dz * scale)
+            cl = Vector3.new(c.X + dx*(XFLAME_CENTER_RADIUS/dist), cl.Y, c.Z + dz*(XFLAME_CENTER_RADIUS/dist))
         end
     end
     return cl
@@ -447,21 +413,19 @@ end
 
 local function isInField(pos)
     if not curField then return false end
-    local c = curField.part.Position
-    local s = curField.part.Size
-    return math.abs(pos.X - c.X) <= s.X / 2 + PETAL_FIELD_MARGIN and
-           math.abs(pos.Z - c.Z) <= s.Z / 2 + PETAL_FIELD_MARGIN
+    local c = curField.part.Position; local s = curField.part.Size
+    return math.abs(pos.X - c.X) <= s.X/2 + PETAL_FIELD_MARGIN and
+           math.abs(pos.Z - c.Z) <= s.Z/2 + PETAL_FIELD_MARGIN
 end
 
--- ===================== AREA RING =====================
+-- ===================== AREA RING — поиск через Heartbeat =====================
 local function findAreaRing()
     local particles = Workspace:FindFirstChild("Particles")
     if particles then
-        for _, ch in ipairs(particles:GetChildren()) do
-            if ch.Name == "AreaRing" and ch:IsA("BasePart") then
-                areaRing = ch
-                local s = ch.Size
-                areaRingRadius = (s.X + s.Z) / 4
+        for _, obj in ipairs(particles:GetChildren()) do
+            if obj.Name == "AreaRing" and obj:IsA("BasePart") then
+                areaRing = obj
+                areaRingRadius = (obj.Size.X + obj.Size.Z) / 4
                 if areaRingRadius < 5 then areaRingRadius = AREA_RING_RADIUS end
                 return
             end
@@ -469,23 +433,20 @@ local function findAreaRing()
     end
     areaRing = Workspace:FindFirstChild("AreaRing")
     if areaRing and areaRing:IsA("BasePart") then
-        local s = areaRing.Size
-        areaRingRadius = (s.X + s.Z) / 4
+        areaRingRadius = (areaRing.Size.X + areaRing.Size.Z) / 4
         if areaRingRadius < 5 then areaRingRadius = AREA_RING_RADIUS end
     else
-        areaRing = nil
-        areaRingRadius = AREA_RING_RADIUS
+        areaRing = nil; areaRingRadius = AREA_RING_RADIUS
     end
 end
-task.spawn(function() while true do task.wait(5) findAreaRing() end end)
 
 -- ===================== КРОСХЕИРЫ =====================
 local Parts = Workspace:FindFirstChild("Particles") or workspace:WaitForChild("Particles", 10)
 local function isClose(a, b, tol)
     tol = tol or PURPLE_TOL
-    return math.abs(a.R * 255 - b.R * 255) <= tol and
-           math.abs(a.G * 255 - b.G * 255) <= tol and
-           math.abs(a.B * 255 - b.B * 255) <= tol
+    return math.abs(a.R*255 - b.R*255) <= tol and
+           math.abs(a.G*255 - b.G*255) <= tol and
+           math.abs(a.B*255 - b.B*255) <= tol
 end
 
 local function isPurple(part)
@@ -498,7 +459,6 @@ end
 local function addCH(obj)
     if obj.Name ~= "Crosshair" or not obj:IsA("BasePart") then return end
     for _, ch in ipairs(chQueue) do if ch.part == obj then return end end
-    task.wait(0.06)
     if not obj.Parent then return end
     table.insert(chQueue, {part = obj, spawnTime = tick(), collected = false, isPurple = isPurple(obj)})
 end
@@ -540,12 +500,8 @@ local function getTargetPracticeGroups()
             if c.spawnTime - a.spawnTime <= 2 then
                 table.insert(groups, {regular1 = a, regular2 = b, purple = c})
                 i = i + 3
-            else
-                i = i + 1
-            end
-        else
-            i = i + 1
-        end
+            else i = i + 1 end
+        else i = i + 1 end
     end
     return #groups > 0 and groups or nil
 end
@@ -562,12 +518,11 @@ local function getRegCHThreats(myPos, destPos)
     for _, ch in ipairs(chQueue) do
         if not ch.collected and ch.part.Parent and not ch.isPurple then
             local cf = Vector3.new(ch.part.Position.X, 0, ch.part.Position.Z)
-            local toCh = cf - mf
-            local d = toCh.Magnitude
+            local toCh = cf - mf; local d = toCh.Magnitude
             if d < CH_AVOID_RADIUS and d > 1 then
                 local dot = toCh.Unit:Dot(tD)
                 if dot > CH_AVOID_DOT_MIN then
-                    local cross = math.abs(toCh.X * tD.Z - toCh.Z * tD.X)
+                    local cross = math.abs(toCh.X*tD.Z - toCh.Z*tD.X)
                     if cross < CH_AVOID_RADIUS then
                         table.insert(th, {ch = ch, pos = cf, dist = d, cross = cross})
                     end
@@ -585,12 +540,10 @@ local function calcAvoidTarget(myPos, destPos)
     local t = th[1]
     local mf = Vector3.new(myPos.X, 0, myPos.Z)
     local df = Vector3.new(destPos.X, 0, destPos.Z)
-    local tD = (df - mf).Unit
-    local toCh = t.pos - mf
+    local tD = (df - mf).Unit; local toCh = t.pos - mf
     local p1 = Vector3.new(-toCh.Unit.Z, 0, toCh.Unit.X)
     local p2 = Vector3.new(toCh.Unit.Z, 0, -toCh.Unit.X)
-    local bp = p1
-    if p2:Dot(tD) >= p1:Dot(tD) then bp = p2 end
+    local bp = (p2:Dot(tD) >= p1:Dot(tD)) and p2 or p1
     local ap = t.pos + bp * CH_AVOID_STEER
     stats.chAvoided = stats.chAvoided + 1
     return clampPos(Vector3.new(ap.X, myPos.Y, ap.Z))
@@ -598,8 +551,7 @@ end
 
 local function getDupedTokenCount()
     local c = 0
-    local r = getHRP()
-    if not r then return 0 end
+    local r = getHRP(); if not r then return 0 end
     for part, t in pairs(activeTokens) do
         if not t.collected and t.duped and part.Parent then
             if dist3(r.Position, part.Position) < 80 then c = c + 1 end
@@ -610,11 +562,9 @@ end
 
 -- ===================== GO TO =====================
 local function goTo(targetPos, radius, timeout, skipClamp)
-    radius = radius or ARRIVE_DIST
-    timeout = timeout or MOVE_TIMEOUT
+    radius = radius or ARRIVE_DIST; timeout = timeout or MOVE_TIMEOUT
     if targetPos == Vector3.zero then return false end
-    local r = getHRP()
-    local h = getHumanoid()
+    local r = getHRP(); local h = getHumanoid()
     if not r or not h then return false end
     targetPos = clampPos(targetPos, skipClamp)
     if targetPos == Vector3.zero then
@@ -627,18 +577,14 @@ local function goTo(targetPos, radius, timeout, skipClamp)
     local avoid = calcAvoidTarget(r.Position, origTarget)
     if avoid then curMove = Vector3.new(avoid.X, r.Position.Y, avoid.Z) end
     h:MoveTo(curMove)
-    local t0 = tick()
-    local lastMove = tick()
-    local lastAvoid = tick()
-    local stepCooldown = 0.15
+    local t0 = tick(); local lastMove = tick(); local lastAvoid = tick()
     while tick() - t0 < timeout do
         task.wait(0.05)
         if not ENABLED then return false end
         if INTERRUPT then return false end
-        r = getHRP()
-        if not r then return false end
+        r = getHRP(); if not r then return false end
         if dist3(r.Position, origTarget) <= radius then return true end
-        if tick() - lastAvoid >= stepCooldown then
+        if tick() - lastAvoid >= 0.15 then
             lastAvoid = tick()
             local newAvoid = calcAvoidTarget(r.Position, origTarget)
             if newAvoid then curMove = Vector3.new(newAvoid.X, r.Position.Y, newAvoid.Z)
@@ -649,61 +595,43 @@ local function goTo(targetPos, radius, timeout, skipClamp)
             curMove = na and Vector3.new(na.X, r.Position.Y, na.Z) or origTarget
         end
         if tick() - lastMove >= 0.3 then
-            h = getHumanoid()
-            if h then h:MoveTo(curMove) end
+            h = getHumanoid(); if h then h:MoveTo(curMove) end
             lastMove = tick()
         end
     end
     return false
 end
 
--- ===================== SMILE TOKEN =====================
-task.spawn(function()
-    while true do
-        task.wait(0.05)
-        if not ENABLED then return end
-        local n = tick()
-        smileTarget = nil
-        smileTargetRem = 0
-        local bp = nil
-        local bd = math.huge
-        local br = 0
-        local r = getHRP()
-        if not r then return end
-        local hp = activeBuffs.PollenMark.active
-        local rp = areaRing and areaRing.Position
-        for part, t in pairs(activeTokens) do
-            if not t.collected and part.Parent and t.id == SMILE_TOKEN_ID then
-                local rem = t.life - (n - t.spawn)
-                if rem <= SMILE_REACT_TIME and rem > 0 then
-                    local take = false
-                    if hp and rp then
-                        if dist3(part.Position, rp) <= areaRingRadius * 1.5 then take = true end
-                    else
-                        take = true
-                    end
-                    if take then
-                        local d = dist3(r.Position, part.Position)
-                        if d < bd then bp = part; bd = d; br = rem end
-                    end
+-- ===================== SMILE TOKEN — проверка через Heartbeat =====================
+local function scanSmile()
+    local n = tick()
+    smileTarget = nil; smileTargetRem = 0
+    local bp, bd, br = nil, math.huge, 0
+    local r = getHRP(); if not r then return end
+    local hp = activeBuffs.PollenMark.active
+    local rp = areaRing and areaRing.Position
+    for part, t in pairs(activeTokens) do
+        if not t.collected and part.Parent and t.id == SMILE_TOKEN_ID then
+            local rem = t.life - (n - t.spawn)
+            if rem <= SMILE_REACT_TIME and rem > 0 then
+                local take = false
+                if hp and rp then
+                    if dist3(part.Position, rp) <= areaRingRadius * 1.5 then take = true end
+                else take = true end
+                if take then
+                    local d = dist3(r.Position, part.Position)
+                    if d < bd then bp = part; bd = d; br = rem end
                 end
             end
         end
-        if bp then
-            smileTarget = bp
-            smileTargetRem = br
-            if not isCollectingSmile then INTERRUPT = true end
-        end
     end
-end)
-
--- ===================== ФЛЕЙМЫ =====================
-local toolCollectEvent = nil
-do
-    local e = ReplicatedStorage:FindFirstChild("Events")
-    if e then toolCollectEvent = e:FindFirstChild("ToolCollect") end
+    if bp then
+        smileTarget = bp; smileTargetRem = br
+        if not isCollectingSmile then INTERRUPT = true end
+    end
 end
 
+-- ===================== ФЛЕЙМЫ — проверка через Heartbeat =====================
 local function isFlmDark(flm)
     local pf = flm:FindFirstChild("PF")
     if pf then
@@ -727,31 +655,31 @@ local function isFlmDark(flm)
     return false
 end
 
-task.spawn(function()
-    while true do
-        task.wait(0.2)
-        local flames = Workspace:FindFirstChild("PlayerFlames")
-        if flames then
-            local n = tick()
-            local seen = {}
-            for _, flm in ipairs(flames:GetChildren()) do
-                if flm.Name:sub(1, 3) == "Flm" then
-                    seen[flm] = true
-                    if not trackedFlames[flm] then
-                        trackedFlames[flm] = {spawnTime = n, isDark = isFlmDark(flm), hit = false}
-                    else
-                        trackedFlames[flm].isDark = isFlmDark(flm)
-                    end
+local function scanFlames()
+    local now = tick()
+    local flames = Workspace:FindFirstChild("PlayerFlames")
+    if flames then
+        local seen = {}
+        for _, flm in ipairs(flames:GetChildren()) do
+            if flm.Name:sub(1, 3) == "Flm" then
+                seen[flm] = true
+                if not trackedFlames[flm] then
+                    trackedFlames[flm] = {spawnTime = now, isDark = isFlmDark(flm), hit = false}
+                else
+                    trackedFlames[flm].isDark = isFlmDark(flm)
                 end
             end
-            for flm in pairs(trackedFlames) do
-                if not seen[flm] then trackedFlames[flm] = nil end
-            end
+        end
+        for flm in pairs(trackedFlames) do
+            if not seen[flm] then trackedFlames[flm] = nil end
         end
     end
-end)
+end
 
 local function swingScythe()
+    local toolCollectEvent = nil
+    local e = ReplicatedStorage:FindFirstChild("Events")
+    if e then toolCollectEvent = e:FindFirstChild("ToolCollect") end
     if toolCollectEvent then
         pcall(toolCollectEvent.FireServer, toolCollectEvent)
         task.wait(0.1)
@@ -759,55 +687,75 @@ local function swingScythe()
         pcall(function()
             local cam = workspace.CurrentCamera
             local vp = cam.ViewportSize
-            VirtualInputManager:SendMouseButtonEvent(vp.X / 2, vp.Y / 2, 0, true, game, 1)
+            VirtualInputManager:SendMouseButtonEvent(vp.X/2, vp.Y/2, 0, true, game, 1)
             task.wait(0.05)
-            VirtualInputManager:SendMouseButtonEvent(vp.X / 2, vp.Y / 2, 0, false, game, 1)
+            VirtualInputManager:SendMouseButtonEvent(vp.X/2, vp.Y/2, 0, false, game, 1)
         end)
     end
 end
 
-task.spawn(function()
-    while true do
-        task.wait(0.15)
-        if not ENABLED then return end
-        local r = getHRP()
-        if not r then return end
-        local n = tick()
-        for flm, data in pairs(trackedFlames) do
-            if not data.hit and not data.isDark and flm.Parent then
-                local age = n - data.spawnTime
-                if age >= FLAME_HIT_AFTER then
-                    local d = dist3(r.Position, flm.Position)
-                    if d <= FLAME_HIT_DIST then
-                        INTERRUPT = true
-                        task.wait(0.05)
-                        local bg = r:FindFirstChild("AI_BG")
-                        if not bg then
-                            bg = Instance.new("BodyGyro")
-                            bg.Name = "AI_BG"
-                            bg.MaxTorque = Vector3.new(0, 40000, 0)
-                            bg.P = 10000
-                            bg.D = 500
-                            bg.Parent = r
-                        end
-                        local dir = (flm.Position - r.Position)
-                        dir = Vector3.new(dir.X, 0, dir.Z)
-                        if dir.Magnitude > 0.1 then bg.CFrame = CFrame.lookAt(r.Position, r.Position + dir) end
-                        task.wait(0.1)
-                        swingScythe()
-                        task.wait(0.15)
-                        if bg then bg:Destroy() end
-                        data.hit = true
-                        stats.flamesHit = stats.flamesHit + 1
-                        task.wait(0.2)
-                        INTERRUPT = false
-                        break
-                    end
+local function tryHitFlame()
+    if not ENABLED then return end
+    local r = getHRP(); if not r then return end
+    local n = tick()
+    for flm, data in pairs(trackedFlames) do
+        if not data.hit and not data.isDark and flm.Parent then
+            if n - data.spawnTime >= FLAME_HIT_AFTER and dist3(r.Position, flm.Position) <= FLAME_HIT_DIST then
+                INTERRUPT = true
+                local bg = r:FindFirstChild("AI_BG")
+                if not bg then
+                    bg = Instance.new("BodyGyro"); bg.Name = "AI_BG"
+                    bg.MaxTorque = Vector3.new(0, 40000, 0); bg.P = 10000; bg.D = 500
+                    bg.Parent = r
                 end
+                local dir = (flm.Position - r.Position)
+                dir = Vector3.new(dir.X, 0, dir.Z)
+                if dir.Magnitude > 0.1 then bg.CFrame = CFrame.lookAt(r.Position, r.Position + dir) end
+                task.wait(0.1); swingScythe(); task.wait(0.15)
+                if bg then bg:Destroy() end
+                data.hit = true; stats.flamesHit = stats.flamesHit + 1
+                task.wait(0.2); INTERRUPT = false; return true
             end
         end
     end
-end)
+    return false
+end
+
+-- ===================== SCORCHING STAR: roam в 4 studs от СКОПЛЕНИЯ флеймов =====================
+-- getFlameClusterCenter — центр ВСЕХ флеймов (чёрные + обычные)
+local function getFlameClusterCenter()
+    local positions = {}
+    for flm, data in pairs(trackedFlames) do
+        if flm.Parent then table.insert(positions, flm.Position) end
+    end
+    if #positions == 0 then return nil end
+    local sum = Vector3.new(0, 0, 0)
+    for _, p in ipairs(positions) do sum = sum + p end
+    return clampPos(sum / #positions)
+end
+
+-- getScorchRoamTarget — точка в 4 studs от ближайшего флейма в кластере
+local function getScorchRoamTarget()
+    local r = getHRP(); if not r then return nil end
+    -- Находим ближайший флейм (любой)
+    local closestFlm = nil; local closestDist = SCORCH_ROAM_DIST + 1
+    for flm in pairs(trackedFlames) do
+        if flm.Parent then
+            local d = dist3(r.Position, flm.Position)
+            if d < closestDist then closestDist = d; closestFlm = flm end
+        end
+    end
+    if not closestFlm then
+        -- Если нет флеймов в радиусе — идём к центру кластера
+        local center = getFlameClusterCenter()
+        if center then return clampPos(center) end
+        return nil
+    end
+    -- Случайная точка в радиусе SCORCH_ROAM_DIST от ближайшего флейма
+    local angle = math.random() * 2 * math.pi
+    local dist = math.random() * SCORCH_ROAM_DIST
+    return clampPos(Vector3.new(closestFlm.Position.X + math.cos(angle)*dist, 0, closestFlm.Position.Z + math.sin(angle)*dist))
+end
 
 -- ===================== ТОКЕНЫ =====================
 local function regToken(obj)
@@ -816,8 +764,7 @@ local function regToken(obj)
     if not front or not front:IsA("Decal") then return end
     local id = texId(front.Texture)
     if not id or AVOID[id] then return end
-    local def = TOKENS[id]
-    if not def then return end
+    local def = TOKENS[id]; if not def then return end
     local r = getHRP()
     local duped = r and (obj.Position.Y - r.Position.Y) > 5
     local life = def.base * ABILITY_MULT
@@ -834,113 +781,106 @@ game.DescendantRemoving:Connect(function(obj)
     end
 end)
 
--- ===================== BUFFS =====================
+-- ===================== BUFFS — проверка через Heartbeat =====================
 local rps = ReplicatedStorage:FindFirstChild("Events") and ReplicatedStorage.Events:FindFirstChild("RetrievePlayerStats")
-task.spawn(function()
-    while true do
-        task.wait(0.5)
-        if not rps then return end
-        local ok, result = pcall(rps.InvokeServer, rps)
-        if ok and type(result) == "table" then
-            local function findBuff(tbl, src)
-                if type(tbl) ~= "table" then return nil end
-                if rawget(tbl, "Src") == src then
-                    local combo = rawget(tbl, "Combo") or 0
-                    return {stacks = tonumber(combo)}
-                end
-                for _, v in pairs(tbl) do
-                    local f = findBuff(v, src)
-                    if f then return f end
-                end
-                return nil
-            end
-            local ss = findBuff(result, "Scorching Star Aura")
-            activeBuffs.ScorchingStar.stacks = ss and ss.stacks or 0
-            local xf = findBuff(result, "X-Flame Aura")
-            activeBuffs.XFlame.stacks = xf and xf.stacks or 0
-            local function findPreciseMark(tbl)
-                if type(tbl) ~= "table" then return false end
-                if rawget(tbl, "BuffID") == 2575093099 and rawget(tbl, "Removed") ~= true then return true end
-                for _, v in pairs(tbl) do if findPreciseMark(v) then return true end end
-                return false
-            end
-            activeBuffs.PreciseMark.active = findPreciseMark(result)
-            local function findPollenMark(tbl)
-                if type(tbl) ~= "table" then return nil end
-                if rawget(tbl, "BuffID") == POLLEN_MARK_BUFF_ID and rawget(tbl, "Removed") ~= true then
-                    return rawget(tbl, "Value") or 1
-                end
-                for _, v in pairs(tbl) do
-                    local f = findPollenMark(v)
-                    if f then return f end
-                end
-                return nil
-            end
-            local pm = findPollenMark(result)
-            if pm and pm > 0 then
-                activeBuffs.PollenMark.active = true
-                activeBuffs.PollenMark.multiplier = pm
-                if areaRing then activeBuffs.PollenMark.pos = areaRing.Position end
-            else
-                activeBuffs.PollenMark.active = false
-            end
-        end
+local function scanBuffs()
+    if not rps then return end
+    local ok, result = pcall(rps.InvokeServer, rps)
+    if not ok or type(result) ~= "table" then return end
+    local function findBuff(tbl, src)
+        if type(tbl) ~= "table" then return nil end
+        if rawget(tbl, "Src") == src then return {stacks = tonumber(rawget(tbl, "Combo") or 0)} end
+        for _, v in pairs(tbl) do local f = findBuff(v, src); if f then return f end end
+        return nil
     end
-end)
-
--- ===================== ЦЕНТР ОГНЯ =====================
-local function getFireClusterCenter()
-    local flames = {}
-    for flm in pairs(trackedFlames) do if flm.Parent then table.insert(flames, flm.Position) end end
-    if #flames == 0 then return nil end
-    local sum = Vector3.new(0, 0, 0)
-    for _, p in ipairs(flames) do sum = sum + p end
-    return clampPos(sum / #flames)
+    local ss = findBuff(result, "Scorching Star Aura")
+    activeBuffs.ScorchingStar.stacks = ss and ss.stacks or 0
+    local xf = findBuff(result, "X-Flame Aura")
+    activeBuffs.XFlame.stacks = xf and xf.stacks or 0
+    local function findPreciseMark(tbl)
+        if type(tbl) ~= "table" then return false end
+        if rawget(tbl, "BuffID") == 2575093099 and rawget(tbl, "Removed") ~= true then return true end
+        for _, v in pairs(tbl) do if findPreciseMark(v) then return true end end
+        return false
+    end
+    activeBuffs.PreciseMark.active = findPreciseMark(result)
+    local function findPollenMark(tbl)
+        if type(tbl) ~= "table" then return nil end
+        if rawget(tbl, "BuffID") == POLLEN_MARK_BUFF_ID and rawget(tbl, "Removed") ~= true then return rawget(tbl, "Value") or 1 end
+        for _, v in pairs(tbl) do local f = findPollenMark(v); if f then return f end end
+        return nil
+    end
+    local pm = findPollenMark(result)
+    if pm and pm > 0 then
+        activeBuffs.PollenMark.active = true; activeBuffs.PollenMark.multiplier = pm
+        if areaRing then activeBuffs.PollenMark.pos = areaRing.Position end
+    else activeBuffs.PollenMark.active = false end
 end
 
--- ===================== ПЕТАЛЫ =====================
+-- ===================== PRECISION — проверка через Heartbeat =====================
+local rps_event = ReplicatedStorage:FindFirstChild("Events") and ReplicatedStorage.Events:FindFirstChild("RetrievePlayerStats")
+local function scanPrecision()
+    if not rps_event then return end
+    local ok, pd = pcall(rps_event.InvokeServer, rps_event)
+    if not ok or type(pd) ~= "table" then return end
+    local function fp(t)
+        if type(t) ~= "table" then return nil end
+        if rawget(t, "BuffID") == PREC_BUFF_ID and rawget(t, "Removed") ~= true then return t end
+        if rawget(t, "Src") == "Precision" then return t end
+        for _, v in pairs(t) do local f = fp(v); if f then return f end end
+        return nil
+    end
+    local b = fp(pd)
+    if b then
+        local val = tonumber(b.Value) or 0
+        if tonumber(b.Start) ~= prec.serverStart then
+            prec.serverStart = tonumber(b.Start) or 0
+            prec.serverDur = tonumber(b.Dur) or 60; prec.localStart = os.clock()
+        end
+        prec.stacks = math.min(PREC_MAX, math.round(val / PREC_PER_STACK))
+        prec.value = val; prec.isX10 = (prec.stacks >= PREC_MAX)
+    else prec.stacks = 0; prec.value = 0; prec.isX10 = false end
+    if prec.localStart > 0 then
+        prec.timeLeft = math.max(0, prec.serverDur - (os.clock() - prec.localStart))
+        prec.needRefresh = prec.isX10 and (prec.timeLeft <= PREC_REFRESH_AT)
+        if prec.needRefresh and refreshCHCounter == 0 then refreshStartTime = tick(); refreshCHCounter = 0 end
+    end
+end
+
+-- ===================== ПЕТАЛЫ — проверка через Heartbeat =====================
 local function getPetalColor(part)
     for name, col in pairs(PETAL_COLORS) do
-        if (col.R - part.Color.R) ^ 2 + (col.G - part.Color.G) ^ 2 + (col.B - part.Color.B) ^ 2 < 0.002 then return name end
+        if (col.R - part.Color.R)^2 + (col.G - part.Color.G)^2 + (col.B - part.Color.B)^2 < 0.002 then return name end
     end
     return nil
 end
 
-task.spawn(function()
-    while true do
-        task.wait(0.15)
-        fieldPetals = {}
-        if not ENABLED or not curField then return end
-        local particles = Workspace:FindFirstChild("Particles")
-        if not particles then return end
-        local r = getHRP()
-        if not r then return end
-        for _, obj in ipairs(particles:GetChildren()) do
-            if obj.Name == "PetalPart" and obj:IsA("BasePart") and isInField(obj.Position) then
-                local cName = getPetalColor(obj)
-                if cName and PETAL_PRIORITY[cName] then
-                    local d = dist3D(r.Position, obj.Position)
-                    table.insert(fieldPetals, {part = obj, colorName = cName, priority = PETAL_PRIORITY[cName], dist = d})
-                end
+local function scanPetals()
+    fieldPetals = {}
+    if not ENABLED or not curField then return end
+    local particles = Workspace:FindFirstChild("Particles")
+    if not particles then return end
+    local r = getHRP(); if not r then return end
+    for _, obj in ipairs(particles:GetChildren()) do
+        if obj.Name == "PetalPart" and obj:IsA("BasePart") and isInField(obj.Position) then
+            local cName = getPetalColor(obj)
+            if cName and PETAL_PRIORITY[cName] then
+                table.insert(fieldPetals, {part = obj, colorName = cName, priority = PETAL_PRIORITY[cName], dist = dist3D(r.Position, obj.Position)})
             end
         end
-        table.sort(fieldPetals, function(a, b)
-            if a.priority ~= b.priority then return a.priority < b.priority end
-            return a.dist < b.dist
-        end)
     end
-end)
+    table.sort(fieldPetals, function(a, b)
+        if a.priority ~= b.priority then return a.priority < b.priority end
+        return a.dist < b.dist
+    end)
+end
 
--- ===================== HPS и ПАТТЕРНЫ =====================
+-- ===================== HPS =====================
 local function findHPSLabel()
-    local sg = LP.PlayerGui:FindFirstChild("ScreenGui")
-    if not sg then return nil end
-    local mh = sg:FindFirstChild("MeterHUD")
-    if not mh then return nil end
-    local hm = mh:FindFirstChild("HoneyMeter")
-    if not hm then return nil end
-    local bar = hm:FindFirstChild("Bar")
-    if not bar then return nil end
+    local sgui = LP.PlayerGui:FindFirstChild("ScreenGui"); if not sgui then return nil end
+    local mh = sgui:FindFirstChild("MeterHUD"); if not mh then return nil end
+    local hm = mh:FindFirstChild("HoneyMeter"); if not hm then return nil end
+    local bar = hm:FindFirstChild("Bar"); if not bar then return nil end
     return bar:FindFirstChild("PerSecLabel")
 end
 
@@ -950,8 +890,7 @@ local function parseHPS(text)
     local num, suffix = text:match("([%d.]+)([KM]?)")
     if not num then return 0 end
     local val = tonumber(num) or 0
-    if suffix == "K" then val = val * 1000
-    elseif suffix == "M" then val = val * 1000000 end
+    if suffix == "K" then val = val * 1000 elseif suffix == "M" then val = val * 1000000 end
     return val
 end
 
@@ -972,39 +911,34 @@ local function loadPatterns()
         local ok2, data = pcall(HttpService.JSONDecode, HttpService, raw)
         if ok2 and type(data) == "table" then
             patternsHistory = data
-            local maxHPS = 0
-            for _, p in ipairs(patternsHistory) do if p.hps and p.hps > maxHPS then maxHPS = p.hps end end
-            bestAvgHPS = maxHPS
+            for _, p in ipairs(patternsHistory) do if p.hps and p.hps > bestAvgHPS then bestAvgHPS = p.hps end end
         end
     end
 end
 
 local function updateHPSBuffers()
-    local now = tick()
-    local hps = getHoneyPerSecond()
+    local now = tick(); local hps = getHoneyPerSecond()
     if hps > 0 then table.insert(hpsBuffer, {time = now, hps = hps}) end
-    local cutoff = now - HPS_WINDOW
+    local cutoff = now - 120
     while #hpsBuffer > 0 and hpsBuffer[1].time < cutoff do table.remove(hpsBuffer, 1) end
     if taskLabel and taskLabel ~= "старт" then
         local r = getHRP()
-        local pos = r and r.Position or Vector3.zero
-        table.insert(actionBuffer, {time = now, action = taskLabel, pos = pos, phase = getPhase(), isScorch = activeBuffs.ScorchingStar.stacks > 0})
+        table.insert(actionBuffer, {time = now, action = taskLabel, pos = r and r.Position or Vector3.zero, phase = getPhase(), isScorch = activeBuffs.ScorchingStar.stacks > 0})
     end
     while #actionBuffer > 0 and actionBuffer[1].time < cutoff do table.remove(actionBuffer, 1) end
-    if now - lastAnalyzeTime >= HPS_ANALYZE_INTERVAL then
+    if now - lastAnalyzeTime >= 10 then
         lastAnalyzeTime = now
-        local sum = 0
-        local count = 0
+        local sum, count = 0, 0
         for _, e in ipairs(hpsBuffer) do sum = sum + e.hps; count = count + 1 end
         local avg = count > 0 and (sum / count) or 0
         if avg > 0 then
             local acts = {}
             for _, e in ipairs(actionBuffer) do
-                table.insert(acts, {action = e.action, pos = e.pos, timeOffset = e.time - (now - HPS_WINDOW), phase = e.phase, isScorch = e.isScorch})
+                table.insert(acts, {action = e.action, pos = e.pos, timeOffset = e.time - (now - 120), phase = e.phase, isScorch = e.isScorch})
             end
             table.insert(patternsHistory, {hps = avg, actions = acts, timestamp = now})
             table.sort(patternsHistory, function(a, b) return a.hps > b.hps end)
-            while #patternsHistory > MAX_PATTERNS do table.remove(patternsHistory) end
+            while #patternsHistory > 30 do table.remove(patternsHistory) end
             if avg > bestAvgHPS then bestAvgHPS = avg end
             savePatterns()
         end
@@ -1013,39 +947,25 @@ end
 
 local function getPatternBonus(action, pos)
     if #patternsHistory == 0 then return 0 end
-    local phase = getPhase()
-    local isScorch = activeBuffs.ScorchingStar.stacks > 0
+    local phase = getPhase(); local isScorch = activeBuffs.ScorchingStar.stacks > 0
     local best = 0
     for _, p in ipairs(patternsHistory) do
         for _, pa in ipairs(p.actions) do
             if pa.action == action then
-                local pm = (pa.phase == phase)
-                local sm = (pa.isScorch == isScorch)
-                local d = (pos - pa.pos).Magnitude
-                if d < PATTERN_COORD_TOLERANCE then
-                    local ms = 1
-                    if pm and sm then ms = 2
-                    elseif pm or sm then ms = 1.5 end
+                if (pos - pa.pos).Magnitude < 10 then
+                    local ms = ((pa.phase == phase) and (pa.isScorch == isScorch)) and 2 or (((pa.phase == phase) or (pa.isScorch == isScorch)) and 1.5 or 1)
                     if ms > best then best = ms end
                 end
             end
         end
     end
-    return PATTERN_BONUS * best
+    return 15 * best
 end
 
 -- ===================== Q-LEARNING =====================
-local function getQ(s, a)
-    if not QTable[s] then return 0 end
-    return QTable[s][a] or 0
-end
+local function getQ(s, a) return (QTable[s] and QTable[s][a]) or 0 end
+local function setQ(s, a, v) if not QTable[s] then QTable[s] = {} end; QTable[s][a] = v end
 
-local function setQ(s, a, v)
-    if not QTable[s] then QTable[s] = {} end
-    QTable[s][a] = v
-end
-
--- МГНОВЕННЫЙ детект Token Link (без отдельного потока)
 local function hasTokenLink()
     for _, t in pairs(activeTokens) do
         if not t.collected and t.prio >= 90 then return true end
@@ -1057,27 +977,20 @@ local function getDupTargetPractice()
     local n = tick()
     for part, t in pairs(activeTokens) do
         if not t.collected and part.Parent and t.id == TARGET_PRACTICE_ID and t.duped then
-            local rem = t.life - (n - t.spawn)
-            if rem > 1 then return part, t end
+            if t.life - (n - t.spawn) > 1 then return part, t end
         end
     end
     return nil, nil
 end
 
 local function getSmileOrDupInArea()
-    local r = getHRP()
-    if not r then return nil end
-    local rp = areaRing and areaRing.Position
-    if not rp then return nil end
-    local bp = nil
-    local bd = math.huge
+    local r = getHRP(); if not r then return nil end
+    local rp = areaRing and areaRing.Position; if not rp then return nil end
+    local bp, bd = nil, math.huge
     for part, t in pairs(activeTokens) do
         if not t.collected and part.Parent then
-            local isSmile = (t.id == SMILE_TOKEN_ID)
-            local isDup = (t.id == TARGET_PRACTICE_ID and t.duped)
-            if isSmile or isDup then
-                local dToRing = dist3(part.Position, rp)
-                if dToRing <= areaRingRadius * 1.5 then
+            if (t.id == SMILE_TOKEN_ID) or (t.id == TARGET_PRACTICE_ID and t.duped) then
+                if dist3(part.Position, rp) <= areaRingRadius * 1.5 then
                     local d = dist3(r.Position, part.Position)
                     if d < bd then bd = d; bp = part end
                 end
@@ -1088,8 +1001,7 @@ local function getSmileOrDupInArea()
 end
 
 local function encodeState()
-    local r = getHRP()
-    if not r then return "dead" end
+    local r = getHRP(); if not r then return "dead" end
     local ph = getPhase()
     local tlDist = "none"
     for part, t in pairs(activeTokens) do
@@ -1098,24 +1010,20 @@ local function encodeState()
             if d < 20 then tlDist = "close" elseif d < 60 then tlDist = "far" end
         end
     end
-    local purN = math.min(3, #getCH(true, false))
-    local regN = math.min(3, #getCH(false, true))
-    local smUrgent = (smileTarget ~= nil)
-    local hasPetal = (#fieldPetals > 0)
-    local nearTok = false
-    local n = tick()
+    local purN = math.min(3, #getCH(true, false)); local regN = math.min(3, #getCH(false, true))
+    local smUrgent = (smileTarget ~= nil); local hasPetal = (#fieldPetals > 0)
+    local nearTok = false; local n = tick()
     for part, t in pairs(activeTokens) do
-        if not t.collected and part.Parent then
-            if (t.life - (n - t.spawn)) > 1 and dist3(r.Position, part.Position) < 30 then nearTok = true break end
+        if not t.collected and part.Parent and (t.life - (n - t.spawn)) > 1 and dist3(r.Position, part.Position) < 30 then
+            nearTok = true; break
         end
     end
     local zone = "mid"
     if curField and curField.part and curField.part.Parent then
-        local c = curField.part.Position
-        local s = curField.part.Size
+        local c = curField.part.Position; local s = curField.part.Size
         if s.X > 0 and s.Z > 0 then
-            local rx = math.abs(r.Position.X - c.X) / (s.X / 2)
-            local rz = math.abs(r.Position.Z - c.Z) / (s.Z / 2)
+            local rx = math.abs(r.Position.X - c.X) / (s.X/2)
+            local rz = math.abs(r.Position.Z - c.Z) / (s.Z/2)
             if rx > 0.7 or rz > 0.7 then zone = "edge"
             elseif rx < 0.3 and rz < 0.3 then zone = "center" end
         end
@@ -1124,13 +1032,12 @@ local function encodeState()
     if prec.isX10 and not prec.needRefresh then
         local ct = 0
         for _, ch in ipairs(chQueue) do
-            if not ch.collected and ch.part.Parent and not ch.isPurple then
-                if dist3(r.Position, ch.part.Position) < 20 then ct = ct + 1 end
-            end
+            if not ch.collected and ch.part.Parent and not ch.isPurple and dist3(r.Position, ch.part.Position) < 20 then ct = ct + 1 end
         end
         if ct > 2 then chT = "many" elseif ct > 0 then chT = "some" end
     end
-    return string.format("PH:%s|TL:%s|CH:%d|PR:%d|SM:%s|NT:%s|Z:%s|CT:%s|PT:%s", ph, tlDist, regN, purN, tostring(smUrgent), tostring(nearTok), zone, chT, tostring(hasPetal))
+    local sc = activeBuffs.ScorchingStar.stacks > 0 and "1" or "0"
+    return string.format("PH:%s|TL:%s|CH:%d|PR:%d|SM:%s|NT:%s|Z:%s|CT:%s|PT:%s|SC:%s", ph, tlDist, regN, purN, tostring(smUrgent), tostring(nearTok), zone, chT, tostring(hasPetal), sc)
 end
 
 -- ===================== ДЕЙСТВИЯ =====================
@@ -1143,30 +1050,33 @@ local function getActionsWithBuffs()
 
     if phase ~= "НАБОР" then
         for part, t in pairs(activeTokens) do
-            if not t.collected and part.Parent then
-                local rem = t.life - (now - t.spawn)
-                if rem < 0.3 and rem > 0 then return {"go_urgent_token"} end
+            if not t.collected and part.Parent and (t.life - (now - t.spawn)) < 0.3 and (t.life - (now - t.spawn)) > 0 then
+                return {"go_urgent_token"}
             end
         end
     end
 
-    if smileTarget and getDupedTokenCount() > 6 then
-        return {"go_smile"}
+    if activeBuffs.ScorchingStar.stacks > 0 and next(trackedFlames) then
+        local center = getFlameClusterCenter()
+        if center then
+            table.insert(baseActions, "go_scorching_roam")
+        end
     end
+
+    if smileTarget and getDupedTokenCount() > 6 then return {"go_smile"} end
 
     if activeBuffs.PollenMark.active and areaRing then
         local target = getSmileOrDupInArea()
         if target then
             local t = activeTokens[target]
-            if t.id == SMILE_TOKEN_ID then table.insert(baseActions, 1, "go_smile_area")
-            elseif t.id == TARGET_PRACTICE_ID and t.duped then table.insert(baseActions, 1, "go_dup_area") end
+            if t and t.id == SMILE_TOKEN_ID then table.insert(baseActions, 1, "go_smile_area")
+            elseif t and t.id == TARGET_PRACTICE_ID and t.duped then table.insert(baseActions, 1, "go_dup_area") end
         end
     end
 
     if xflameEmergency then
         local center = getFieldCenter()
-        local closestCH = nil
-        local closestDist = XFLAME_CENTER_RADIUS + 1
+        local closestCH, closestDist = nil, XFLAME_CENTER_RADIUS + 1
         if center ~= Vector3.zero then
             for _, ch in ipairs(chQueue) do
                 if not ch.collected and ch.part.Parent then
@@ -1178,7 +1088,6 @@ local function getActionsWithBuffs()
         if closestCH then return {"go_xflame_ch"} else return {"go_xflame_center"} end
     end
 
-    -- REFRESH: собираем ВСЕ 3 CH без обхода
     if phase == "REFRESH" then
         local all = getCH(false, false)
         if #all > 0 then table.insert(baseActions, "go_crosshair_refresh_all")
@@ -1186,11 +1095,9 @@ local function getActionsWithBuffs()
         return baseActions
     end
 
-    -- X10: Target Practice или обычные фиолетовые
     if phase == "X10" then
         local tpGroups = getTargetPracticeGroups()
-        if tpGroups then
-            table.insert(baseActions, "go_target_practice_purple")
+        if tpGroups then table.insert(baseActions, "go_target_practice_purple")
         else
             local purps = getCH(true, false)
             if #purps > 0 then table.insert(baseActions, "go_purple") end
@@ -1201,15 +1108,10 @@ local function getActionsWithBuffs()
         if #fieldPetals > 0 then table.insert(baseActions, "go_petal") end
         local all = getCH(false, false)
         if #all > 0 then table.insert(baseActions, "go_crosshair") end
-        local hasAny = false
-        for _ in pairs(activeTokens) do hasAny = true break end
-        if hasAny then
-            table.insert(baseActions, "go_token_near")
-            table.insert(baseActions, "go_token_best")
-        end
+        local hasAny = false; for _ in pairs(activeTokens) do hasAny = true; break end
+        if hasAny then table.insert(baseActions, "go_token_near"); table.insert(baseActions, "go_token_best") end
         local dtp = getDupTargetPractice()
         if dtp then table.insert(baseActions, "go_dup_tp") end
-        if activeBuffs.ScorchingStar.stacks > 0 and next(trackedFlames) then table.insert(baseActions, "go_scorching_center") end
         table.insert(baseActions, "patrol_ring")
         if phase == "НАБОР" then table.insert(baseActions, "patrol_random") end
         return baseActions
@@ -1222,8 +1124,7 @@ local function chooseActionWithBuffs(state)
     local valid = getActionsWithBuffs()
     if #valid == 0 then return "patrol_ring" end
     if math.random() < EPSILON then return valid[math.random(1, #valid)] end
-    local bestA = valid[1]
-    local bestQ = getQ(state, bestA)
+    local bestA, bestQ = valid[1], getQ(state, valid[1])
     for i = 2, #valid do
         local q = getQ(state, valid[i])
         if q > bestQ then bestA = valid[i]; bestQ = q end
@@ -1233,92 +1134,31 @@ end
 
 local function doUpdateQ(state, action, reward, nextState)
     local r = getHRP()
-    local pos = r and r.Position or Vector3.zero
-    local patternBonus = getPatternBonus(action, pos)
-    local totalReward = reward + patternBonus
+    local totalReward = reward + getPatternBonus(action, r and r.Position or Vector3.zero)
     local valid = getActionsWithBuffs()
     local maxNext = 0
-    for _, a in ipairs(valid) do
-        local q = getQ(nextState, a)
-        if q > maxNext then maxNext = q end
-    end
-    local old = getQ(state, action)
-    local new = old + ALPHA * (totalReward + GAMMA * maxNext - old)
+    for _, a in ipairs(valid) do local q = getQ(nextState, a); if q > maxNext then maxNext = q end end
+    local new = getQ(state, action) + ALPHA * (totalReward + GAMMA * maxNext - getQ(state, action))
     setQ(state, action, new)
-    stats.totalReward = stats.totalReward + totalReward
-    stats.decisions = stats.decisions + 1
+    stats.totalReward = stats.totalReward + totalReward; stats.decisions = stats.decisions + 1
     EPSILON = math.max(0.02, EPSILON * EPSILON_DECAY)
 end
-
--- ===================== PRECISION =====================
-local rps_event = ReplicatedStorage:FindFirstChild("Events") and ReplicatedStorage.Events:FindFirstChild("RetrievePlayerStats")
-task.spawn(function()
-    while true do
-        task.wait(0.3)
-        if not rps_event then return end
-        local ok, pd = pcall(rps_event.InvokeServer, rps_event)
-        if not ok or type(pd) ~= "table" then return end
-        local function fp(t)
-            if type(t) ~= "table" then return nil end
-            if rawget(t, "BuffID") == PREC_BUFF_ID and rawget(t, "Removed") ~= true then return t end
-            if rawget(t, "Src") == "Precision" then return t end
-            for _, v in pairs(t) do
-                local f = fp(v)
-                if f then return f end
-            end
-            return nil
-        end
-        local b = fp(pd)
-        if b then
-            local val = tonumber(b.Value) or 0
-            local st = tonumber(b.Start) or 0
-            local dur = tonumber(b.Dur) or 60
-            local stk = math.min(PREC_MAX, math.round(val / PREC_PER_STACK))
-            if st ~= prec.serverStart then
-                prec.serverStart = st
-                prec.serverDur = dur
-                prec.localStart = os.clock()
-            end
-            prec.stacks = stk
-            prec.value = val
-            prec.isX10 = (stk >= PREC_MAX)
-        else
-            prec.stacks = 0; prec.value = 0; prec.isX10 = false
-        end
-    end
-end)
-RunService.Heartbeat:Connect(function()
-    if prec.localStart > 0 then
-        local elapsed = os.clock() - prec.localStart
-        prec.timeLeft = math.max(0, prec.serverDur - elapsed)
-        prec.needRefresh = prec.isX10 and (prec.timeLeft <= PREC_REFRESH_AT)
-        if prec.needRefresh and refreshCHCounter == 0 then refreshStartTime = tick(); refreshCHCounter = 0 end
-    end
-end)
 
 -- ===================== ВИЗУАЛИЗАЦИЯ =====================
 local function updateXFlameCircle()
     if xflameEmergency then
         local center = getFieldCenter()
-        if center == Vector3.zero then
-            local r = getHRP()
-            if r then center = r.Position end
-        end
+        if center == Vector3.zero then local r = getHRP(); if r then center = r.Position end end
         if not xflameCircle then
-            xflameCircle = Instance.new("Part")
-            xflameCircle.Name = "XFlameCircle"
-            xflameCircle.Shape = Enum.PartType.Cylinder
-            xflameCircle.Anchored = true
-            xflameCircle.CanCollide = false
-            xflameCircle.Transparency = 0.6
+            xflameCircle = Instance.new("Part"); xflameCircle.Name = "XFlameCircle"
+            xflameCircle.Shape = Enum.PartType.Cylinder; xflameCircle.Anchored = true
+            xflameCircle.CanCollide = false; xflameCircle.Transparency = 0.6
             xflameCircle.BrickColor = BrickColor.Red()
-            xflameCircle.Size = Vector3.new(XFLAME_CENTER_RADIUS * 2, 0.2, XFLAME_CENTER_RADIUS * 2)
+            xflameCircle.Size = Vector3.new(XFLAME_CENTER_RADIUS*2, 0.2, XFLAME_CENTER_RADIUS*2)
             xflameCircle.Parent = Workspace
         end
         xflameCircle.Position = Vector3.new(center.X, center.Y + 0.2, center.Z)
-    else
-        if xflameCircle then xflameCircle:Destroy(); xflameCircle = nil end
-    end
+    else if xflameCircle then xflameCircle:Destroy(); xflameCircle = nil end end
 end
 
 local function updateScytheCircle()
@@ -1326,40 +1166,33 @@ local function updateScytheCircle()
         local r = getHRP()
         if r then
             if not scytheCircle then
-                scytheCircle = Instance.new("Part")
-                scytheCircle.Name = "ScytheRadius"
-                scytheCircle.Shape = Enum.PartType.Cylinder
-                scytheCircle.Anchored = true
-                scytheCircle.CanCollide = false
-                scytheCircle.Transparency = 0.6
+                scytheCircle = Instance.new("Part"); scytheCircle.Name = "ScytheRadius"
+                scytheCircle.Shape = Enum.PartType.Cylinder; scytheCircle.Anchored = true
+                scytheCircle.CanCollide = false; scytheCircle.Transparency = 0.6
                 scytheCircle.BrickColor = BrickColor.new("Bright orange")
-                scytheCircle.Size = Vector3.new(FLAME_HIT_DIST * 2, 0.2, FLAME_HIT_DIST * 2)
+                scytheCircle.Size = Vector3.new(FLAME_HIT_DIST*2, 0.2, FLAME_HIT_DIST*2)
                 scytheCircle.Parent = Workspace
             end
             scytheCircle.Position = Vector3.new(r.Position.X, r.Position.Y + 0.2, r.Position.Z)
         end
-    else
-        if scytheCircle then scytheCircle:Destroy(); scytheCircle = nil end
-    end
+    else if scytheCircle then scytheCircle:Destroy(); scytheCircle = nil end end
 end
 
 local function getEdgePoint(targetPos)
     if not areaRing or not areaRing.Parent then return targetPos end
-    local center = areaRing.Position
-    local dir = (targetPos - center).Unit
-    return clampPos(Vector3.new(center.X + dir.X * areaRingRadius, 0, center.Z + dir.Z * areaRingRadius))
+    local dir = (targetPos - areaRing.Position).Unit
+    return clampPos(Vector3.new(areaRing.Position.X + dir.X*areaRingRadius, 0, areaRing.Position.Z + dir.Z*areaRingRadius))
 end
 
 -- ===================== Crosshair Hit =====================
 local CROSSHAIR_HIT_COLOR = Color3.fromRGB(17, 134, 19)
-local COLOR_TOLERANCE = 0.05
 local function isCrosshairHit(part)
     if not part or part.Name ~= "Crosshair" then return false end
     local ok, col = pcall(function() return part.Color end)
     if not ok then return false end
-    return math.abs(col.R - CROSSHAIR_HIT_COLOR.R) < COLOR_TOLERANCE and
-           math.abs(col.G - CROSSHAIR_HIT_COLOR.G) < COLOR_TOLERANCE and
-           math.abs(col.B - CROSSHAIR_HIT_COLOR.B) < COLOR_TOLERANCE
+    return math.abs(col.R - CROSSHAIR_HIT_COLOR.R) < 0.05 and
+           math.abs(col.G - CROSSHAIR_HIT_COLOR.G) < 0.05 and
+           math.abs(col.B - CROSSHAIR_HIT_COLOR.B) < 0.05
 end
 
 -- ===================== ИСПОЛНЕНИЕ ДЕЙСТВИЙ =====================
@@ -1367,33 +1200,40 @@ local function executeAction(action)
     local r = getHRP()
     if not r then return -1 end
 
-    if action == "go_crosshair_refresh_all" then
-        -- REFRESH: собираем ВСЕ 3 CH без обхода
+    if action == "go_scorching_roam" then
+        local target = getScorchRoamTarget()
+        if not target then return -1 end
+        taskLabel = "🔥 Scorch roam"
+        INTERRUPT = false
+        goTo(target, 2, 2)
+        task.wait(0.15)
+        return 2
+    elseif action == "go_crosshair_refresh_all" then
         local all = getCH(false, false)
         if #all == 0 then return -1 end
-        local collected = 0
-        INTERRUPT = false
+        local collected = 0; INTERRUPT = false
         for _, ch in ipairs(all) do
             if ch.part.Parent and not ch.collected then
                 if collected >= 3 then break end
                 taskLabel = "🔄 REFRESH (" .. (collected+1) .. "/3)"
                 local ok = goTo(ch.part.Position, 4, 4, true)
                 if ok and ch.part.Parent then
-                    ch.collected = true
-                    refreshCHCounter = refreshCHCounter + 1
+                    ch.collected = true; refreshCHCounter = refreshCHCounter + 1
                     if ch.isPurple then stats.purple = stats.purple + 1; lastPurple = ch.part
                     else stats.ch = stats.ch + 1 end
-                    collected = collected + 1
-                    task.wait(0.1)
+                    collected = collected + 1; task.wait(0.1)
                 end
             end
         end
-        goTo(clampPos(r.Position), 5, 2)
+        if areaRing and areaRing.Parent then
+            taskLabel = "🏠 возврат в кольцо"
+            goTo(areaRing.Position, 6, 4)
+        else
+            goTo(clampPos(r.Position), 5, 2)
+        end
         if refreshCHCounter >= 3 then
-            prec.needRefresh = false
-            cycle.chCollectedCount = 0
-            stats.ref = stats.ref + 1
-            refreshCHCounter = 0
+            prec.needRefresh = false; cycle.chCollectedCount = 0
+            stats.ref = stats.ref + 1; refreshCHCounter = 0
             taskLabel = "✅ REFRESH ОК"
             return 40
         end
@@ -1401,24 +1241,17 @@ local function executeAction(action)
     elseif action == "go_target_practice_purple" then
         local tpGroups = getTargetPracticeGroups()
         if not tpGroups then return -1 end
-        local reward = 0
-        INTERRUPT = false
+        local reward = 0; INTERRUPT = false
         for _, group in ipairs(tpGroups) do
             if group.purple.part.Parent and not group.purple.collected then
                 taskLabel = "🎯 TP фиолетовый"
                 local ok = goTo(group.purple.part.Position, 4, 5)
                 if ok and group.purple.part.Parent then
-                    group.purple.collected = true
-                    group.regular1.collected = true
-                    group.regular2.collected = true
-                    lastPurple = group.purple.part
-                    stats.purple = stats.purple + 1
+                    group.purple.collected = true; group.regular1.collected = true; group.regular2.collected = true
+                    lastPurple = group.purple.part; stats.purple = stats.purple + 1
                     taskLabel = "🟣 TP Precise Mark"
                     local t0 = tick()
-                    while tick() - t0 < PURPLE_STAND do
-                        task.wait(0.05)
-                        if smileTarget or prec.needRefresh or not ENABLED then break end
-                    end
+                    while tick() - t0 < PURPLE_STAND do task.wait(0.05); if smileTarget or prec.needRefresh or not ENABLED then break end end
                     reward = reward + 40
                 end
             end
@@ -1429,21 +1262,17 @@ local function executeAction(action)
         if not target then return -1 end
         local t = activeTokens[target]
         if not t or t.collected or t.id ~= SMILE_TOKEN_ID then return -1 end
-        taskLabel = "😊 Smile (AreaRing)"
-        INTERRUPT = false
+        taskLabel = "😊 Smile (AreaRing)"; INTERRUPT = false
         local edge = getEdgePoint(target.Position)
         local ok = goTo(edge, 4, 4)
         if ok and target.Parent then
             local start = tick()
             while tick() - start < TOKEN_STAND_DUR do
-                task.wait(0.1)
-                if not target.Parent or INTERRUPT then break end
+                task.wait(0.1); if not target.Parent or INTERRUPT then break end
                 local hrp = getHRP()
                 if hrp then hrp.CFrame = CFrame.new(target.Position.X, hrp.Position.Y, target.Position.Z) end
             end
-            t.collected = true
-            stats.smileCollected = stats.smileCollected + 1
-            return 45
+            t.collected = true; stats.smileCollected = stats.smileCollected + 1; return 45
         end
         return -10
     elseif action == "go_dup_area" then
@@ -1451,21 +1280,17 @@ local function executeAction(action)
         if not target then return -1 end
         local t = activeTokens[target]
         if not t or t.collected or t.id ~= TARGET_PRACTICE_ID or not t.duped then return -1 end
-        taskLabel = "🎯 Dup (AreaRing)"
-        INTERRUPT = false
+        taskLabel = "🎯 Dup (AreaRing)"; INTERRUPT = false
         local edge = getEdgePoint(target.Position)
         local ok = goTo(edge, 4, 4)
         if ok and target.Parent then
             local start = tick()
             while tick() - start < TOKEN_STAND_DUR do
-                task.wait(0.1)
-                if not target.Parent or INTERRUPT then break end
+                task.wait(0.1); if not target.Parent or INTERRUPT then break end
                 local hrp = getHRP()
                 if hrp then hrp.CFrame = CFrame.new(target.Position.X, hrp.Position.Y, target.Position.Z) end
             end
-            t.collected = true
-            stats.tok = stats.tok + 1
-            return 15
+            t.collected = true; stats.tok = stats.tok + 1; return 15
         end
         return -2
     elseif action == "go_smile" then
@@ -1473,31 +1298,21 @@ local function executeAction(action)
         if not target or not target.Parent then smileTarget = nil; return -1 end
         local t = activeTokens[target]
         if not t or t.collected then smileTarget = nil; return -1 end
-        isCollectingSmile = true
-        taskLabel = "😊 Smile"
-        INTERRUPT = false
+        isCollectingSmile = true; taskLabel = "😊 Smile"; INTERRUPT = false
         local ok = goTo(target.Position, 4, math.min(2.5, smileTargetRem - 0.2))
         if ok and target.Parent then
             local start = tick()
             while tick() - start < TOKEN_STAND_DUR do
-                task.wait(0.1)
-                if not target.Parent or INTERRUPT then break end
+                task.wait(0.1); if not target.Parent or INTERRUPT then break end
                 local hrp = getHRP()
                 if hrp then hrp.CFrame = CFrame.new(target.Position.X, hrp.Position.Y, target.Position.Z) end
             end
-            t.collected = true
-            smileTarget = nil
-            stats.smileCollected = stats.smileCollected + 1
-            isCollectingSmile = false
-            return 45
+            t.collected = true; smileTarget = nil; stats.smileCollected = stats.smileCollected + 1
+            isCollectingSmile = false; return 45
         end
-        isCollectingSmile = false
-        smileTarget = nil
-        return -10
+        isCollectingSmile = false; smileTarget = nil; return -10
     elseif action == "go_urgent_token" then
-        local now = tick()
-        local best = nil
-        local bestLife = 0.3
+        local now = tick(); local best, bestLife = nil, 0.3
         for part, t in pairs(activeTokens) do
             if not t.collected and part.Parent then
                 local rem = t.life - (now - t.spawn)
@@ -1505,8 +1320,7 @@ local function executeAction(action)
             end
         end
         if best then
-            taskLabel = "⚡Срочный токен"
-            INTERRUPT = false
+            taskLabel = "⚡Срочный токен"; INTERRUPT = false
             local ok = goTo(best.Position, 4, 2)
             if ok and best.Parent then activeTokens[best].collected = true; stats.tok = stats.tok + 1; return 25 end
             return -2
@@ -1515,21 +1329,15 @@ local function executeAction(action)
     elseif action == "go_purple" then
         local purps = getCH(true, false)
         if #purps == 0 then return -1 end
-        local reward = 0
-        INTERRUPT = false
+        local reward = 0; INTERRUPT = false
         for _, ch in ipairs(purps) do
             if ch.part.Parent and not ch.collected and not smileTarget and not prec.needRefresh then
                 local ok = goTo(ch.part.Position, 4, 5)
                 if ok and ch.part.Parent then
-                    ch.collected = true
-                    lastPurple = ch.part
-                    stats.purple = stats.purple + 1
+                    ch.collected = true; lastPurple = ch.part; stats.purple = stats.purple + 1
                     taskLabel = "🟣 1с"
                     local t0 = tick()
-                    while tick() - t0 < PURPLE_STAND do
-                        task.wait(0.05)
-                        if smileTarget or prec.needRefresh or not ENABLED then break end
-                    end
+                    while tick() - t0 < PURPLE_STAND do task.wait(0.05); if smileTarget or prec.needRefresh or not ENABLED then break end end
                     reward = reward + 30
                 end
             end
@@ -1538,12 +1346,9 @@ local function executeAction(action)
     elseif action == "go_tokenlink" then
         for part, t in pairs(activeTokens) do
             if not t.collected and part.Parent and t.prio >= 90 then
-                taskLabel = "💎🔴 Link"
-                INTERRUPT = false
+                taskLabel = "💎🔴 Link"; INTERRUPT = false
                 local ok = goTo(part.Position, 5, 5)
-                if ok and part.Parent then
-                    t.collected = true; ignoreNewTokensUntil = tick() + TOKEN_LINK_COOLDOWN; return 50
-                end
+                if ok and part.Parent then t.collected = true; ignoreNewTokensUntil = tick() + TOKEN_LINK_COOLDOWN; return 50 end
                 return -5
             end
         end
@@ -1551,12 +1356,9 @@ local function executeAction(action)
     elseif action == "go_crosshair" then
         local all = getCH(false, false)
         if #all == 0 then return -1 end
-        local target = all[1]
-        local reward = 0
-        INTERRUPT = false
+        local target = all[1]; local reward = 0; INTERRUPT = false
         if target.part.Parent and not target.collected and not smileTarget and not prec.needRefresh then
-            local shouldSkip = false
-            local r2 = getHRP()
+            local shouldSkip = false; local r2 = getHRP()
             if r2 then
                 for part2, t2 in pairs(activeTokens) do
                     if not t2.collected and part2.Parent and t2.prio >= 90 then
@@ -1590,20 +1392,16 @@ local function executeAction(action)
         if ok and part.Parent then
             local start = tick()
             while tick() - start < TOKEN_STAND_DUR do
-                task.wait(0.1)
-                if not part.Parent or INTERRUPT then break end
+                task.wait(0.1); if not part.Parent or INTERRUPT then break end
                 local hrp = getHRP()
                 if hrp then hrp.CFrame = CFrame.new(part.Position.X, hrp.Position.Y, part.Position.Z) end
             end
-            t.collected = true
-            return 15
+            t.collected = true; return 15
         end
         return -2
     elseif action == "go_petal" then
         if #fieldPetals == 0 then return -1 end
-        local collectedAny = false
-        local totalReward = 0
-        local i = 1
+        local collectedAny, totalReward = false, 0; local i = 1
         while i <= #fieldPetals do
             local petal = fieldPetals[i]
             if not petal.part.Parent then table.remove(fieldPetals, i)
@@ -1611,19 +1409,13 @@ local function executeAction(action)
             else
                 taskLabel = "🌸 " .. petal.colorName; INTERRUPT = false
                 local ok = goTo(Vector3.new(petal.part.Position.X, 0, petal.part.Position.Z), PETAL_COLLECT_DIST, 2.5)
-                if ok then
-                    stats.petalsCollected = stats.petalsCollected + 1
-                    totalReward = totalReward + 8 + (14 - petal.priority)
-                    collectedAny = true
-                    task.wait(0.05)
-                    i = i + 1
+                if ok then stats.petalsCollected = stats.petalsCollected + 1; totalReward = totalReward + 8 + (14 - petal.priority); collectedAny = true; task.wait(0.05); i = i + 1
                 else stuckPetals[petal.part] = tick() + 5; table.remove(fieldPetals, i) end
             end
         end
         return collectedAny and totalReward or -1
     elseif action == "go_token_near" then
-        local best = nil
-        local bestD = math.huge
+        local best, bestD = nil, math.huge
         for part, t in pairs(activeTokens) do
             if not t.collected and part.Parent then
                 local d = dist3(r.Position, part.Position)
@@ -1631,26 +1423,21 @@ local function executeAction(action)
             end
         end
         if best then
-            local t = activeTokens[best]
-            taskLabel = "💎 " .. t.name; INTERRUPT = false
+            local t = activeTokens[best]; taskLabel = "💎 " .. t.name; INTERRUPT = false
             local ok = goTo(best.Position, 5, 5)
             if ok and best.Parent then t.collected = true; return 3 + t.prio * 0.2 end
             return -2
         end
         return -1
     elseif action == "go_token_best" then
-        local best = nil
-        local bestP = -1
-        local now = tick()
+        local best, bestP = nil, -1; local now = tick()
         for part, t in pairs(activeTokens) do
-            if not t.collected and part.Parent then
-                local rem = t.life - (now - t.spawn)
-                if rem > 0.5 and t.prio > bestP then best = part; bestP = t.prio end
+            if not t.collected and part.Parent and (t.life - (now - t.spawn)) > 0.5 and t.prio > bestP then
+                best = part; bestP = t.prio
             end
         end
         if best then
-            local t = activeTokens[best]
-            taskLabel = "💎⭐ " .. t.name; INTERRUPT = false
+            local t = activeTokens[best]; taskLabel = "💎⭐ " .. t.name; INTERRUPT = false
             local ok = goTo(best.Position, 5, 5)
             if ok and best.Parent then t.collected = true; return 5 + t.prio * 0.3 end
             return -3
@@ -1659,19 +1446,14 @@ local function executeAction(action)
     elseif action == "patrol_ring" then
         local function rndRing()
             if areaRing and areaRing.Parent and curField then
-                local c = areaRing.Position
-                local a = math.random() * 2 * math.pi
-                local r = areaRingRadius * (0.5 + math.random() * 0.8)
-                return clampPos(Vector3.new(c.X + math.cos(a) * r, 0, c.Z + math.sin(a) * r))
+                local a = math.random() * 2 * math.pi; local rr = areaRingRadius * (0.5 + math.random() * 0.8)
+                return clampPos(Vector3.new(areaRing.Position.X + math.cos(a)*rr, 0, areaRing.Position.Z + math.sin(a)*rr))
             elseif curField then
-                local c = curField.part.Position
-                local s = curField.part.Size
-                local mx = math.max(s.X / 2 * 0.3, 5)
-                local mz = math.max(s.Z / 2 * 0.3, 5)
-                return clampPos(Vector3.new(c.X + (math.random() * 2 - 1) * mx, 0, c.Z + (math.random() * 2 - 1) * mz))
+                local c = curField.part.Position; local s = curField.part.Size
+                return clampPos(Vector3.new(c.X + (math.random()*2-1)*math.max(s.X/2*0.3,5), 0, c.Z + (math.random()*2-1)*math.max(s.Z/2*0.3,5)))
             else
                 local rp = getHRP()
-                if rp then return clampPos(rp.Position + Vector3.new((math.random() * 2 - 1) * 30, 0, (math.random() * 2 - 1) * 30))
+                if rp then return clampPos(rp.Position + Vector3.new((math.random()*2-1)*30, 0, (math.random()*2-1)*30))
                 else return clampPos(Vector3.zero) end
             end
         end
@@ -1679,20 +1461,15 @@ local function executeAction(action)
         local target = rndRing()
         if target == Vector3.zero or not isInField(target) then target = getFieldCenter() end
         if target == Vector3.zero then return 0 end
-        goTo(target, 6, PATROL_TIMEOUT)
-        task.wait(0.1 + math.random() * 0.3)
-        return 0
+        goTo(target, 6, PATROL_TIMEOUT); task.wait(0.1 + math.random() * 0.3); return 0
     elseif action == "patrol_random" then
         local function rndF()
             if curField then
-                local c = curField.part.Position
-                local s = curField.part.Size
-                local mx = math.max(s.X / 2 - 3, 1)
-                local mz = math.max(s.Z / 2 - 3, 1)
-                return clampPos(Vector3.new(c.X + (math.random() * 2 - 1) * mx, 0, c.Z + (math.random() * 2 - 1) * mz))
+                local c = curField.part.Position; local s = curField.part.Size
+                return clampPos(Vector3.new(c.X + (math.random()*2-1)*math.max(s.X/2-3,1), 0, c.Z + (math.random()*2-1)*math.max(s.Z/2-3,1)))
             else
                 local rp = getHRP()
-                if rp then return clampPos(rp.Position + Vector3.new((math.random() * 2 - 1) * 30, 0, (math.random() * 2 - 1) * 30))
+                if rp then return clampPos(rp.Position + Vector3.new((math.random()*2-1)*30, 0, (math.random()*2-1)*30))
                 else return clampPos(Vector3.zero) end
             end
         end
@@ -1700,23 +1477,15 @@ local function executeAction(action)
         local target = rndF()
         if target == Vector3.zero or not isInField(target) then target = getFieldCenter() end
         if target == Vector3.zero then return 0 end
-        goTo(target, 4, PATROL_TIMEOUT)
-        task.wait(0.2 + math.random() * 0.4)
-        return 0
-    elseif action == "go_scorching_center" then
-        local center = getFireClusterCenter()
-        if not center then return -1 end
-        if dist3(r.Position, center) <= 5 then taskLabel = "🔥 Scorching (центр)"; INTERRUPT = false; task.wait(0.2); return 2
-        else taskLabel = "🔥 Scorching центр"; INTERRUPT = false; goTo(center, 5, 5); return 2 end
+        goTo(target, 4, PATROL_TIMEOUT); task.wait(0.2 + math.random() * 0.4); return 0
     elseif action == "go_xflame_center" then
         local center = getFieldCenter()
         if center == Vector3.zero then return -1 end
-        taskLabel = "🔥 XFlame в центр"; INTERRUPT = false; goTo(center, 3, 3); return 0
+        taskLabel = "🔥 XFlame"; INTERRUPT = false; goTo(center, 3, 3); return 0
     elseif action == "go_xflame_ch" then
         local center = getFieldCenter()
         if center == Vector3.zero then return -1 end
-        local bestCH = nil
-        local bestDist = XFLAME_CENTER_RADIUS + 1
+        local bestCH, bestDist = nil, XFLAME_CENTER_RADIUS + 1
         for _, ch in ipairs(chQueue) do
             if not ch.collected and ch.part.Parent then
                 local d = dist3(ch.part.Position, center)
@@ -1729,84 +1498,126 @@ local function executeAction(action)
     return 0
 end
 
--- ===================== ГЛАВНЫЙ ЦИКЛ =====================
--- Адаптивный спидхак
+-- ===================== ГЛАВНЫЙ HEARTBEAT-ЦИКЛ =====================
+local mainLoopStarted = false
+local function startMainLoop()
+    if mainLoopStarted then return end
+    mainLoopStarted = true
+    task.wait(2)
+    loadQ(); findAreaRing(); findCurrentField()
+    logInfo("BSS AI v12.9 готов!")
+    print("✅ BSS AI v12.9 safe+ (Heartbeat-оптимизация) готов.")
+    taskLabel = "инициализация"; lastMoveTime = tick()
+end
+
+-- Загрузка паттернов (редкая операция — через task.spawn)
 task.spawn(function()
-    while true do
-        task.wait(0.15)
+    loadPatterns()
+    logInfo("Паттерны загружены")
+end)
+
+RunService.Heartbeat:Connect(function(dt)
+    hbFrame = hbFrame + 1
+    if not ENABLED then return end
+
+    -- Запуск с задержкой (ждём загрузки)
+    if not mainLoopStarted then
+        startMainLoop()
+        return
+    end
+
+    local now = tick()
+
+    -- === КАЖДЫЙ КАДР: AreaRing ===
+    findAreaRing()
+
+    -- === КАЖДЫЕ 18 кадров (~0.3 сек): Buffs + Precision ===
+    if hbFrame % 18 == 0 then
+        scanBuffs()
+        scanPrecision()
+    end
+
+    -- === КАЖДЫЕ 12 кадров (~0.2 сек): Флеймы ===
+    if hbFrame % 12 == 0 then
+        scanFlames()
+    end
+
+    -- === КАЖДЫЕ 9 кадров (~0.15 сек): Петалы + спидхак + удар флейма ===
+    if hbFrame % 9 == 0 then
+        scanPetals()
         local h = getHumanoid()
         if h then
             local ts = getAdaptiveSpeed()
             if math.abs(h.WalkSpeed - ts) > 0.5 then h.WalkSpeed = ts end
         end
+        tryHitFlame()
     end
-end)
 
-RunService.Heartbeat:Connect(function()
-    if not ENABLED or not prec.isX10 or prec.needRefresh then return end
+    -- === КАЖДЫЕ 6 кадров (~0.1 сек): HPS ===
+    if hbFrame % 6 == 0 then
+        pcall(updateHPSBuffers)
+    end
+
+    -- === КАЖДЫЕ 3 кадра (~0.05 сек): Smile + поле ===
+    if hbFrame % 3 == 0 then
+        scanSmile()
+    end
+
+    -- === КАЖДЫЕ 180 кадров (~3 сек): Поле ===
+    if hbFrame % 180 == 0 then
+        findCurrentField()
+    end
+
+    -- === Каждые 18000 кадров (~5 мин): Сохранение Q-таблицы ===
+    if hbFrame % 18000 == 0 then
+        pcall(function()
+            local qc = 0; for _ in pairs(QTable) do qc = qc + 1 end
+            pcall(writefile, "bss_ai_q_v12.json", HttpService:JSONEncode({
+                version = Q_VERSION, qtable = QTable,
+                meta = {stateCount = qc, epsilon = math.floor(EPSILON*1000)/1000, userId = tostring(LP.UserId), savedAt = os.time(), totalReward = math.floor(stats.totalReward), decisions = stats.decisions}
+            }))
+        end)
+    end
+
+    -- === XFlame emergency ===
+    xflameEmergency = (activeBuffs.XFlame.stacks >= 20)
+    if xflameEmergency then INTERRUPT = true end
+    updateXFlameCircle(); updateScytheCircle()
+
+    -- === Анти-застревание ===
     local r = getHRP()
-    if not r then return end
-    local now = tick()
-    for _, ch in ipairs(chQueue) do
-        if ch.part and ch.part.Parent and not ch.collected and not ch.isPurple then
-            if isCrosshairHit(ch.part) and now - lastPenaltyTime > 1.5 then
-                lastPenaltyTime = now
-                local state = encodeState()
-                if state and state ~= "dead" then pcall(doUpdateQ, state, "patrol_ring", -20, state) end
-                stats.chAvoided = stats.chAvoided + 1
-                break
+    if r then
+        local vel = r.AssemblyLinearVelocity
+        local hSpeed = (Vector3.new(vel.X, 0, vel.Z)).Magnitude
+        if hSpeed > 0.2 then lastMoveTime = now; stuckWarning = false
+        elseif now - lastMoveTime > 5 and not stuckWarning then
+            stuckWarning = true; INTERRUPT = true; taskLabel = "⏳ сброс"
+            if lastPurple and not lastPurple.Parent then lastPurple = nil end
+            if smileTarget and not smileTarget.Parent then smileTarget = nil; isCollectingSmile = false end
+            INTERRUPT = false; lastMoveTime = now
+        end
+    end
+
+    if INTERRUPT and not smileTarget and not prec.needRefresh and not xflameEmergency then
+        INTERRUPT = false
+    end
+
+    -- === CH-hit penalty ===
+    if prec.isX10 and not prec.needRefresh and r then
+        for _, ch in ipairs(chQueue) do
+            if ch.part and ch.part.Parent and not ch.collected and not ch.isPurple then
+                if isCrosshairHit(ch.part) and now - lastPenaltyTime > 1.5 then
+                    lastPenaltyTime = now
+                    local state = encodeState()
+                    if state and state ~= "dead" then pcall(doUpdateQ, state, "patrol_ring", -20, state) end
+                    stats.chAvoided = stats.chAvoided + 1; break
+                end
             end
         end
     end
-end)
 
--- ===================== Q-ТАБЛИЦА =====================
-local Q_FILE = "bss_ai_q_v12.json"
-local function resetQ()
-    QTable = {}; EPSILON = 0.1; stats.totalReward = 0; stats.decisions = 0
-    local ok, j = pcall(HttpService.JSONEncode, HttpService, {version = Q_VERSION, qtable = {}, meta = {resetAt = os.time()}})
-    if ok then pcall(writefile, Q_FILE, j) end
-end
-local function loadQ()
-    local ok, raw = pcall(readfile, Q_FILE)
-    if ok and raw then
-        local ok2, d = pcall(HttpService.JSONDecode, HttpService, raw)
-        if ok2 and type(d) == "table" and d.version == Q_VERSION and type(d.qtable) == "table" then QTable = d.qtable end
-    end
-end
-local function saveQ()
-    local qc = 0; for _ in pairs(QTable) do qc = qc + 1 end
-    local d = {version = Q_VERSION, qtable = QTable, meta = {stateCount = qc, epsilon = math.floor(EPSILON * 1000) / 1000, userId = tostring(LP.UserId), savedAt = os.time(), totalReward = math.floor(stats.totalReward), decisions = stats.decisions}}
-    pcall(function() writefile(Q_FILE, HttpService:JSONEncode(d)) end)
-end
-task.spawn(function() while true do task.wait(300) saveQ() end end)
-
--- ===================== ЗАПУСК =====================
-task.spawn(function() loadPatterns(); while true do task.wait(HPS_READ_INTERVAL); if ENABLED then pcall(updateHPSBuffers) end end end)
-task.spawn(function()
-    task.wait(4); loadQ(); findAreaRing(); findCurrentField()
-    print("✅ BSS AI v12.9 safe+ (GUI ошибок, REFRESH все 3 CH, адаптивный спидхак) готов.")
-    logInfo("BSS AI v12.9 готов!")
-    taskLabel = "инициализация"; lastMoveTime = tick()
-    while true do
-        task.wait(0.03)
-        if not ENABLED then task.wait(0.3); continue end
-        xflameEmergency = (activeBuffs.XFlame.stacks >= 20)
-        if xflameEmergency then INTERRUPT = true end
-        updateXFlameCircle(); updateScytheCircle()
-        local r = getHRP()
-        if r then
-            local vel = r.AssemblyLinearVelocity
-            local hSpeed = (Vector3.new(vel.X, 0, vel.Z)).Magnitude
-            if hSpeed > 0.2 then lastMoveTime = tick(); stuckWarning = false
-            elseif tick() - lastMoveTime > 5 and not stuckWarning then
-                stuckWarning = true; INTERRUPT = true; taskLabel = "⏳ сброс"
-                if lastPurple and not lastPurple.Parent then lastPurple = nil end
-                if smileTarget and not smileTarget.Parent then smileTarget = nil; isCollectingSmile = false end
-                INTERRUPT = false; lastMoveTime = tick()
-            end
-        end
-        if INTERRUPT and not smileTarget and not prec.needRefresh and not xflameEmergency then INTERRUPT = false end
+    -- === Главный Q-Learning цикл (каждые 2 кадра ~0.033 сек) ===
+    if hbFrame % 2 == 0 then
         local state = encodeState()
         local action = chooseActionWithBuffs(state)
         local ok, reward = pcall(executeAction, action)
@@ -1815,6 +1626,20 @@ task.spawn(function()
         pcall(doUpdateQ, state, action, reward, nextState)
     end
 end)
+
+-- ===================== Q-ТАБЛИЦА (init) =====================
+local function loadQ()
+    local ok, raw = pcall(readfile, "bss_ai_q_v12.json")
+    if ok and raw then
+        local ok2, d = pcall(HttpService.JSONDecode, HttpService, raw)
+        if ok2 and type(d) == "table" and d.version == Q_VERSION and type(d.qtable) == "table" then QTable = d.qtable end
+    end
+end
+
+local function resetQ()
+    QTable = {}; EPSILON = 0.1; stats.totalReward = 0; stats.decisions = 0
+    pcall(writefile, "bss_ai_q_v12.json", HttpService:JSONEncode({version = Q_VERSION, qtable = {}, meta = {resetAt = os.time()}}))
+end
 
 -- ===================== GUI =====================
 local sg = Instance.new("ScreenGui", PGui) sg.Name = "BSSAI_GUI"
@@ -1850,5 +1675,8 @@ UserInputService.InputBegan:Connect(function(input, gp) if gp then return end
         local c = 0; for _ in pairs(QTable) do c = c + 1 end; print("States: " .. c); print("Patterns: " .. #patternsHistory)
     end
 end)
-LP.CharacterAdded:Connect(function() task.wait(2) activeTokens={} chQueue={} lastPurple=nil curField=nil taskLabel="старт" smileTarget=nil isCollectingSmile=false INTERRUPT=false cycle={chCollectedCount=0} trackedFlames={} fieldPetals={} ignoreNewTokensUntil=0 refreshCHCounter=0 if xflameCircle then xflameCircle:Destroy() xflameCircle=nil end if scytheCircle then scytheCircle:Destroy() scytheCircle=nil end saveQ() end)
+LP.CharacterAdded:Connect(function() task.wait(2) activeTokens={} chQueue={} lastPurple=nil curField=nil taskLabel="старт" smileTarget=nil isCollectingSmile=false INTERRUPT=false cycle={chCollectedCount=0} trackedFlames={} fieldPetals={} ignoreNewTokensUntil=0 refreshCHCounter=0 if xflameCircle then xflameCircle:Destroy() xflameCircle=nil end if scytheCircle then scytheCircle:Destroy() scytheCircle=nil end pcall(function()
+    local qc = 0; for _ in pairs(QTable) do qc = qc + 1 end
+    pcall(writefile, "bss_ai_q_v12.json", HttpService:JSONEncode({version = Q_VERSION, qtable = QTable, meta = {stateCount = qc, savedAt = os.time()}}))
+end) end)
 print("✅ Готово.")
