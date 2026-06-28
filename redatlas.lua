@@ -1,4 +1,4 @@
--- BSS AI v13.0: диагональный REFRESH, предикт линий CH, спираль+край кластера, Web AI концепт
+-- BSS AI v13.0: диагональный REFRESH, предикт линий CH, адаптивная спираль, Web AI ready
 local P=game:GetService("Players")local W=game:GetService("Workspace")local R=game:GetService("RunService")
 local U=game:GetService("UserInputService")local RS=game:GetService("ReplicatedStorage")local H=game:GetService("HttpService")
 local V=game:GetService("VirtualInputManager")local L=P.LocalPlayer;local G=L:WaitForChild("PlayerGui")
@@ -42,7 +42,7 @@ local PBI,PPK,PMX,PRAT=2574507284,0.02,10,15
 local PURP,PTOL,PST=Color3.fromRGB(119,85,255),12,1
 local SMI,SMRT,TSD=5877939956,15,1.1
 local CAR,CAS,CAD=28,20,0.1
-local ARR,TLID=20,20;local PCD,PFM,FHA,FHD=8,20,5,14;local TPI,TLC,PT,XCR,SCRD,MCD=8173559749,2,8,12,4,10
+local ARR,TLID=20,20;local PCD,PFM,FHA,FHD=8,20,5,14;local TPI,TLC,PT,XCR,SCRD=8173559749,2,8,12,4
 local AL,GA,EP,ED=0.5,0.95,0.3,0.9995;local PMBI=2499540966
 local CHIT_COLOR=Color3.fromRGB(17,134,19)
 local DIAG_MAX_ANGLE=0.35;local DIAG_MAX_TIME=0.8
@@ -182,20 +182,12 @@ local function goTo(tP,rad,to,sk)
     end;return false
 end
 
--- === СПИРАЛЬ + ДЕТЕКТ КРАЯ КЛАСТЕРА ===
+-- === СПИРАЛЬ ===
 local function getFlameDensity()local cnt=0;local r=hr();if not r then return 0 end;for fl in pairs(tF)do if fl.Parent and d3(r.Position,fl.Position)<=20 then cnt=cnt+1 end end;return cnt end
--- Проверка: если от цели до ближайшего флейма > MCD — мы уходим из кластера
-local function isLeavingCluster(target)local r=hr();if not r then return false end
-    for fl in pairs(tF)do if fl.Parent then if d3(target,fl.Position)<=MCD then return false end end end;return true end
 local function gST()if not sprC or tick()-lSM>2 then lSM=tick();sprC=gFCC();if sprC then sprA=0;sprR=1 end end;if not sprC then return nil end
     local density=getFlameDensity();local step=(density>8 and 0.8)or(density>4 and 1.6)or 3.5
     sprA=sprA+step/math.max(sprR,1);sprR=1+sprA*step/(2*math.pi);if sprR>SCRD*3 then sprA=0;sprR=1 end
-    local target=cP(Vector3.new(sprC.X+math.cos(sprA)*sprR,0,sprC.Z+math.sin(sprA)*sprR))
-    -- Если цель за границей кластера — идём к ближайшему флейму вместо спирали
-    if isLeavingCluster(target)then local r=hr();local best,br=nil,MCD+1
-        for fl in pairs(tF)do if fl.Parent then local d=d3(r.Position,fl.Position);if d<br then br=d;best=fl end end end
-        if best then return cP(best.Position)end
-    end;return target
+    return cP(Vector3.new(sprC.X+math.cos(sprA)*sprR,0,sprC.Z+math.sin(sprA)*sprR))
 end
 
 -- === ФЛЕЙМЫ ===
