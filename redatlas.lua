@@ -1,13 +1,7 @@
--- BSS AI v13.0: самообучающийся ИИ (microHPS %-based + patternGenerator + balanced rewards)
-local P=game:GetService("Players")
-local W=game:GetService("Workspace")
-local R=game:GetService("RunService")
-local U=game:GetService("UserInputService")
-local RS=game:GetService("ReplicatedStorage")
-local H=game:GetService("HttpService")
-local V=game:GetService("VirtualInputManager")
-local L=P.LocalPlayer
-local G=L:WaitForChild("PlayerGui")
+-- BSS AI v13.0: самообучающийся ИИ (microHPS + adaptiveParams + patternReason)
+local P=game:GetService("Players")local W=game:GetService("Workspace")local R=game:GetService("RunService")
+local U=game:GetService("UserInputService")local RS=game:GetService("ReplicatedStorage")local H=game:GetService("HttpService")
+local V=game:GetService("VirtualInputManager")local L=P.LocalPlayer;local G=L:WaitForChild("PlayerGui")
 local VQ,EN="13.0",true
 
 -- === GUI ОШИБОК ===
@@ -41,63 +35,47 @@ task.spawn(function()while true do task.wait(30)pcall(function()
     local lt=W:FindFirstChild("Lighting");if lt then lt.GlobalShadows=false;lt.Brightness=2 end
 end)end end)
 
--- === АДАПТИВНЫЕ ПАРАМЕТРЫ ===
-local aP={scrD=4,pst=1,tsd=1.1,mcd=10,pt=8,arr=5,mt=6}
-local aPH={}
-local function getAP(n,d)return aP[n]or d end
-local function setAP(n,v)aP[n]=math.max(0.2,math.min(50,v))end
+-- === АДАПТИВНЫЕ ПАРАМЕТРЫ (ИИ сам подбирает) ===
+local aP={scrD=4,pst=1,tsd=1.1,mcd=10,pt=8,arr=5,mt=6} -- стартовые значения
+local aPH={} -- история: {param, value, microHPS}
+
+local function getAP(name,default)return aP[name]or default end
+local function setAP(name,value)aP[name]=math.max(0.2,math.min(50,value))end
+
+-- Авто-подбор: раз в 30 действий пробуем случайное значение и запоминаем если HPS вырос
 local function tryMutateParams()
     if st.dc%30~=0 or st.dc==0 then return end
     local keys={"scrD","pst","tsd","mcd","pt","arr","mt"}
     local k=keys[math.random(1,#keys)]
-    local old=aP[k];local delta=(math.random()*2-1)*(old*0.3)
-    setAP(k,old+delta);aP._trial={key=k,old=old,new=aP[k],at=tick()}
+    local old=aP[k]
+    local delta=(math.random()*2-1)*(old*0.3) -- ±30%
+    setAP(k,old+delta)
+    -- Запомним что попробовали; через 10 сек проверим HPS
+    aP._trial={key=k,old=old,new=aP[k],at=tick()}
 end
+
 local function checkMutation()
     if not aP._trial then return end
     if tick()-aP._trial.at>10 then
-        local cur=gHP();local rec=bAH>0 and bAH or cur
+        local cur=gHP()
+        local rec=bAH>0 and bAH or cur
+        -- Если HPS стал хуже — откатываем
         if cur<rec*0.85 then setAP(aP._trial.key,aP._trial.old)end
         aP._trial=nil
     end
 end
 
--- === microHPS: %-based (реалистичные масштабы HPS) ===
+-- === microHPS: мгновенная награда ===
 local lastMicroHPS=0
-local function snapMicroHPS()lastMicroHPS=math.max(gHP(),1)end
+local function snapMicroHPS()lastMicroHPS=gHP()end
 local function getMicroReward()
-    local cur=math.max(gHP(),1)
-    local pct=(cur-lastMicroHPS)/lastMicroHPS
+    local cur=gHP()
+    local delta=cur-lastMicroHPS
     lastMicroHPS=cur
-    if pct>0.05 then return 8+math.floor(pct*50)
-    elseif pct>0.01 then return 4+math.floor(pct*100)
-    elseif pct>-0.01 then return 0
-    elseif pct>-0.05 then return -(2+math.floor(-pct*50))
-    else return -(6+math.floor(-pct*30))
-    end
-end
-
--- === ГЕНЕРАТОР ПАТТЕРНОВ ===
-local generatedPatterns={}
-local function generatePattern()
-    if#pH<5 then return end
-    local sorted={};for _,p in ipairs(pH)do table.insert(sorted,p)end
-    table.sort(sorted,function(a,b)return a.hps>b.hps end)
-    local p1=sorted[1];local p2=sorted[math.random(2,math.min(5,#sorted))]
-    local newActions={}
-    local half1=math.floor(#p1.actions/2)
-    for i=1,half1 do table.insert(newActions,{action=p1.actions[i].action,pos=p1.actions[i].pos,phase=p1.actions[i].phase,isSc=p1.actions[i].isSc,to=0})end
-    for i=half1+1,#p2.actions do table.insert(newActions,{action=p2.actions[i].action,pos=p2.actions[i].pos,phase=p2.actions[i].phase,isSc=p2.actions[i].isSc,to=0})end
-    if#newActions>2 then
-        local mi=math.random(1,#newActions)
-        local allActions={"go_crosshair","go_purple","go_tokenlink","go_petal","go_token_near","patrol_ring","patrol_random","go_smile","go_target_practice_purple","go_scorching_spiral","go_xflame_center"}
-        newActions[mi].action=allActions[math.random(1,#allActions)]
-    end
-    local gen={hps=0,actions=newActions,timestamp=tick(),ctx=p1.ctx or{},generated=true}
-    table.insert(generatedPatterns,gen)
-    while#generatedPatterns>10 do table.remove(generatedPatterns,1)end
-    table.insert(pH,gen);table.sort(pH,function(a,b)return a.hps>b.hps end)
-    while#pH>30 do table.remove(pH)end
+    if delta>500 then return 15+math.floor(delta/200)
+    elseif delta>0 then return math.floor(delta/100)
+    elseif delta>-200 then return-2
+    else return-8 end
 end
 
 -- === КОНФИГ ===
@@ -129,7 +107,7 @@ local hB,aBf,pH,bAH,laT,hML,pF={},{},{},0,0,nil,"bss_ai_pat_v13.json"
 local QT,lMT,stW,xfE,xfC,scC,lPT={},tick(),false,false,nil,nil,0
 local lSJ,cS,lSM,hbF,isA=0,SB["НАБОР"],0,0,false
 local sprA,sprR,sprC=0,0,nil
-local lastGenTime=0
+local lastAction,lastActionStart="",0
 
 -- === УТИЛИТЫ ===
 local function hr()local c=L.Character;if c then return c:FindFirstChild("HumanoidRootPart")end end
@@ -158,30 +136,58 @@ local function gCHall(op,oR)local L_={};for _,ch in ipairs(cQ)do if not ch.col a
 local function gUNT(op,oR)return gCH(op,oR,true)end
 
 -- === ДЕТЕКТ ДИАГОНАЛЕЙ ===
-local function getDiagonalGroups()local all=gCHall(false,false);if#all<3 then return nil end;local groups={};local used={}
-    for i=1,#all-2 do if not used[i]then for j=i+1,#all-1 do if not used[j]then if all[j].sT-all[i].sT<=DIAG_MAX_TIME then
-        for k=j+1,#all do if not used[k]then if all[k].sT-all[i].sT<=DIAG_MAX_TIME then
-            local p1=all[i].part.Position;local p2=all[j].part.Position;local p3=all[k].part.Position
-            if math.abs(math.abs((p2-p1).Unit:Dot((p3-p1).Unit))-1)<DIAG_MAX_ANGLE then
-                used[i]=true;used[j]=true;used[k]=true;local c=(p1+p2+p3)/3
-                local d1=(p1-c).Magnitude;local d2=(p2-c).Magnitude;local d3_=(p3-c).Magnitude
-                local a,b,cc=all[i],all[j],all[k]
-                if d1>=d2 and d1>=d3_ then cc,a,b=all[i],all[j],all[k]elseif d2>=d1 and d2>=d3_ then a,cc,b=all[i],all[j],all[k]end
-                table.insert(groups,{r1=a,r2=b,pr=cc,center=c})
-end end end end end end end end
-    return#groups>0 and groups or nil end
-local function getDiagonalForRefresh()local all=gCHall(false,false);if#all<3 then return nil end;local groups={};local used={}
-    for i=1,#all-2 do if not used[i]then for j=i+1,#all-1 do if not used[j]then if all[j].sT-all[i].sT<=1.5 then
-        for k=j+1,#all do if not used[k]then if all[k].sT-all[i].sT<=1.5 then
-            local p1,p2,p3=all[i].part.Position,all[j].part.Position,all[k].part.Position
-            if math.abs(math.abs((p2-p1).Unit:Dot((p3-p1).Unit))-1)<0.5 then
-                used[i]=true;used[j]=true;used[k]=true;local c=(p1+p2+p3)/3
-                local d1,d2,d3_=(p1-c).Magnitude,(p2-c).Magnitude,(p3-c).Magnitude
-                local a,b,cc=all[i],all[j],all[k]
-                if d1>=d2 and d1>=d3_ then cc,a,b=all[i],all[j],all[k]elseif d2>=d1 and d2>=d3_ then a,cc,b=all[i],all[j],all[k]end
-                table.insert(groups,{r1=a,r2=b,pr=cc})
-end end end end end end end end
-    return#groups>0 and groups or nil end
+local function getDiagonalGroups()
+    local all=gCHall(false,false);if#all<3 then return nil end
+    local groups={};local used={}
+    for i=1,#all-2 do if not used[i]then
+        for j=i+1,#all-1 do if not used[j]then
+            if all[j].sT-all[i].sT<=DIAG_MAX_TIME then
+                for k=j+1,#all do if not used[k]then
+                    if all[k].sT-all[i].sT<=DIAG_MAX_TIME then
+                        local p1=all[i].part.Position;local p2=all[j].part.Position;local p3=all[k].part.Position
+                        local v12=(p2-p1).Unit;local v13=(p3-p1).Unit
+                        if math.abs(math.abs(v12:Dot(v13))-1)<DIAG_MAX_ANGLE then
+                            used[i]=true;used[j]=true;used[k]=true
+                            local center=(p1+p2+p3)/3
+                            local d1=(p1-center).Magnitude;local d2=(p2-center).Magnitude;local d3_=(p3-center).Magnitude
+                            local a,b,c=all[i],all[j],all[k]
+                            if d1>=d2 and d1>=d3_ then c,a,b=all[i],all[j],all[k]
+                            elseif d2>=d1 and d2>=d3_ then a,c,b=all[i],all[j],all[k]end
+                            table.insert(groups,{r1=a,r2=b,pr=c,center=center})
+                        end
+                    end
+                end end
+            end
+        end end
+    end
+    return#groups>0 and groups or nil
+end
+local function getDiagonalForRefresh()
+    local all=gCHall(false,false);if#all<3 then return nil end
+    local groups={};local used={}
+    for i=1,#all-2 do if not used[i]then
+        for j=i+1,#all-1 do if not used[j]then
+            if all[j].sT-all[i].sT<=1.5 then
+                for k=j+1,#all do if not used[k]then
+                    if all[k].sT-all[i].sT<=1.5 then
+                        local p1,p2,p3=all[i].part.Position,all[j].part.Position,all[k].part.Position
+                        local dot=(p2-p1).Unit:Dot((p3-p1).Unit)
+                        if math.abs(math.abs(dot)-1)<0.5 then
+                            used[i]=true;used[j]=true;used[k]=true
+                            local c=(p1+p2+p3)/3
+                            local d1,d2,d3_=(p1-c).Magnitude,(p2-c).Magnitude,(p3-c).Magnitude
+                            local a,b,cc=all[i],all[j],all[k]
+                            if d1>=d2 and d1>=d3_ then cc,a,b=all[i],all[j],all[k]
+                            elseif d2>=d1 and d2>=d3_ then a,cc,b=all[i],all[j],all[k]end
+                            table.insert(groups,{r1=a,r2=b,pr=cc})
+                        end
+                    end
+                end end
+            end
+        end end
+    end
+    return#groups>0 and groups or nil
+end
 
 -- === TP ГРУППЫ ===
 local function gTPG()if not prec.isX or prec.nR then return nil end;local all=gCH(false,false,true);if#all<3 then return nil end;local G={};local i=1;while i<=#all-2 do local a,b,c=all[i],all[i+1],all[i+2];if not a.isP and not b.isP and c.isP then if c.sT-a.sT<=2 then table.insert(G,{r1=a,r2=b,pr=c});i=i+3 else i=i+1 end else i=i+1 end end;return#G>0 and G or nil end
@@ -214,7 +220,8 @@ end
 
 -- === СПИРАЛЬ + КРАЙ КЛАСТЕРА ===
 local function getFlameDensity()local cnt=0;local r=hr();if not r then return 0 end;for fl in pairs(tF)do if fl.Parent and d3(r.Position,fl.Position)<=20 then cnt=cnt+1 end end;return cnt end
-local function isLeavingCluster(target)local mcd=getAP("mcd",10);for fl in pairs(tF)do if fl.Parent then if d3(target,fl.Position)<=mcd then return false end end end;return true end
+local function isLeavingCluster(target)local mcd=getAP("mcd",10);local r=hr();if not r then return false end
+    for fl in pairs(tF)do if fl.Parent then if d3(target,fl.Position)<=mcd then return false end end end;return true end
 local function gST()if not sprC or tick()-lSM>2 then lSM=tick();sprC=gFCC();if sprC then sprA=0;sprR=1 end end;if not sprC then return nil end
     local density=getFlameDensity();local step=(density>8 and 0.8)or(density>4 and 1.6)or 3.5
     local scrD=getAP("scrD",4)
@@ -268,22 +275,27 @@ local function gHP()if not hML or not hML.Parent then hML=fHL()end;if hML and hM
 local function uHB()local n=tick();local hps=gHP();if hps>0 then table.insert(hB,{time=n,hps=hps})end;local cut=n-120;while#hB>0 and hB[1].time<cut do table.remove(hB,1)end;if tL and tL~="старт"then local r=hr();local flCnt=0;for _ in pairs(tF)do flCnt=flCnt+1 end;local chCnt=#cQ;table.insert(aBf,{time=n,action=tL,pos=r and r.Position or Vector3.zero,phase=ph(),isSc=aB.SS.st>0,flCnt=flCnt,chCnt=chCnt})end;while#aBf>0 and aBf[1].time<cut do table.remove(aBf,1)end
     if n-laT>=10 then laT=n;local sum,cn=0,0;for _,e in ipairs(hB)do sum=sum+e.hps;cn=cn+1 end;local av=cn>0 and(sum/cn)or 0
         if av>0 then local ac={};for _,e in ipairs(aBf)do table.insert(ac,{action=e.action,pos=e.pos,to=e.time-(n-120),phase=e.phase,isSc=e.isSc,flCnt=e.flCnt,chCnt=e.chCnt})end
+            -- patternReason: сохраняем контекст
             local totalFl=0;local totalCh=0;for _,e in ipairs(ac)do totalFl=totalFl+e.flCnt;totalCh=totalCh+e.chCnt end
             local avgFl=#ac>0 and math.floor(totalFl/#ac)or 0;local avgCh=#ac>0 and math.floor(totalCh/#ac)or 0
             table.insert(pH,{hps=av,actions=ac,timestamp=n,ctx={flames=avgFl,chs=avgCh,phase=ph(),scorch=aB.SS.st>0 and 1 or 0}})
             table.sort(pH,function(a,b)return a.hps>b.hps end);while#pH>30 do table.remove(pH)end
             if av>bAH then bAH=av end;pcall(function()writefile(pF,H:JSONEncode(pH))end)
-        end;if n-lastGenTime>300 then lastGenTime=n;generatePattern()end
+        end
     end
 end
 local function gPB(action,pos)if#pH==0 then return 0 end;local p_=ph();local isSc=aB.SS.st>0;local flCnt=0;for _ in pairs(tF)do flCnt=flCnt+1 end;local chCnt=#cQ;local be=0
     for _,p in ipairs(pH)do for _,pa in ipairs(p.actions)do if pa.action==action then if(pos-pa.pos).Magnitude<10 then
-        local phaseMatch=(pa.phase==p_)and 2 or 1
-        local scorchMatch=(pa.isSc==isSc)and 2 or 1
+        -- Контекстный бонус: совпадает фаза + scorch + похожий контекст
+        local phaseMatch=(pa.phase==p_)and 1.5 or 1
+        local scorchMatch=(pa.isSc==isSc)and 1.5 or 1
+        -- Если в паттерне было много флеймов и сейчас много — бонус
         local ctxMatch=1
-        if p.ctx then if math.abs((p.ctx.flames or 0)-flCnt)<=3 then ctxMatch=ctxMatch*1.5 end;if math.abs((p.ctx.chs or 0)-chCnt)<=2 then ctxMatch=ctxMatch*1.4 end end
-        local noveltyBonus=p.generated and 1.3 or 1
-        local ms=phaseMatch*scorchMatch*ctxMatch*noveltyBonus
+        if p.ctx then
+            if math.abs((p.ctx.flames or 0)-flCnt)<=3 then ctxMatch=ctxMatch*1.4 end
+            if math.abs((p.ctx.chs or 0)-chCnt)<=2 then ctxMatch=ctxMatch*1.3 end
+        end
+        local ms=phaseMatch*scorchMatch*ctxMatch
         if ms>be then be=ms end
     end end end end
     return 15*be
@@ -331,49 +343,51 @@ local function gEP(tP)if not aR or not aR.Parent then return tP end;local dir=(t
 local function eA(action)
     local r=hr();if not r then return-1 end
     snapMicroHPS()
+    lastAction=action;lastActionStart=tick()
     if action=="go_scorching_spiral"then local t=gST();if not t then return-1 end;tL="🔥 Спираль";INT=false;goTo(t,2,2);return 0
     elseif action=="go_crosshair_refresh_diagonal"then local di=getDiagonalForRefresh();if not di then return-1 end
         local g=di[1];local col=0;INT=false
         for _,ch in ipairs({g.r1,g.r2,g.pr})do if ch.part.Parent and not ch.col then if ch.wasGreen then continue end
-            tL="🔄 REFRESH диаг ("..(col+1).."/3)";goTo(ch.part.Position,4,4,true)
-            if ch.part.Parent then ch.col=true;rCC=rCC+1
+            tL="🔄 REFRESH диаг ("..(col+1).."/3)";local ok=goTo(ch.part.Position,4,4,true)
+            if ok==true and ch.part.Parent then ch.col=true;rCC=rCC+1
                 if ch.isP then st.pr=st.pr+1;lP=ch.part else st.ch=st.ch+1 end;col=col+1;st.diag=st.diag+1;task.wait(0.1)
             end
         end end
         if aR and aR.Parent then goTo(aR.Position,6,4)end
-        if rCC>=3 then prec.nR=false;cyc.chC=0;st.rf=st.rf+1;rCC=0;tL="✅ REFRESH диаг OK"end;return 0
+        if rCC>=3 then prec.nR=false;cyc.chC=0;st.rf=st.rf+1;rCC=0;tL="✅ REFRESH диаг OK";return 0 end
+        return 0
     elseif action=="go_crosshair_refresh_all"then local all=gCHall(false,false);if#all==0 then return-1 end;local col=0;INT=false
-        for _,ch in ipairs(all)do if ch.part.Parent and not ch.col then if col>=3 then break end;if ch.wasGreen then continue end;tL="🔄 REFRESH";goTo(ch.part.Position,4,4,true);if ch.part.Parent then ch.col=true;rCC=rCC+1;if ch.isP then st.pr=st.pr+1;lP=ch.part else st.ch=st.ch+1 end;col=col+1;task.wait(0.1)end end end
+        for _,ch in ipairs(all)do if ch.part.Parent and not ch.col then if col>=3 then break end;if ch.wasGreen then continue end;tL="🔄 REFRESH ("..(col+1).."/3)";local ok=goTo(ch.part.Position,4,4,true);if ok==true and ch.part.Parent then ch.col=true;rCC=rCC+1;if ch.isP then st.pr=st.pr+1;lP=ch.part else st.ch=st.ch+1 end;col=col+1;task.wait(0.1)end end end
         if aR and aR.Parent then goTo(aR.Position,6,4)else goTo(cP(r.Position),5,2)end
-        if rCC>=3 then prec.nR=false;cyc.chC=0;st.rf=st.rf+1;rCC=0;tL="✅ REFRESH OK"end;return 0
-    elseif action=="go_target_practice_purple"then local tp=gTPG();if not tp then return-1 end;INT=false
-        for _,g in ipairs(tp)do if g.pr.part.Parent and not g.pr.col and not g.pr.wasGreen then tL="🎯 TP фиол";goTo(g.pr.part.Position,4,5);if g.pr.part.Parent then g.pr.col=true;g.r1.col=true;g.r2.col=true;lP=g.pr.part;st.pr=st.pr+1;tL="🟣 TP Precise Mark";local t0=tick();while tick()-t0<getAP("pst",1)do task.wait(0.05);if smT or prec.nR or not EN then break end end end end end;return 0
-    elseif action=="go_smile_area"then local t=gSDA();if not t then return-1 end;local td=aT[t];if not td or td.col or td.id~=SMI then return-1 end;tL="😊 Smile (Ring)";INT=false;goTo(gEP(t.Position),4,4);if t.Parent then local st_=tick();while tick()-st_<getAP("tsd",1.1)do task.wait(0.1);if not t.Parent or INT then break end;local hp=hr();if hp then hp.CFrame=CFrame.new(t.Position.X,hp.Position.Y,t.Position.Z)end end;td.col=true;st.sm=st.sm+1 end;return 0
-    elseif action=="go_dup_area"then local t=gSDA();if not t then return-1 end;local td=aT[t];if not td or td.col or td.id~=TPI or not td.dp then return-1 end;tL="🎯 Dup (Ring)";INT=false;goTo(gEP(t.Position),4,4);if t.Parent then local st_=tick();while tick()-st_<getAP("tsd",1.1)do task.wait(0.1);if not t.Parent or INT then break end;local hp=hr();if hp then hp.CFrame=CFrame.new(t.Position.X,hp.Position.Y,t.Position.Z)end end;td.col=true;st.tk=st.tk+1 end;return 0
-    elseif action=="go_smile"then local t=smT;if not t or not t.Parent then smT=nil;return-1 end;local td=aT[t];if not td or td.col then smT=nil;return-1 end;isCS=true;tL="😊 Smile";INT=false;goTo(t.Position,4,math.min(5,smTR-0.5));if t.Parent then local st_=tick();while tick()-st_<getAP("tsd",1.1)do task.wait(0.1);if not t.Parent or INT then break end;local hp=hr();if hp then hp.CFrame=CFrame.new(t.Position.X,hp.Position.Y,t.Position.Z)end end;td.col=true;smT=nil;st.sm=st.sm+1;isCS=false end;return 0
-    elseif action=="go_urgent_token"then local n=tick();local be,bl=nil,0.3;for p,t in pairs(aT)do if not t.col and p.Parent then local rem=t.l-(n-t.s);if rem<bl and rem>0 then bl=rem;be=p end end end;if be then tL="⚡Срочный";INT=false;goTo(be.Position,4,2);if be.Parent then aT[be].col=true;st.tk=st.tk+1 end end;return 0
-    elseif action=="go_purple"then local pp=gUNT(true,false);if#pp==0 then return-1 end;INT=false;for _,ch in ipairs(pp)do if ch.part.Parent and not ch.col and not smT and not prec.nR and not ch.wasGreen then goTo(ch.part.Position,4,5);if ch.part.Parent then ch.col=true;lP=ch.part;st.pr=st.pr+1;tL="🟣 1с";local t0=tick();while tick()-t0<getAP("pst",1)do task.wait(0.05);if smT or prec.nR or not EN then break end end end end end;return 0
-    elseif action=="go_tokenlink"then for p,t in pairs(aT)do if not t.col and p.Parent and t.p>=90 then tL="💎🔴 Link";INT=false;goTo(p.Position,5,5);if p.Parent then t.col=true;igT=tick()+TLC end;return 0 end end;return 0
-    elseif action=="go_crosshair"then local all=gUNT(false,false);if#all==0 then all=gCH(false,false);if#all==0 then return-1 end end;local t=all[1];INT=false
+        if rCC>=3 then prec.nR=false;cyc.chC=0;st.rf=st.rf+1;rCC=0;tL="✅ REFRESH OK";return 0 end;return 0
+    elseif action=="go_target_practice_purple"then local tp=gTPG();if not tp then return-1 end;local rw=0;INT=false
+        for _,g in ipairs(tp)do if g.pr.part.Parent and not g.pr.col and not g.pr.wasGreen then tL="🎯 TP фиол";local ok=goTo(g.pr.part.Position,4,5);if ok==true and g.pr.part.Parent then g.pr.col=true;g.r1.col=true;g.r2.col=true;lP=g.pr.part;st.pr=st.pr+1;tL="🟣 TP Precise Mark";local t0=tick();while tick()-t0<getAP("pst",1)do task.wait(0.05);if smT or prec.nR or not EN then break end end;rw=rw+40 end end end;return rw
+    elseif action=="go_smile_area"then local t=gSDA();if not t then return-1 end;local td=aT[t];if not td or td.col or td.id~=SMI then return-1 end;tL="😊 Smile (Ring)";INT=false;local ok=goTo(gEP(t.Position),4,4);if ok==true and t.Parent then local st_=tick();while tick()-st_<getAP("tsd",1.1)do task.wait(0.1);if not t.Parent or INT then break end;local hp=hr();if hp then hp.CFrame=CFrame.new(t.Position.X,hp.Position.Y,t.Position.Z)end end;td.col=true;st.sm=st.sm+1;return 0 end;return-1
+    elseif action=="go_dup_area"then local t=gSDA();if not t then return-1 end;local td=aT[t];if not td or td.col or td.id~=TPI or not td.dp then return-1 end;tL="🎯 Dup (Ring)";INT=false;local ok=goTo(gEP(t.Position),4,4);if ok==true and t.Parent then local st_=tick();while tick()-st_<getAP("tsd",1.1)do task.wait(0.1);if not t.Parent or INT then break end;local hp=hr();if hp then hp.CFrame=CFrame.new(t.Position.X,hp.Position.Y,t.Position.Z)end end;td.col=true;st.tk=st.tk+1;return 0 end;return-1
+    elseif action=="go_smile"then local t=smT;if not t or not t.Parent then smT=nil;return-1 end;local td=aT[t];if not td or td.col then smT=nil;return-1 end;isCS=true;tL="😊 Smile";INT=false;local ok=goTo(t.Position,4,math.min(5,smTR-0.5));if ok==true and t.Parent then local st_=tick();while tick()-st_<getAP("tsd",1.1)do task.wait(0.1);if not t.Parent or INT then break end;local hp=hr();if hp then hp.CFrame=CFrame.new(t.Position.X,hp.Position.Y,t.Position.Z)end end;td.col=true;smT=nil;st.sm=st.sm+1;isCS=false;return 0 end;isCS=false;smT=nil;return-1
+    elseif action=="go_urgent_token"then local n=tick();local be,bl=nil,0.3;for p,t in pairs(aT)do if not t.col and p.Parent then local rem=t.l-(n-t.s);if rem<bl and rem>0 then bl=rem;be=p end end end;if be then tL="⚡Срочный";INT=false;local ok=goTo(be.Position,4,2);if ok then aT[be].col=true;st.tk=st.tk+1;return 0 end;return-1 end;return-1
+    elseif action=="go_purple"then local pp=gUNT(true,false);if#pp==0 then return-1 end;local rw=0;INT=false;for _,ch in ipairs(pp)do if ch.part.Parent and not ch.col and not smT and not prec.nR and not ch.wasGreen then local ok=goTo(ch.part.Position,4,5);if ok==true and ch.part.Parent then ch.col=true;lP=ch.part;st.pr=st.pr+1;tL="🟣 1с";local t0=tick();while tick()-t0<getAP("pst",1)do task.wait(0.05);if smT or prec.nR or not EN then break end end;rw=rw+30 end end end;return rw
+    elseif action=="go_tokenlink"then for p,t in pairs(aT)do if not t.col and p.Parent and t.p>=90 then tL="💎🔴 Link";INT=false;local ok=goTo(p.Position,5,5);if ok then t.col=true;igT=tick()+TLC;return 0 end;return-1 end end;return-1
+    elseif action=="go_crosshair"then local all=gUNT(false,false);if#all==0 then all=gCH(false,false);if#all==0 then return-1 end end;local t=all[1];local rw=0;INT=false
         if t.part.Parent and not t.col and not smT and not prec.nR then local sk=false;local r2=hr()
             if r2 then for p2,t2 in pairs(aT)do if not t2.col and p2.Parent and t2.p>=90 then if d3(r2.Position,p2.Position)<TLID and d3(r2.Position,t.part.Position)>30 then sk=true;break end end end end
-            if not sk then goTo(t.part.Position,4,5);if t.part.Parent then t.col=true;if t.isP then st.pr=st.pr+1;lP=t.part else st.ch=st.ch+1 end end end
-        end;return 0
-    elseif action=="go_dup_tp"then local p,t=gDTP();if not p then return-1 end;tL="🎯 Dup";INT=false;goTo(p.Position,5,5);if p.Parent then local st_=tick();while tick()-st_<getAP("tsd",1.1)do task.wait(0.1);if not p.Parent or INT then break end;local hp=hr();if hp then hp.CFrame=CFrame.new(p.Position.X,hp.Position.Y,p.Position.Z)end end;t.col=true end;return 0
-    elseif action=="go_petal"then if#fP==0 then return-1 end;local i=1;while i<=#fP do local pt=fP[i];if not pt.part.Parent then table.remove(fP,i)elseif stP[pt.part]and tick()<stP[pt.part]then table.remove(fP,i)else tL="🌸 "..pt.cn;INT=false;local ok=goTo(Vector3.new(pt.part.Position.X,0,pt.part.Position.Z),PCD,2.5);if ok==true then st.pt=st.pt+1;i=i+1 elseif ok=="CH_NEARBY"then return 0 else stP[pt.part]=tick()+5;table.remove(fP,i)end end end;return 0
-    elseif action=="go_token_near"then local be,bD=nil,math.huge;for p,t in pairs(aT)do if not t.col and p.Parent then local d=d3(r.Position,p.Position);if d<bD then be=p;bD=d end end end;if be then local t=aT[be];tL="💎 "..t.n;INT=false;goTo(be.Position,5,5);if be.Parent then t.col=true end end;return 0
-    elseif action=="go_token_best"then local be,bP=nil,-1;local n=tick();for p,t in pairs(aT)do if not t.col and p.Parent and(t.l-(n-t.s))>0.5 and t.p>bP then be=p;bP=t.p end end;if be then local t=aT[be];tL="💎⭐ "..t.n;INT=false;goTo(be.Position,5,5);if be.Parent then t.col=true end end;return 0
-    elseif action=="patrol_ring"then local function rR()if aR and aR.Parent and curF then local a_=math.random()*2*math.pi;local rr_=aRR*(0.5+math.random()*0.8);return cP(Vector3.new(aR.Position.X+math.cos(a_)*rr_,0,aR.Position.Z+math.sin(a_)*rr_))elseif curF then local c=curF.part.Position;local s=curF.part.Size;return cP(Vector3.new(c.X+(math.random()*2-1)*math.max(s.X/2*0.3,5),0,c.Z+(math.random()*2-1)*math.max(s.Z/2*0.3,5)))else local rp=hr();if rp then return cP(rp.Position+Vector3.new((math.random()*2-1)*30,0,(math.random()*2-1)*30))else return cP(Vector3.zero)end end end;tL="🚶 кольцо";INT=false;local t=rR();if t==Vector3.zero or not iF(t)then t=gFC()end;if t==Vector3.zero then return 0 end;goTo(t,6,getAP("pt",8));task.wait(0.1+math.random()*0.3);return 0
-    elseif action=="patrol_random"then local function rF()if curF then local c=curF.part.Position;local s=curF.part.Size;return cP(Vector3.new(c.X+(math.random()*2-1)*math.max(s.X/2-3,1),0,c.Z+(math.random()*2-1)*math.max(s.Z/2-3,1)))else local rp=hr();if rp then return cP(rp.Position+Vector3.new((math.random()*2-1)*30,0,(math.random()*2-1)*30))else return cP(Vector3.zero)end end end;tL="🚶 патруль";INT=false;local t=rF();if t==Vector3.zero or not iF(t)then t=gFC()end;goTo(t,4,getAP("pt",8));task.wait(0.2+math.random()*0.4);return 0
+            if not sk then local ok=goTo(t.part.Position,4,5);if ok==true and t.part.Parent then t.col=true;if t.isP then st.pr=st.pr+1;lP=t.part;rw=rw+10 else st.ch=st.ch+1;rw=rw+8 end elseif ok=="CH_NEARBY"then return 0 end end
+        end;if rw>0 and aB.PoM.a and aB.PoM.pos then goTo(aB.PoM.pos,6,4)end;return rw
+    elseif action=="go_dup_tp"then local p,t=gDTP();if not p then return-1 end;tL="🎯 Dup";INT=false;local ok=goTo(p.Position,5,5);if ok then local st_=tick();while tick()-st_<getAP("tsd",1.1)do task.wait(0.1);if not p.Parent or INT then break end;local hp=hr();if hp then hp.CFrame=CFrame.new(p.Position.X,hp.Position.Y,p.Position.Z)end end;t.col=true;return 0 end;return-1
+    elseif action=="go_petal"then if#fP==0 then return-1 end;local ca,tr=false,0;local i=1;while i<=#fP do local pt=fP[i];if not pt.part.Parent then table.remove(fP,i)elseif stP[pt.part]and tick()<stP[pt.part]then table.remove(fP,i)else tL="🌸 "..pt.cn;INT=false;local ok=goTo(Vector3.new(pt.part.Position.X,0,pt.part.Position.Z),PCD,2.5);if ok==true then st.pt=st.pt+1;tr=tr+8+(14-pt.pr);ca=true;task.wait(0.05);i=i+1 elseif ok=="CH_NEARBY"then return 0 else stP[pt.part]=tick()+5;table.remove(fP,i)end end end;return ca and tr or-1
+    elseif action=="go_token_near"then local be,bD=nil,math.huge;for p,t in pairs(aT)do if not t.col and p.Parent then local d=d3(r.Position,p.Position);if d<bD then be=p;bD=d end end end;if be then local t=aT[be];tL="💎 "..t.n;INT=false;local ok=goTo(be.Position,5,5);if ok then t.col=true;return 0 end;return-1 end;return-1
+    elseif action=="go_token_best"then local be,bP=nil,-1;local n=tick();for p,t in pairs(aT)do if not t.col and p.Parent and(t.l-(n-t.s))>0.5 and t.p>bP then be=p;bP=t.p end end;if be then local t=aT[be];tL="💎⭐ "..t.n;INT=false;local ok=goTo(be.Position,5,5);if ok then t.col=true;return 0 end;return-1 end;return-1
+    elseif action=="patrol_ring"then local function rR()if aR and aR.Parent and curF then local a_=math.random()*2*math.pi;local rr_=aRR*(0.5+math.random()*0.8);return cP(Vector3.new(aR.Position.X+math.cos(a_)*rr_,0,aR.Position.Z+math.sin(a_)*rr_))elseif curF then local c=curF.part.Position;local s=curF.part.Size;return cP(Vector3.new(c.X+(math.random()*2-1)*math.max(s.X/2*0.3,5),0,c.Z+(math.random()*2-1)*math.max(s.Z/2*0.3,5)))else local rp=hr();if rp then return cP(rp.Position+Vector3.new((math.random()*2-1)*30,0,(math.random()*2-1)*30))else return cP(Vector3.zero)end end end;tL="🚶 кольцо";INT=false;local t=rR();if t==Vector3.zero or not iF(t)then t=gFC()end;if t==Vector3.zero then return 0 end;local ok=goTo(t,6,getAP("pt",8));if ok=="CH_NEARBY"then return 0 end;task.wait(0.1+math.random()*0.3);return 0
+    elseif action=="patrol_random"then local function rF()if curF then local c=curF.part.Position;local s=curF.part.Size;return cP(Vector3.new(c.X+(math.random()*2-1)*math.max(s.X/2-3,1),0,c.Z+(math.random()*2-1)*math.max(s.Z/2-3,1)))else local rp=hr();if rp then return cP(rp.Position+Vector3.new((math.random()*2-1)*30,0,(math.random()*2-1)*30))else return cP(Vector3.zero)end end end;tL="🚶 патруль";INT=false;local t=rF();if t==Vector3.zero or not iF(t)then t=gFC()end;if t==Vector3.zero then return 0 end;local ok=goTo(t,4,getAP("pt",8));if ok=="CH_NEARBY"then return 0 end;task.wait(0.2+math.random()*0.4);return 0
     elseif action=="go_xflame_center"then local c=gFC();if c==Vector3.zero then return-1 end;tL="🔥 XFlame центр";INT=false;goTo(c,3,3);return 0
-    elseif action=="go_xflame_ch"then local c=gFC();if c==Vector3.zero then return-1 end;local bC,bD=nil,XCR+1;for _,ch in ipairs(cQ)do if not ch.col and ch.part.Parent and not ch.wasGreen then local d=d3(ch.part.Position,c);if d<=XCR and d<bD then bD=d;bC=ch end end end;if bC then tL="🔥 XFlame CH";INT=false;goTo(bC.part.Position,2,3);task.wait(1)end;return 0
+    elseif action=="go_xflame_ch"then local c=gFC();if c==Vector3.zero then return-1 end;local bC,bD=nil,XCR+1;for _,ch in ipairs(cQ)do if not ch.col and ch.part.Parent and not ch.wasGreen then local d=d3(ch.part.Position,c);if d<=XCR and d<bD then bD=d;bC=ch end end end;if bC then tL="🔥 XFlame CH";INT=false;goTo(bC.part.Position,2,3);task.wait(1);return 0 end;return-1
     end
     return 0
 end
 
 -- === ГЛАВНЫЙ HEARTBEAT ===
 local mLS=false
-local function sML()if mLS then return end;mLS=true;task.wait(2);lQ();fAR();fF();lI("BSS AI v13.0!");print("✅ v13.0");tL="иниц";lMT=tick();snapMicroHPS();lastGenTime=tick()end
+local function sML()if mLS then return end;mLS=true;task.wait(2);lQ();fAR();fF();lI("BSS AI v13.0!");print("✅ v13.0");tL="иниц";lMT=tick();snapMicroHPS()end
 task.spawn(function()pcall(function()local ok,raw=pcall(readfile,pF);if ok and raw then local ok2,data=pcall(H.JSONDecode,H,raw);if ok2 and type(data)=="table"then pH=data;for _,p in ipairs(pH)do if p.hps and p.hps>bAH then bAH=p.hps end end end end end);lI("Паттерны OK")end)
 R.Heartbeat:Connect(function()
     hbF=hbF+1;if not EN then return end;if not mLS then sML();return end
@@ -384,7 +398,7 @@ R.Heartbeat:Connect(function()
     if hbF%6==0 then pcall(uHB);checkMutation()end
     if hbF%3==0 then sSm()end
     if hbF%180==0 then fF()end
-    if hbF%18000==0 then pcall(function()local qc=0;for _ in pairs(QT)do qc=qc+1 end;pcall(writefile,"bss_ai_q_v13.json",H:JSONEncode({version=VQ,qtable=QT,aP=aP,gen=#generatedPatterns,meta={sc=qc,sa=os.time()}}))end)end
+    if hbF%18000==0 then pcall(function()local qc=0;for _ in pairs(QT)do qc=qc+1 end;pcall(writefile,"bss_ai_q_v13.json",H:JSONEncode({version=VQ,qtable=QT,aP=aP,meta={sc=qc,sa=os.time()}}))end)end
     xfE=(aB.XF.st>=20);if xfE then INT=true end;uXC();uSC()
     local r=hr();if r then local vel=r.AssemblyLinearVelocity;local hS=(Vector3.new(vel.X,0,vel.Z)).Magnitude;if hS>0.2 then lMT=n;stW=false elseif n-lMT>5 and not stW then stW=true;INT=true;tL="⏳ сброс";if lP and not lP.Parent then lP=nil end;if smT and not smT.Parent then smT=nil;isCS=false end;INT=false;lMT=n end end
     if INT and not smT and not prec.nR and not xfE then INT=false end
@@ -392,19 +406,19 @@ R.Heartbeat:Connect(function()
     if hbF%2==0 then isA=true;local s_=eS();local a_=cAB(s_);local ok,rw=pcall(eA,a_);if not ok then rw=-1 end;local ns=eS();pcall(dUQ,s_,a_,rw,ns);isA=false end
 end)
 function lQ()local ok,raw=pcall(readfile,"bss_ai_q_v13.json");if ok and raw then local ok2,d=pcall(H.JSONDecode,H,raw);if ok2 and type(d)=="table"and d.version==VQ and type(d.qtable)=="table"then QT=d.qtable;if d.aP then for k,v in pairs(d.aP)do aP[k]=v end end end end end
-local function rQ()QT={};EP=0.1;st.tR=0;st.dc=0;aP={scrD=4,pst=1,tsd=1.1,mcd=10,pt=8,arr=5,mt=6};generatedPatterns={};lastGenTime=0;pcall(writefile,"bss_ai_q_v13.json",H:JSONEncode({version=VQ,qtable={},aP=aP,meta={ra=os.time()}}))end
+local function rQ()QT={};EP=0.1;st.tR=0;st.dc=0;aP={scrD=4,pst=1,tsd=1.1,mcd=10,pt=8,arr=5,mt=6};pcall(writefile,"bss_ai_q_v13.json",H:JSONEncode({version=VQ,qtable={},aP=aP,meta={ra=os.time()}}))end
 
 -- === GUI ===
 local sg=Instance.new("ScreenGui",G)sg.Name="BSSAI_GUI"
 local fr=Instance.new("Frame",sg)fr.Size=UDim2.new(0,270,0,120)fr.Position=UDim2.new(0,10,0,10)
 fr.BackgroundColor3=Color3.fromRGB(20,20,30)fr.BackgroundTransparency=0.15 fr.BorderSizePixel=0 fr.Active=true fr.Draggable=true Instance.new("UICorner",fr).CornerRadius=UDim.new(0,6)
-local ti_=Instance.new("TextLabel",fr)ti_.Size=UDim2.new(1,0,0,20)ti_.Position=UDim2.new(0,0,0,2)ti_.BackgroundTransparency=1 ti_.Text="🧠 BSS AI v13.0 self-gen"ti_.TextColor3=Color3.fromRGB(100,200,255)ti_.Font=Enum.Font.GothamBold ti_.TextSize=12 ti_.TextXAlignment=Enum.TextXAlignment.Center
+local ti_=Instance.new("TextLabel",fr)ti_.Size=UDim2.new(1,0,0,20)ti_.Position=UDim2.new(0,0,0,2)ti_.BackgroundTransparency=1 ti_.Text="🧠 BSS AI v13.0 self-learn"ti_.TextColor3=Color3.fromRGB(100,200,255)ti_.Font=Enum.Font.GothamBold ti_.TextSize=12 ti_.TextXAlignment=Enum.TextXAlignment.Center
 local lb=Instance.new("TextLabel",fr)lb.Size=UDim2.new(1,0,0,18)lb.Position=UDim2.new(0,0,0,24)lb.BackgroundTransparency=1 lb.Text="Действие: старт"lb.TextColor3=Color3.fromRGB(255,255,255)lb.Font=Enum.Font.Gotham lb.TextSize=13 lb.TextXAlignment=Enum.TextXAlignment.Center
 local hl=Instance.new("TextLabel",fr)hl.Size=UDim2.new(1,0,0,18)hl.Position=UDim2.new(0,0,0,44)hl.BackgroundTransparency=1 hl.Text="HPS: -- | Рек: --"hl.TextColor3=Color3.fromRGB(150,255,150)hl.Font=Enum.Font.Gotham hl.TextSize=12 hl.TextXAlignment=Enum.TextXAlignment.Center
 local sl_=Instance.new("TextLabel",fr)sl_.Size=UDim2.new(1,0,0,18)sl_.Position=UDim2.new(0,0,0,64)sl_.BackgroundTransparency=1 sl_.Text="⚡ --"sl_.TextColor3=Color3.fromRGB(255,200,100)sl_.Font=Enum.Font.Gotham sl_.TextSize=11 sl_.TextXAlignment=Enum.TextXAlignment.Center
 local pl_=Instance.new("TextLabel",fr)pl_.Size=UDim2.new(1,0,0,18)pl_.Position=UDim2.new(0,0,0,82)pl_.BackgroundTransparency=1 pl_.Text="Φ: --"pl_.TextColor3=Color3.fromRGB(180,180,255)pl_.Font=Enum.Font.Gotham pl_.TextSize=11 pl_.TextXAlignment=Enum.TextXAlignment.Center
 local al_=Instance.new("TextLabel",fr)al_.Size=UDim2.new(1,0,0,18)al_.Position=UDim2.new(0,0,0,100)al_.BackgroundTransparency=1 al_.Text="AI: --"al_.TextColor3=Color3.fromRGB(255,180,100)al_.Font=Enum.Font.Gotham al_.TextSize=10 al_.TextXAlignment=Enum.TextXAlignment.Center
-task.spawn(function()while true do task.wait(0.3)lb.Text="🎯 "..tL;local cur=gHP();local hs=cur>0 and string.format("%.0f",cur)or"--";local bs=bAH>0 and string.format("%.0f",bAH)or"--";hl.Text="HPS: "..hs.." | Рек: "..bs;sl_.Text="⚡ "..string.format("%.0f",cS);pl_.Text="Φ:"..ph().." CH:"..#cQ.." Ген:"..#generatedPatterns;al_.Text="AI s:"..string.format("%.1f",aP.scrD).." p:"..string.format("%.1f",aP.pst).." t:"..string.format("%.1f",aP.tsd)end end)
+task.spawn(function()while true do task.wait(0.3)lb.Text="🎯 "..tL;local cur=gHP();local hs=cur>0 and string.format("%.0f",cur)or"--";local bs=bAH>0 and string.format("%.0f",bAH)or"--";hl.Text="HPS: "..hs.." | Рек: "..bs;sl_.Text="⚡ "..string.format("%.0f",cS);pl_.Text="Φ:"..ph().." CH:"..#cQ.." Дг:"..st.diag;al_.Text="AI scrD:"..string.format("%.1f",aP.scrD).." pst:"..string.format("%.1f",aP.pst).." tsd:"..string.format("%.1f",aP.tsd)end end)
 U.InputBegan:Connect(function(i,gp)if gp then return end;if i.KeyCode==Enum.KeyCode.T then EN=not EN;sg.Enabled=EN elseif i.KeyCode==Enum.KeyCode.G then rQ()end end)
 L.CharacterAdded:Connect(function()task.wait(2)aT={};cQ={};lP=nil;curF=nil;tL="старт";smT=nil;isCS=false;INT=false;cyc={chC=0};tF={};fP={};igT=0;rCC=0;sprC=nil;sprA=0;sprR=0;if xfC then xfC:Destroy();xfC=nil end;if scC then scC:Destroy();scC=nil end;pcall(function()local qc=0;for _ in pairs(QT)do qc=qc+1 end;pcall(writefile,"bss_ai_q_v13.json",H:JSONEncode({version=VQ,qtable=QT,aP=aP,meta={sc=qc,sa=os.time()}}))end)end)
 print("✅ OK")
