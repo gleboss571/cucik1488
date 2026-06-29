@@ -153,7 +153,7 @@ local function isGreen(part)if not part or part.Name~="Crosshair"then return fal
 local function updateGreenStatus()for _,ch in ipairs(cQ)do if not ch.col and ch.part.Parent then if isGreen(ch.part)and not ch.wasGreen then ch.wasGreen=true;ch.greenTime=tick();if not ch.isP and prec.isX and not prec.nR then st.chG=st.chG+1 end end end end end
 local function aCH(o)if o.Name~="Crosshair"or not o:IsA("BasePart")then return end;for _,ch in ipairs(cQ)do if ch.part==o then return end end;if not o.Parent then return end;table.insert(cQ,{part=o,sT=tick(),col=false,isP=iP(o),wasGreen=isGreen(o)})end
 if Pt then Pt.DescendantAdded:Connect(aCH);Pt.DescendantRemoving:Connect(function(o)for i=#cQ,1,-1 do if cQ[i].part==o then table.remove(cQ,i)break end end;if lP==o then lP=nil end end);for _,o in ipairs(Pt:GetDescendants())do aCH(o)end end
-local function gCH(op,oR,noGreen)local L_={};for _,ch in ipairs(cQ)do if not ch.col and ch.part.Parent then if noGreen and ch.wasGreen then continue end;if(op and ch.isP)or(oR and not ch.isP)or(not op and not oR)then table.insert(L_,ch)end end end;table.sort(L_,function(a,b)return a.sT<b.sT end);return L_ end
+local function gCH(op,oR,noGreen)local L_={};for _,ch in ipairs(cQ)do if not ch.col and ch.part.Parent then if not(noGreen and ch.wasGreen)then if(op and ch.isP)or(oR and not ch.isP)or(not op and not oR)then table.insert(L_,ch)end end end end;table.sort(L_,function(a,b)return a.sT<b.sT end);return L_ end
 local function gCHall(op,oR)local L_={};for _,ch in ipairs(cQ)do if not ch.col and ch.part.Parent then if(op and ch.isP)or(oR and not ch.isP)or(not op and not oR)then table.insert(L_,ch)end end end;table.sort(L_,function(a,b)return a.sT<b.sT end);return L_ end
 local function gUNT(op,oR)return gCH(op,oR,true)end
 
@@ -334,7 +334,7 @@ local function eA(action)
     if action=="go_scorching_spiral"then local t=gST();if not t then return-1 end;tL="🔥 Спираль";INT=false;goTo(t,2,2);return 0
     elseif action=="go_crosshair_refresh_diagonal"then local di=getDiagonalForRefresh();if not di then return-1 end
         local g=di[1];local col=0;INT=false
-        for _,ch in ipairs({g.r1,g.r2,g.pr})do if ch.part.Parent and not ch.col then if ch.wasGreen then continue end
+        for _,ch in ipairs({g.r1,g.r2,g.pr})do if ch.part.Parent and not ch.col and not ch.wasGreen then
             tL="🔄 REFRESH диаг ("..(col+1).."/3)";goTo(ch.part.Position,4,4,true)
             if ch.part.Parent then ch.col=true;rCC=rCC+1
                 if ch.isP then st.pr=st.pr+1;lP=ch.part else st.ch=st.ch+1 end;col=col+1;st.diag=st.diag+1;task.wait(0.1)
@@ -343,7 +343,7 @@ local function eA(action)
         if aR and aR.Parent then goTo(aR.Position,6,4)end
         if rCC>=3 then prec.nR=false;cyc.chC=0;st.rf=st.rf+1;rCC=0;tL="✅ REFRESH диаг OK"end;return 0
     elseif action=="go_crosshair_refresh_all"then local all=gCHall(false,false);if#all==0 then return-1 end;local col=0;INT=false
-        for _,ch in ipairs(all)do if ch.part.Parent and not ch.col then if col>=3 then break end;if ch.wasGreen then continue end;tL="🔄 REFRESH";goTo(ch.part.Position,4,4,true);if ch.part.Parent then ch.col=true;rCC=rCC+1;if ch.isP then st.pr=st.pr+1;lP=ch.part else st.ch=st.ch+1 end;col=col+1;task.wait(0.1)end end end
+        for _,ch in ipairs(all)do if ch.part.Parent and not ch.col then if col>=3 then break end;if not ch.wasGreen then tL="🔄 REFRESH";goTo(ch.part.Position,4,4,true);if ch.part.Parent then ch.col=true;rCC=rCC+1;if ch.isP then st.pr=st.pr+1;lP=ch.part else st.ch=st.ch+1 end;col=col+1;task.wait(0.1)end end end end
         if aR and aR.Parent then goTo(aR.Position,6,4)else goTo(cP(r.Position),5,2)end
         if rCC>=3 then prec.nR=false;cyc.chC=0;st.rf=st.rf+1;rCC=0;tL="✅ REFRESH OK"end;return 0
     elseif action=="go_target_practice_purple"then local tp=gTPG();if not tp then return-1 end;INT=false
