@@ -133,7 +133,7 @@ logOk("GUI OK")
 local SB = {}
 SB["НАБОР"] = 70; SB["X10"] = 90; SB["REFRESH"] = 75
 local SJ = 3
-local AM = 1.22; local DGL = 22; local FM = 3; local AD = 5; local MT = 6
+local AM = 1.2; local DGL = 22; local FM = 3; local AD = 5; local MT = 6
 local PBI = 2574507284; local PLMBI = 2577647417
 local PPK = 0.02; local PMX = 10; local PRAT = 25
 local PURP = Color3.fromRGB(119, 85, 255); local PTOL = 12; local PST = 1
@@ -1181,32 +1181,76 @@ local function flatBuffs(t, d)
     end
 end
 
--- ===== BUFF POLLING VIA HEARTBEAT =====
-local function sBf()
+-- ===== UNIFIED BUFF POLLING (one InvokeServer call, handles all buffs + precision) =====
+local function pollAllBuffs()
     if not rps then return end
     local ok, res = pcall(rps.InvokeServer, rps)
     if not ok or type(res) ~= "table" then return end
     local fd = {}
     flatBuffs(res, fd)
+
+    -- === Scorching Star ===
     local prevSS = aB.SS.st
     local ss = fd["Scorching Star Aura"]
     aB.SS.st = ss and (tonumber(rawget(ss, "Combo") or 0) or 0) or 0
+
+    -- === X-Flame ===
     local xf = fd["X-Flame Aura"]
     aB.XF.st = xf and (tonumber(rawget(xf, "Combo") or 0) or 0) or 0
+
+    -- === Pollen Mark (basic) ===
     aB.PM.a = (fd[2575093099] and rawget(fd[2575093099], "Removed") ~= true)
-    -- Precision of Marks (PoM)
+
+    -- === Precision of Marks (PoM) ===
     local pm = fd[PMBI]
     if pm and rawget(pm, "Removed") ~= true then
         aB.PoM.a = true
         aB.PoM.m = tonumber(rawget(pm, "Combo") or 0) or 1
         if aR then aB.PoM.pos = aR.Position end
     else aB.PoM.a = false; aB.PoM.m = 0 end
-    -- FC/RB tracking removed
+
+    -- === Precision (X10 tracking) ===
+    local b = fd[PBI]
+    if b and rawget(b, "Removed") ~= true then
+        prec.val = tonumber(rawget(b, "Value") or 0) or 0
+        local bStart = tonumber(rawget(b, "Start"))
+        -- Always update timer (fix: bStart might be same session, still need fresh ls)
+        if bStart then
+            prec.sS = bStart
+            prec.sD = tonumber(rawget(b, "Dur") or 60) or 60
+            prec.ls = os.clock()
+        end
+        prec.st = math.min(PMX, math.round(prec.val / PPK))
+        prec.isX = (prec.st >= PMX)
+    else
+        prec.st = 0; prec.val = 0; prec.isX = false
+        prec.ls = 0; prec.tL = 0; prec.nR = false
+    end
+
+    -- === Pollen Mark x3 ===
+    local plm = fd[PLMBI]
+    if plm and rawget(plm, "Removed") ~= true then
+        pollenMarkStacks = tonumber(rawget(plm, "Combo") or rawget(plm, "Value") or 0) or 0
+        aB.PollM.combo = pollenMarkStacks
+        aB.PollM.active = (aB.PollM.combo >= 3)
+        if aB.PollM.active and aR then aB.PollM.ringPos = aR.Position end
+    else
+        pollenMarkStacks = 0; aB.PollM.active = false; aB.PollM.combo = 0
+    end
+
+    -- === Precision timer ===
+    if prec.ls > 0 then
+        prec.tL = math.max(0, prec.sD - (os.clock() - prec.ls))
+        prec.nR = prec.isX and (prec.tL <= PRAT)
+        if prec.nR and rCC == 0 then rST = tick(); rCC = 0 end
+    end
+
+    -- === Scorch start/end detection ===
     local curH = getCoreHoney()
     if aB.SS.st > 0 and prevSS == 0 then
         scorchStartHoney = curH; scorchStartTime = tick()
         scorchActive = true; scorchRecording = true; scorchActions = {}
-        scorchProgress = 0  -- reset progress when scorch activates
+        scorchProgress = 0
     elseif aB.SS.st == 0 and prevSS > 0 then
         scorchActive = false
         if scorchRecording and scorchStartTime > 0 then
@@ -1221,40 +1265,6 @@ local function sBf()
             end
             scorchRecording = false; scorchActions = {}
         end
-    end
-end
-
-local function sPr()
-    if not rps then return end
-    local ok, pd = pcall(rps.InvokeServer, rps)
-    if not ok or type(pd) ~= "table" then return end
-    local fd = {}; flatBuffs(pd, fd)
-    local b = fd[PBI]
-    if b and rawget(b, "Removed") ~= true then
-        prec.val = tonumber(rawget(b, "Value") or 0) or 0
-        local bStart = tonumber(rawget(b, "Start"))
-        if bStart and bStart ~= prec.sS then
-            prec.sS = bStart
-            prec.sD = tonumber(rawget(b, "Dur") or 60) or 60
-            prec.ls = os.clock()
-        end
-        prec.st = math.min(PMX, math.round(prec.val / PPK))
-        prec.isX = (prec.st >= PMX)
-    else prec.st = 0; prec.val = 0; prec.isX = false end
-    -- Pollen Mark x3 tracking
-    local plm = fd[PLMBI]
-    if plm and rawget(plm, "Removed") ~= true then
-        pollenMarkStacks = tonumber(rawget(plm, "Combo") or rawget(plm, "Value") or 0) or 0
-        aB.PollM.combo = pollenMarkStacks
-        aB.PollM.active = (aB.PollM.combo >= 3)
-        if aB.PollM.active and aR then aB.PollM.ringPos = aR.Position end
-    else
-        pollenMarkStacks = 0; aB.PollM.active = false; aB.PollM.combo = 0
-    end
-    if prec.ls > 0 then
-        prec.tL = math.max(0, prec.sD - (os.clock() - prec.ls))
-        prec.nR = prec.isX and (prec.tL <= PRAT)
-        if prec.nR and rCC == 0 then rST = tick(); rCC = 0 end
     end
 end
 
@@ -2331,8 +2341,7 @@ task.spawn(function()
     while true do
         task.wait(0.5)
         if ENABLED and mLS then
-            pcall(sBf)
-            pcall(sPr)
+            pcall(pollAllBuffs)
         end
     end
 end)
@@ -2343,7 +2352,7 @@ _G.BSSAI_HB = RunService.Heartbeat:Connect(function()
     if not ENABLED then return end
     if not mLS then sML(); return end
     local n = tick(); fAR()
-    -- Buff polling moved to separate spawn loop (0.5s interval)
+    -- Buff polling handled by separate spawn loop (pollAllBuffs every 0.5s)
     if hbF % 9 == 0 then sPt(); scanScythes()
         local h_ = hm()
         if h_ then local ts = gAS(); if math.abs(h_.WalkSpeed - ts) > 0.5 then h_.WalkSpeed = ts end end
