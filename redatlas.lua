@@ -786,7 +786,7 @@ local function hitNearbyBloom()
                 local flamesNearby = 0
                 if isScorchActive then
                     for fl in pairs(scytheParts) do
-                        if fl.Parent and d3(bloom.Position, fl.Position) < 15 then
+                        if fl and fl.Parent and d3(bloom.Position, fl.Position) < 15 then
                             flamesNearby = flamesNearby + 1
                         end
                     end
@@ -837,55 +837,55 @@ local function computeFlameStrafe(mP, dP)
     -- Group flames into clusters (simple: find flame with most neighbors)
     local flameList = {}
     for fl, data in pairs(scytheParts) do
-        if fl.Parent then
-            local isDark = (fl.Name:find("Dark") or fl.BrickColor.Name == "Really black")
+        if fl and fl.Parent and data then
+            local nm = fl.Name or ""
+            local bcName = ""
+            pcall(function() bcName = fl.BrickColor.Name end)
+            local isDark = (nm:find("Dark") or bcName == "Really black")
             local cd = flameCooldowns[fl]
             if not isDark and (not cd or n >= cd) and (n - data.sT) >= 6.0 then
-                table.insert(flameList, fl)
+                table.insert(flameList, { part = fl, sT = data.sT })
             end
         end
     end
     if #flameList == 0 then return nil end
     -- For each flame, check if near the path corridor
-    for _, fl in ipairs(flameList) do
-        local fp = Vector3.new(fl.Position.X, 0, fl.Position.Z)
-        local toFl = fp - mf
-        local alongDist = toFl:Dot(tD)
-        -- Only consider flames ahead of us (0 to 40 studs forward)
-        if alongDist > 0 and alongDist < 40 then
-            local crossDist = math.abs(toFl.X * tD.Z - toFl.Z * tD.X)
-            -- Within 10 studs of the path
-            if crossDist < 10 then
-                -- Count neighbors within 8 studs (cluster density)
-                local neighbors = 0
-                for _, fl2 in ipairs(flameList) do
-                    if fl2 ~= fl then
-                        if d3(fl.Position, fl2.Position) < 8 then
-                            neighbors = neighbors + 1
+    for _, fe in ipairs(flameList) do
+        local fl = fe.part
+        if fl and fl.Parent then
+            local fp = Vector3.new(fl.Position.X, 0, fl.Position.Z)
+            local toFl = fp - mf
+            local alongDist = toFl:Dot(tD)
+            if alongDist > 0 and alongDist < 40 then
+                local crossDist = math.abs(toFl.X * tD.Z - toFl.Z * tD.X)
+                if crossDist < 10 then
+                    local neighbors = 0
+                    for _, fe2 in ipairs(flameList) do
+                        if fe2.part ~= fl and fe2.part and fe2.part.Parent then
+                            if d3(fl.Position, fe2.part.Position) < 8 then
+                                neighbors = neighbors + 1
+                            end
                         end
                     end
-                end
-                -- Score: cluster size * (1 - crossDist/10) * age factor
-                local age = n - scytheParts[fl].sT
-                -- Invert: prioritize flames with LESS time remaining (<2s left = high priority)
-                local remLife = math.max(0, 7.0 - age)  -- normal flame lives ~7s
-                local ageScore = math.min(1.0, remLife / 2.0)  -- max urgency when <2s remain
-                local score = (1 + neighbors) * (1 - crossDist / 10) * (0.5 + ageScore * 0.5)
-                if score > bestScore then
-                    bestScore = score
-                    -- Nudge towards the flame, but limit deviation from path
-                    local nudgeDist = math.min(6, crossDist * 0.7 + 2)
-                    local sign = (toFl.X * tD.Z - toFl.Z * tD.X) > 0 and 1 or -1
-                    local perpX = -tD.Z * sign
-                    local perpZ = tD.X * sign
-                    bestCluster = {
-                        pos = Vector3.new(
-                            mP.X + tD.X * alongDist + perpX * nudgeDist,
-                            mP.Y,
-                            mP.Z + tD.Z * alongDist + perpZ * nudgeDist
-                        ),
-                        score = score
-                    }
+                    local age = n - fe.sT
+                    local remLife = math.max(0, 7.0 - age)
+                    local ageScore = math.min(1.0, remLife / 2.0)
+                    local score = (1 + neighbors) * (1 - crossDist / 10) * (0.5 + ageScore * 0.5)
+                    if score > bestScore then
+                        bestScore = score
+                        local nudgeDist = math.min(6, crossDist * 0.7 + 2)
+                        local sign = (toFl.X * tD.Z - toFl.Z * tD.X) > 0 and 1 or -1
+                        local perpX = -tD.Z * sign
+                        local perpZ = tD.X * sign
+                        bestCluster = {
+                            pos = Vector3.new(
+                                mP.X + tD.X * alongDist + perpX * nudgeDist,
+                                mP.Y,
+                                mP.Z + tD.Z * alongDist + perpZ * nudgeDist
+                            ),
+                            score = score
+                        }
+                    end
                 end
             end
         end
@@ -903,12 +903,15 @@ local function hitNearbyFlames()
     local n = tick()
     if n - lastScytheHit < SCYTHE_CD then return end
     for fl, data in pairs(scytheParts) do
-        if fl.Parent then
-            local isDark = (fl.Name:find("Dark") or fl.BrickColor.Name == "Really black")
+        if fl and fl.Parent then
+            local nm = fl.Name or ""
+            local bcName = ""
+            pcall(function() bcName = fl.BrickColor.Name end)
+            local isDark = (nm:find("Dark") or bcName == "Really black")
             local cd = flameCooldowns[fl]
             if not isDark and (not cd or n >= cd) then
                 local dist = d3(r.Position, fl.Position)
-                if dist <= SCYTHE_DIST * 2 and (n - data.sT) >= 6.0 then
+                if dist <= SCYTHE_DIST * 2 and data and (n - data.sT) >= 6.0 then
                     lastScytheHit = n
                     flameCooldowns[fl] = n + 5.0
                     flamesHitThisStep = flamesHitThisStep + 1
@@ -976,7 +979,7 @@ local function goTo(tP, rad, to, sk)
         pcall(hitNearbyBloom)
         local hasFlameNearby = false
         for fl, data in pairs(scytheParts) do
-            if fl.Parent and d3(r.Position, fl.Position) <= SCYTHE_DIST * 2 then
+            if fl and fl.Parent and d3(r.Position, fl.Position) <= SCYTHE_DIST * 2 then
                 hasFlameNearby = true; break
             end
         end
@@ -1127,7 +1130,10 @@ game.DescendantRemoving:Connect(function(o)
         if aT[o].dp then dupCnt = math.max(0, dupCnt - 1) end
         aT[o] = nil
     end
-    if activeTokenGuis[o] then activeTokenGuis[o].gui:Destroy(); activeTokenGuis[o] = nil end
+    if activeTokenGuis[o] then
+        pcall(function() if activeTokenGuis[o].gui then activeTokenGuis[o].gui:Destroy() end end)
+        activeTokenGuis[o] = nil
+    end
     -- Clean up flame cooldowns when flame part is removed
     if scytheParts[o] then scytheParts[o] = nil; flameCooldowns[o] = nil end
 end)
@@ -1149,14 +1155,17 @@ end
 RunService.Heartbeat:Connect(function()
     local now = tick()
     for part, data in pairs(activeTokenGuis) do
-        if part and part.Parent then
+        if part and part.Parent and data and data.label then
             local remaining = data.totalLifetime - (now - data.startTime)
             if remaining > 0 then
                 data.label.Text = data.prefix .. string.format("%.1f", remaining)
                 if remaining < 3.0 then data.label.TextColor3 = Color3.new(1, 0.3, 0.3) end
-            else data.label.Text = data.prefix .. "0.0" end
+            elseif remaining <= 0 then
+                data.label.Text = data.prefix .. "0.0"
+            end
         else
-            if data.gui then data.gui:Destroy() end; activeTokenGuis[part] = nil
+            pcall(function() if data and data.gui then data.gui:Destroy() end end)
+            activeTokenGuis[part] = nil
         end
     end
 end)
@@ -1243,18 +1252,22 @@ local function pollAllBuffs()
     else aB.PoM.a = false; aB.PoM.m = 0 end
 
     -- === Precision (X10 tracking) ===
-    local b = fd[PBI]
+    -- Precision stores Value as fraction: 0.02=1stack, 0.04=2... 0.20=X10
+    local b = fd[PBI] or fd["Precision"]  -- try BuffID first, then Src name
     if b and rawget(b, "Removed") ~= true then
-        prec.val = tonumber(rawget(b, "Value") or 0) or 0
-        local bStart = tonumber(rawget(b, "Start"))
-        -- Always update timer (fix: bStart might be same session, still need fresh ls)
-        if bStart then
-            prec.sS = bStart
-            prec.sD = tonumber(rawget(b, "Dur") or 60) or 60
-            prec.ls = os.clock()
+        local rawVal = rawget(b, "Value")
+        prec.val = tonumber(rawVal or 0) or 0
+        -- Stacks = Value / 0.02 (e.g. 0.14 / 0.02 = 7)
+        if prec.val > 0 then
+            prec.st = math.min(PMX, math.round(prec.val / PPK))
+        else
+            prec.st = 0
         end
-        prec.st = math.min(PMX, math.round(prec.val / PPK))
         prec.isX = (prec.st >= PMX)
+        -- Track timer independently
+        if prec.ls == 0 then prec.ls = os.clock() end
+        local bDur = tonumber(rawget(b, "Dur") or 60) or 60
+        prec.sD = bDur
     else
         prec.st = 0; prec.val = 0; prec.isX = false
         prec.ls = 0; prec.tL = 0; prec.nR = false
@@ -1521,8 +1534,11 @@ local function getScorchFlameCenter()
     local cx, cz, count = 0, 0, 0
     local darkWeight = 5
     for fl, _ in pairs(scytheParts) do
-        if fl.Parent then
-            local isDark = (fl.Name:find("Dark") or fl.BrickColor.Name == "Really black")
+        if fl and fl.Parent then
+            local nm = fl.Name or ""
+            local bcName = ""
+            pcall(function() bcName = fl.BrickColor.Name end)
+            local isDark = (nm:find("Dark") or bcName == "Really black")
             local w = isDark and darkWeight or 1
             cx = cx + fl.Position.X * w; cz = cz + fl.Position.Z * w
             count = count + w
@@ -1666,10 +1682,15 @@ local function gAWB()
         if #allCH > 0 then table.insert(ba, "go_crosshair") end
         if #fP > 0 then table.insert(ba, "go_petal") end
         for fl, data in pairs(scytheParts) do
-            if fl.Parent and not (fl.Name:find("Dark") or fl.BrickColor.Name == "Really black") then
-                local cd = flameCooldowns[fl]
-                if (not cd or n >= cd) and (n - data.sT) > 2.0 then
-                    table.insert(ba, "go_touch_flame"); break
+            if fl and fl.Parent then
+                local nm = fl.Name or ""
+                local bcName = ""
+                pcall(function() bcName = fl.BrickColor.Name end)
+                if not (nm:find("Dark") or bcName == "Really black") then
+                    local cd = flameCooldowns[fl]
+                    if (not cd or n >= cd) and data and (n - data.sT) > 2.0 then
+                        table.insert(ba, "go_touch_flame"); break
+                    end
                 end
             end
         end
@@ -1781,13 +1802,14 @@ local function eA(action)
     if not r then return -1 end
     tL = action; recordScorchAction(action)
 
-    -- Hit nearby non-dark flames while running to smile
+    -- Hit nearby non-dark flames while running to smile (pre-handler, hardened)
     if action == "go_smile" then
-        -- Aggressively hit all non-dark flames along the way
         for fl, data in pairs(scytheParts) do
-            if fl.Parent then
-                local isDark = (fl.Name:find("Dark") or fl.BrickColor.Name == "Really black")
-                if not isDark and d3(r.Position, fl.Position) <= SCYTHE_DIST * 2 then
+            if fl and fl.Parent then
+                local nm = fl.Name or ""
+                local bcName = ""
+                pcall(function() bcName = fl.BrickColor.Name end)
+                if not (nm:find("Dark") or bcName == "Really black") and d3(r.Position, fl.Position) <= SCYTHE_DIST * 2 then
                     pcall(hitNearbyFlames)
                 end
             end
@@ -1966,11 +1988,17 @@ local function eA(action)
     if action == "go_touch_flame" then
         local bestFl, bestD = nil, math.huge; local n = tick()
         for fl, data in pairs(scytheParts) do
-            if fl.Parent and not (fl.Name:find("Dark") or fl.BrickColor.Name == "Really black") then
-                local cd = flameCooldowns[fl]
-                if (not cd or n >= cd) and (n - data.sT) > 2.0 then
-                    local d = d3(r.Position, fl.Position)
-                    if d < bestD then bestD = d; bestFl = fl end
+            -- Guard: weak table keys can go nil, check all fields safely
+            if fl and fl.Parent then
+                local nm = fl.Name or ""
+                local bcName = ""
+                pcall(function() bcName = fl.BrickColor.Name end)
+                if not (nm:find("Dark") or bcName == "Really black") then
+                    local cd = flameCooldowns[fl]
+                    if (not cd or n >= cd) and data and (n - data.sT) > 2.0 then
+                        local d = d3(r.Position, fl.Position)
+                        if d < bestD then bestD = d; bestFl = fl end
+                    end
                 end
             end
         end
@@ -2100,12 +2128,14 @@ local function eA(action)
         local td = aT[smT]
         if not td or td.col then smT = nil; return -1 end
         isCS = true; tL = "Smile"; INT = false
-        -- Set goSmileGuard so sticky detours use tighter radius
         goSmileGuard = true
-        -- Hit ALL non-dark flames while running to smile (aggressive strafe)
+        -- Hit ALL non-dark flames while running to smile (aggressive strafe, hardened)
         for fl, data in pairs(scytheParts) do
-            if fl.Parent then
-                local isDark = (fl.Name:find("Dark") or fl.BrickColor.Name == "Really black")
+            if fl and fl.Parent then
+                local nm = fl.Name or ""
+                local bcName = ""
+                pcall(function() bcName = fl.BrickColor.Name end)
+                local isDark = (nm:find("Dark") or bcName == "Really black")
                 if not isDark and d3(r.Position, fl.Position) <= SCYTHE_DIST * 2 then
                     pcall(hitNearbyFlames)
                 end
@@ -2167,7 +2197,7 @@ local function eA(action)
         if #tlList == 0 then return -2 end
         table.sort(tlList, function(a, b) return a.rem < b.rem end)
         -- X-Flame aware: if TL in corner would trigger X-Flame at 25, skip it
-        local bestTL = tlList[1]
+        local bestTL = nil
         for _, entry in ipairs(tlList) do
             local shouldSkip = false
             if aB.XF.st > 0 then
@@ -2175,16 +2205,17 @@ local function eA(action)
                 if cc ~= Vector3.zero then
                     local inCenter = d3(entry.p.Position, cc) <= XCR * 2
                     if not inCenter then
-                        -- TL not in center: check if collecting it would trigger X-Flame
                         local battleNear = countBattleTokensNear(entry.p.Position, 40)
                         if aB.XF.st + battleNear >= 25 then
-                            shouldSkip = true  -- would trigger X-Flame in corner, skip
+                            shouldSkip = true
                         end
                     end
                 end
             end
             if not shouldSkip then bestTL = entry; break end
         end
+        -- If all TLs skipped (would trigger X-Flame in corner), abort
+        if not bestTL then return -2 end
         tL = "Link"; INT = false
         if goTo(bestTL.p.Position, 5, 5) and bestTL.p.Parent then
             bestTL.t.col = true; igT = tick() + TLC; lastTokenLinkTime = tick()
@@ -2516,11 +2547,19 @@ _G.BSSAI_HB = RunService.Heartbeat:Connect(function()
     if isA then return end
     if hbF % 2 == 0 then
         isA = true
-        flamesHitThisStep = 0; chDetourThisStep = 0; abortedThisStep = false
-        local s_ = eS(); local a_ = cAB(s_)
-        local ok, rw = pcall(eA, a_)
-        if not ok then rw = -1; logErr(a_ .. " fail: " .. tostring(rw)) end
-        local ns = eS(); pcall(dUQ, s_, a_, rw, ns)
+        local guardRoot = h()
+        if guardRoot then
+            flamesHitThisStep = 0; chDetourThisStep = 0; abortedThisStep = false
+            local s_ = eS(); local a_ = cAB(s_)
+            local ok, rw = pcall(eA, a_)
+            if not ok then
+                -- Actual Lua error (crash), worth logging
+                logErr(a_ .. " crash: " .. tostring(rw))
+                rw = -1
+            end
+            -- rw == -1 is normal "no targets" — never log, never treat as error
+            local ns = eS(); pcall(dUQ, s_, a_, rw, ns)
+        end
         isA = false
     end
 end)
@@ -2667,9 +2706,11 @@ LP.CharacterAdded:Connect(function()
     scorchActive = false; scorchRecording = false; scorchActions = {}
     scorchStartHoney = 0; scorchStartTime = 0
     fixedXFlameCenter = nil; lastTokenLinkTime = 0; lastFocusCHTime = 0
-    xfProgress = 0; scorchProgress = 0
-    activeShowers = {}; activeBlooms = {}; activeCoconuts = {}
+    xfProgress = 0; scorchProgress = 0; lastBloomHit = 0
+    for _, v in pairs(activeTokenGuis) do if v.gui then pcall(function() v.gui:Destroy() end) end end
+    activeShowers = {}; activeBlooms = {}; activeCoconuts = {}; activeTokenGuis = {}
     for fl in pairs(flameCooldowns) do flameCooldowns[fl] = nil end
+    for fl in pairs(scytheParts) do scytheParts[fl] = nil end
     if xfC then xfC:Destroy(); xfC = nil end
     if scVis then scVis:Destroy(); scVis = nil end
     if syVis then syVis:Destroy(); syVis = nil end
