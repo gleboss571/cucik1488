@@ -268,6 +268,10 @@ local activeTokenGuis = {}; local activeBlooms = {}
 local xfProgress = 0      -- from PlayerAbilityEvent
 local scorchProgress = 0  -- from PlayerAbilityEvent
 local lastBloomHit = 0
+-- ===== Bloom petal buff tracking =====
+local redPetalTimer = 0   -- tick() when last red petal collected (8s buff)
+-- ===== Session statistics =====
+local stChMin = 0; local stTkMin = 0; local stFlMin = 0; local stBloomMin = 0
 
 -- ===== TIMER CREATION FOR ALL TOKENS =====
 local function createTimer(part, id, totalLifetime, duped, def)
@@ -839,8 +843,7 @@ local function computeFlameStrafe(mP, dP)
     for fl, data in pairs(scytheParts) do
         if fl and fl.Parent and data then
             local nm = fl.Name or ""
-            local bcName = ""
-            pcall(function() bcName = fl.BrickColor.Name end)
+            local bcName = safeBrickColorName(fl)
             local isDark = (nm:find("Dark") or bcName == "Really black")
             local cd = flameCooldowns[fl]
             if not isDark and (not cd or n >= cd) and (n - data.sT) >= 6.0 then
@@ -897,6 +900,17 @@ end
 -- ===== FLAME COOLDOWN TRACKING =====
 local flameCooldowns = setmetatable({}, { __mode = "k" })
 
+-- SAFE helper: get BrickColor.Name without crashing on GC'd objects
+local function safeBrickColorName(obj)
+    if not obj then return "" end
+    local ok, bc = pcall(function() return obj.BrickColor end)
+    if ok and bc then
+        local ok2, nm = pcall(function() return bc.Name end)
+        if ok2 and nm then return nm end
+    end
+    return ""
+end
+
 local function hitNearbyFlames()
     local r = h()
     if not r then return end
@@ -905,8 +919,7 @@ local function hitNearbyFlames()
     for fl, data in pairs(scytheParts) do
         if fl and fl.Parent then
             local nm = fl.Name or ""
-            local bcName = ""
-            pcall(function() bcName = fl.BrickColor.Name end)
+            local bcName = safeBrickColorName(fl)
             local isDark = (nm:find("Dark") or bcName == "Really black")
             local cd = flameCooldowns[fl]
             if not isDark and (not cd or n >= cd) then
@@ -915,6 +928,7 @@ local function hitNearbyFlames()
                     lastScytheHit = n
                     flameCooldowns[fl] = n + 5.0
                     flamesHitThisStep = flamesHitThisStep + 1
+                    stFlMin = stFlMin + 1
                     local bg = r:FindFirstChild("AI_BG_Scythe")
                     if not bg then
                         bg = Instance.new("BodyGyro"); bg.Name = "AI_BG_Scythe"
@@ -1011,7 +1025,9 @@ local function goTo(tP, rad, to, sk)
                     end
                     if whitelisted then
                         local rem = t.l - (nSticky - t.s)
-                        local maxDist = (goSmileGuard and smTR < 3.0) and 5 or 12
+                        -- Adaptive radius: tighter during X10 to avoid wasting Precision time
+                        local baseDist = prec.isX and 8 or 14
+                        local maxDist = (goSmileGuard and smTR < 3.0) and 4 or baseDist
                         if rem > 0 and rem < 3.0 and d3(r.Position, p.Position) < maxDist then
                             local score = t.p * (1 - rem / t.l)
                             if score > bestScore then bestScore = score; bestSticky = p end
@@ -1258,16 +1274,21 @@ local function pollAllBuffs()
         local rawVal = rawget(b, "Value")
         prec.val = tonumber(rawVal or 0) or 0
         -- Stacks = Value / 0.02 (e.g. 0.14 / 0.02 = 7)
+        local newSt = 0
         if prec.val > 0 then
-            prec.st = math.min(PMX, math.round(prec.val / PPK))
-        else
-            prec.st = 0
+            newSt = math.min(PMX, math.round(prec.val / PPK))
         end
-        prec.isX = (prec.st >= PMX)
-        -- Track timer independently
-        if prec.ls == 0 then prec.ls = os.clock() end
+        prec.isX = (newSt >= PMX)
         local bDur = tonumber(rawget(b, "Dur") or 60) or 60
         prec.sD = bDur
+        -- Reset timer on stack increase OR new Precision session (Refresh extends Start time)
+        local bStart = tonumber(rawget(b, "Start"))
+        if newSt ~= prec.st or (bStart and bStart ~= prec.sS) then
+            prec.st = newSt
+            prec.ls = os.clock()
+            if bStart then prec.sS = bStart end
+            if prec.isX then prec.nR = false; rCC = 0 end
+        end
     else
         prec.st = 0; prec.val = 0; prec.isX = false
         prec.ls = 0; prec.tL = 0; prec.nR = false
@@ -1334,6 +1355,18 @@ local function sPt()
             if cn and PP[cn] then
                 table.insert(fP, { part = o, cn = cn, pr = PP[cn], dist = d3d(r.Position, o.Position) })
             end
+        end
+    end
+    -- Bloom petal buff: red petal buff lasts 8s, with <4s remaining prioritize red
+    if redPetalTimer > 0 then
+        local rem = 8.0 - (tick() - redPetalTimer)
+        if rem > 0 and rem < 4.0 then
+            -- Prioritize red petals above all others
+            for _, fp in ipairs(fP) do
+                if fp.cn == "Red" then fp.pr = 0 end -- force top priority
+            end
+        elseif rem <= 0 then
+            redPetalTimer = 0 -- buff expired
         end
     end
     table.sort(fP, function(a, b)
@@ -1536,8 +1569,7 @@ local function getScorchFlameCenter()
     for fl, _ in pairs(scytheParts) do
         if fl and fl.Parent then
             local nm = fl.Name or ""
-            local bcName = ""
-            pcall(function() bcName = fl.BrickColor.Name end)
+            local bcName = safeBrickColorName(fl)
             local isDark = (nm:find("Dark") or bcName == "Really black")
             local w = isDark and darkWeight or 1
             cx = cx + fl.Position.X * w; cz = cz + fl.Position.Z * w
@@ -1588,6 +1620,14 @@ local function gAWB()
                     return { "go_shower" }
                 end
             end
+        end
+    end
+
+    -- Pre-emptive centering: XF≥22 and SS≥20 → drop everything, rush to center
+    if xfProgress >= 22 and scorchProgress >= 20 and not isSuperScorch then
+        local cc = gFC()
+        if cc ~= Vector3.zero and r and d3(r.Position, cc) > XCR * 2 then
+            return { "go_xflame_center" }
         end
     end
 
@@ -1684,8 +1724,7 @@ local function gAWB()
         for fl, data in pairs(scytheParts) do
             if fl and fl.Parent then
                 local nm = fl.Name or ""
-                local bcName = ""
-                pcall(function() bcName = fl.BrickColor.Name end)
+                local bcName = safeBrickColorName(fl)
                 if not (nm:find("Dark") or bcName == "Really black") then
                     local cd = flameCooldowns[fl]
                     if (not cd or n >= cd) and data and (n - data.sT) > 2.0 then
@@ -1699,7 +1738,7 @@ local function gAWB()
         end
         local dt, _ = gDTP()
         if dt then table.insert(ba, "go_dup_tp") end
-        table.insert(ba, "patrol_ring"); table.insert(ba, "patrol_random")
+        table.insert(ba, "patrol_ring")
         return ba
     end
     return { "patrol_ring" }
@@ -1807,8 +1846,7 @@ local function eA(action)
         for fl, data in pairs(scytheParts) do
             if fl and fl.Parent then
                 local nm = fl.Name or ""
-                local bcName = ""
-                pcall(function() bcName = fl.BrickColor.Name end)
+                local bcName = safeBrickColorName(fl)
                 if not (nm:find("Dark") or bcName == "Really black") and d3(r.Position, fl.Position) <= SCYTHE_DIST * 2 then
                     pcall(hitNearbyFlames)
                 end
@@ -1991,8 +2029,7 @@ local function eA(action)
             -- Guard: weak table keys can go nil, check all fields safely
             if fl and fl.Parent then
                 local nm = fl.Name or ""
-                local bcName = ""
-                pcall(function() bcName = fl.BrickColor.Name end)
+                local bcName = safeBrickColorName(fl)
                 if not (nm:find("Dark") or bcName == "Really black") then
                     local cd = flameCooldowns[fl]
                     if (not cd or n >= cd) and data and (n - data.sT) > 2.0 then
@@ -2133,15 +2170,14 @@ local function eA(action)
         for fl, data in pairs(scytheParts) do
             if fl and fl.Parent then
                 local nm = fl.Name or ""
-                local bcName = ""
-                pcall(function() bcName = fl.BrickColor.Name end)
+                local bcName = safeBrickColorName(fl)
                 local isDark = (nm:find("Dark") or bcName == "Really black")
                 if not isDark and d3(r.Position, fl.Position) <= SCYTHE_DIST * 2 then
                     pcall(hitNearbyFlames)
                 end
             end
         end
-        local timeout = math.max(0.5, math.min(3, smTR - 0.3))  -- clamp to positive
+        local timeout = math.max(0.5, math.min(3, smTR - 0.3))
         local ok = goTo(smT.Position, 4, timeout)
         goSmileGuard = false
         if ok and smT.Parent then
@@ -2289,7 +2325,9 @@ local function eA(action)
             else
                 tL = "🌸 " .. pt.cn; INT = false
                 if goTo(Vector3.new(pt.part.Position.X, 0, pt.part.Position.Z), PCD, 2.5) then
-                    st.pt = st.pt + 1; tr = tr + 8 + (14 - pt.pr); ca = true; task.wait(0.05); i = i + 1
+                    st.pt = st.pt + 1; tr = tr + 8 + (14 - pt.pr); ca = true
+                    if pt.cn == "Red" then redPetalTimer = tick() end  -- 8s buff timer
+                    task.wait(0.05); i = i + 1
                 else stP[pt.part] = tick() + 5; table.remove(fP, i) end
             end
         end
@@ -2354,28 +2392,34 @@ local function eA(action)
         local t = rR()
         if t == Vector3.zero or (not xfE and not iF(t)) then t = gFC() end
         if t == Vector3.zero then return 0 end
-        goTo(t, xfE and 2 or 6, PT); task.wait(0.1 + math.random() * 0.3); return 0
-    end
-
-    if action == "patrol_random" then
-        local function rF()
-            if curF then
-                local c = curF.part.Position; local s = curF.part.Size
-                local rp = Vector3.new(c.X + (math.random() * 2 - 1) * math.max(s.X / 2 - 3, 1), 0, c.Z + (math.random() * 2 - 1) * math.max(s.Z / 2 - 3, 1))
-                local rx = math.abs(rp.X - c.X) / math.max(s.X / 2, 1)
-                local rz = math.abs(rp.Z - c.Z) / math.max(s.Z / 2, 1)
-                if rx > 0.6 or rz > 0.6 then
-                    rp = Vector3.new(rp.X + (c.X - rp.X) * 0.4, 0, rp.Z + (c.Z - rp.Z) * 0.4)
+        -- Superficial token grab while patrolling: quick detour only for close tokens
+        local bestTok, bestD = nil, math.huge
+        local n_ = tick()
+        for p, td in pairs(aT) do
+            if not td.col and p.Parent then
+                local d = d3(r.Position, p.Position)
+                if d < 8 and d < bestD then
+                    local rem = td.l - (n_ - td.s)
+                    if rem > 1 and td.p >= 5 then bestD = d; bestTok = p end
                 end
-                return cP(rp)
             end
-            local rp = h(); return rp and cP(rp.Position + Vector3.new((math.random() * 2 - 1) * 30, 0, (math.random() * 2 - 1) * 30)) or cP(Vector3.zero)
         end
-        tL = "Rand"; INT = false
-        local t = rF()
-        if t == Vector3.zero or not iF(t) then t = gFC() end
-        if t == Vector3.zero then return 0 end
-        goTo(t, 4, PT); task.wait(0.2 + math.random() * 0.4); return 0
+        if bestTok then
+            local hm_ = hm()
+            if hm_ then hm_:MoveTo(Vector3.new(bestTok.Position.X, r.Position.Y, bestTok.Position.Z)) end
+            local tDet = tick()
+            while tick() - tDet < 0.5 do
+                task.wait(0.03)
+                local rd = h(); if not rd then break end
+                if d3(rd.Position, bestTok.Position) < 5 then
+                    if aT[bestTok] and not aT[bestTok].col then
+                        aT[bestTok].col = true; st.tk = st.tk + 1
+                    end
+                    break
+                end
+            end
+        end
+        goTo(t, xfE and 2 or 6, PT); task.wait(0.1 + math.random() * 0.3); return 0
     end
 
     if action == "go_xflame_center" then
@@ -2647,15 +2691,22 @@ bf.TextColor3 = Color3.fromRGB(255, 180, 100)
 bf.Font = Enum.Font.Gotham; bf.TextSize = 9
 bf.TextXAlignment = Enum.TextXAlignment.Center
 
+local xfLine = Instance.new("TextLabel", fr)
+xfLine.Size = UDim2.new(1, 0, 0, 14); xfLine.Position = UDim2.new(0, 0, 0, 90)
+xfLine.BackgroundTransparency = 1; xfLine.Text = "XF:--/25 SS:--/30 PM:-- PLM:-- dup:--"
+xfLine.TextColor3 = Color3.fromRGB(255, 180, 100)
+xfLine.Font = Enum.Font.Gotham; xfLine.TextSize = 9
+xfLine.TextXAlignment = Enum.TextXAlignment.Center
+
 local sh = Instance.new("TextLabel", fr)
-sh.Size = UDim2.new(1, 0, 0, 14); sh.Position = UDim2.new(0, 0, 0, 90)
+sh.Size = UDim2.new(1, 0, 0, 14); sh.Position = UDim2.new(0, 0, 0, 105)
 sh.BackgroundTransparency = 1; sh.Text = "🔥 --"
 sh.TextColor3 = Color3.fromRGB(255, 140, 80)
 sh.Font = Enum.Font.Gotham; sh.TextSize = 9
 sh.TextXAlignment = Enum.TextXAlignment.Center
 
 local stopBtn = Instance.new("TextButton", fr)
-stopBtn.Size = UDim2.new(1, -8, 0, 24); stopBtn.Position = UDim2.new(0, 4, 0, 120)
+stopBtn.Size = UDim2.new(1, -8, 0, 24); stopBtn.Position = UDim2.new(0, 4, 0, 135)
 stopBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40); stopBtn.BorderSizePixel = 0
 stopBtn.Text = "STOP"; stopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 stopBtn.Font = Enum.Font.GothamBold; stopBtn.TextSize = 12
@@ -2675,9 +2726,17 @@ task.spawn(function()
         hl.Text = "HP40M: " .. fmtHoney(hp40m) .. " | " .. fmtHoney(curH)
         local pStacksText = prec.isX and "[X10]" or ("[" .. prec.st .. "/10]")
         local precTimer = prec.tL > 0 and string.format("%.0fs", prec.tL) or "--"
-        sl.Text = "S: " .. string.format("%.0f", cS) .. " | PREC: " .. precTimer .. " " .. pStacksText
+        local precColor = ""
+        if prec.isX and prec.tL > 0 and prec.tL <= PRAT then precColor = "⏳"
+        elseif prec.isX then precColor = "✅" end
+        sl.Text = "S: " .. string.format("%.0f", cS) .. " | " .. precColor .. "PREC: " .. precTimer .. " " .. pStacksText
         pl_.Text = ph() .. " CH:" .. #cQ .. " Tk:" .. st.tk .. " Pr:" .. st.pr .. " Sm:" .. st.sm
-        bf.Text = "PM:" .. aB.PoM.m .. " PLM:" .. pollenMarkStacks .. " dup:" .. dupCnt .. " XF:" .. xfProgress .. "/25 SS:" .. scorchProgress .. "/30"
+        -- Session stats per minute
+        local chRate = elapsedMin > 0 and math.floor(st.chP / elapsedMin) or 0
+        local tkRate = elapsedMin > 0 and math.floor(st.tk / elapsedMin) or 0
+        local flRate = elapsedMin > 0 and math.floor(stFlMin / elapsedMin) or 0
+        bf.Text = "CH:" .. chRate .. "/m Tk:" .. tkRate .. "/m Fl:" .. flRate .. "/m"
+        xfLine.Text = "XF:" .. xfProgress .. "/25 SS:" .. scorchProgress .. "/30 PM:" .. aB.PoM.m .. " PLM:" .. pollenMarkStacks .. " dup:" .. dupCnt
         if scorchActive and scorchStartTime > 0 then
             local se = (tick() - scorchStartTime) / 60
             sh.Text = "🔥 " .. fmtHoney(curH - scorchStartHoney) .. " " .. string.format("%.1f", se) .. "min | " .. fmtHoney(bestScorchHoney)
@@ -2706,7 +2765,8 @@ LP.CharacterAdded:Connect(function()
     scorchActive = false; scorchRecording = false; scorchActions = {}
     scorchStartHoney = 0; scorchStartTime = 0
     fixedXFlameCenter = nil; lastTokenLinkTime = 0; lastFocusCHTime = 0
-    xfProgress = 0; scorchProgress = 0; lastBloomHit = 0
+    xfProgress = 0; scorchProgress = 0; lastBloomHit = 0; redPetalTimer = 0
+    stFlMin = 0
     for _, v in pairs(activeTokenGuis) do if v.gui then pcall(function() v.gui:Destroy() end) end end
     activeShowers = {}; activeBlooms = {}; activeCoconuts = {}; activeTokenGuis = {}
     for fl in pairs(flameCooldowns) do flameCooldowns[fl] = nil end
