@@ -242,6 +242,16 @@ local pF = "bss_ai_pat_v15.json"
 local QT = {}; local lMT = tick(); local stW = false
 local xfE = false; local xfC = nil; local lPT = 0
 local qTables = {}; local pHTables = {}; local fldHash = nil; local dupCnt = 0
+-- ===== ADVANCED Q-LEARNING =====
+local eligibility = {}     -- { state = { action = trace } }  TD-lambda traces
+local visitCount = {}      -- { state = { action = count } }   UCB visit counters
+local totalSteps = 0       -- total action steps for UCB
+local TD_LAMBDA = 0.7      -- trace decay
+local UCB_C = 1.5          -- exploration constant
+local lastActionTime = 0   -- time-penalty tracking
+local flamesHitThisStep = 0
+local chDetourThisStep = 0
+local abortedThisStep = false
 local cS = SB["НАБОР"]; local hbF = 0; local isA = false
 -- focusRenew/rbSkip removed
 local scorchActive = false; local scorchRecording = false
@@ -382,7 +392,13 @@ local function getCoreHoney()
 end
 
 local function getCtxKey()
-    return string.format("%s|PM%d|PLL%d", ph(), math.min(3, aB.PoM.m), math.min(1, pollenMarkStacks >= 3 and 1 or 0))
+    -- X-Flame bracket: 0-9, 10-17, 18-21, 22-25 (near trigger)
+    local xfBracket = 0
+    if xfProgress >= 22 then xfBracket = 3
+    elseif xfProgress >= 18 then xfBracket = 2
+    elseif xfProgress >= 10 then xfBracket = 1
+    end
+    return string.format("%s|PM%d|PLL%d|XF%d", ph(), math.min(3, aB.PoM.m), math.min(1, pollenMarkStacks >= 3 and 1 or 0), xfBracket)
 end
 
 local function fldHashFn()
@@ -895,6 +911,7 @@ local function hitNearbyFlames()
                 if dist <= SCYTHE_DIST * 2 and (n - data.sT) >= 6.0 then
                     lastScytheHit = n
                     flameCooldowns[fl] = n + 5.0
+                    flamesHitThisStep = flamesHitThisStep + 1
                     local bg = r:FindFirstChild("AI_BG_Scythe")
                     if not bg then
                         bg = Instance.new("BodyGyro"); bg.Name = "AI_BG_Scythe"
@@ -1012,6 +1029,7 @@ local function goTo(tP, rad, to, sk)
                     if not rDetour then break end
                     if d3(rDetour.Position, detourPos) < 5 then
                         if aT[bestSticky] then aT[bestSticky].col = true; st.tk = st.tk + 1 end
+                        chDetourThisStep = chDetourThisStep + 1
                         break
                     end
                 end
@@ -1023,6 +1041,7 @@ local function goTo(tP, rad, to, sk)
         -- goTo abort: if stuck (distance reduced < 2 studs in 4s) -> abort
         if tick() - abortTimer > 4.0 then
             if d3(r.Position, abortLastPos) < 2 then
+                abortedThisStep = true
                 return false
             end
             abortTimer = tick()
@@ -1073,15 +1092,15 @@ local function rT(o)
     if not id or AV[id] then return end
     local df = TKS[id]
     if not df then return end
-    local r = h()
+    -- Always use Map.Ground for duped detection (player may be on elevated terrain)
+    local map = Workspace:FindFirstChild("Map")
+    local ground = map and map:FindFirstChild("Ground")
     local dp = false
-    if r then
-        dp = (o.Position.Y - r.Position.Y) > 5
+    if ground then
+        dp = (o.Position.Y - ground.Position.Y) > 5
     else
-        -- Fallback: use Map.Ground as reference for duped detection
-        local map = Workspace:FindFirstChild("Map")
-        local ground = map and map:FindFirstChild("Ground")
-        if ground then dp = (o.Position.Y - ground.Position.Y) > 5 end
+        local r = h()
+        if r then dp = (o.Position.Y - r.Position.Y) > 5 end
     end
     local lf = df.base * AM
     if dp then
@@ -1116,10 +1135,12 @@ end)
 -- ===== BATTLE TOKEN FIELD COUNTER (for X-Flame prediction) =====
 local function countBattleTokensNear(pos, radius)
     local count = 0
-    for _, t in pairs(aT) do
-        if not t.col and t.dp and d3(t.part.Position or pos, pos) <= radius then
-            local def = TKS[t.id]
-            if def and def.battle then count = count + 1 end
+    for part, t in pairs(aT) do
+        if not t.col and part.Parent then
+            if d3(part.Position, pos) <= radius then
+                local def = TKS[t.id]
+                if def and def.battle then count = count + 1 end
+            end
         end
     end
     return count
@@ -1192,11 +1213,23 @@ local function pollAllBuffs()
     -- === Scorching Star ===
     local prevSS = aB.SS.st
     local ss = fd["Scorching Star Aura"]
-    aB.SS.st = ss and (tonumber(rawget(ss, "Combo") or 0) or 0) or 0
+    if ss and rawget(ss, "Removed") ~= true then
+        aB.SS.st = tonumber(rawget(ss, "Combo") or 0) or 0
+    else
+        aB.SS.st = 0
+        -- Reset scorchProgress when Scorching Star aura disappears
+        if scorchProgress > 0 then scorchProgress = 0 end
+    end
 
     -- === X-Flame ===
     local xf = fd["X-Flame Aura"]
-    aB.XF.st = xf and (tonumber(rawget(xf, "Combo") or 0) or 0) or 0
+    if xf and rawget(xf, "Removed") ~= true then
+        aB.XF.st = tonumber(rawget(xf, "Combo") or 0) or 0
+    else
+        aB.XF.st = 0
+        -- Reset xfProgress when X-Flame aura disappears (after use / expires)
+        if xfProgress > 0 then xfProgress = 0 end
+    end
 
     -- === Pollen Mark (basic) ===
     aB.PM.a = (fd[2575093099] and rawget(fd[2575093099], "Removed") ~= true)
@@ -1250,7 +1283,6 @@ local function pollAllBuffs()
     if aB.SS.st > 0 and prevSS == 0 then
         scorchStartHoney = curH; scorchStartTime = tick()
         scorchActive = true; scorchRecording = true; scorchActions = {}
-        scorchProgress = 0
     elseif aB.SS.st == 0 and prevSS > 0 then
         scorchActive = false
         if scorchRecording and scorchStartTime > 0 then
@@ -1652,15 +1684,25 @@ local function gAWB()
     return { "patrol_ring" }
 end
 
+-- ===== UCB ACTION SELECTION =====
 local function cAB(s)
     local v = gAWB()
     if #v == 0 then return "patrol_ring" end
+    -- ε-greedy fallback (only early on, fades with EP)
     if math.random() < EP then return v[math.random(1, #v)] end
-    local bA, bQ = v[1], gQ(s, v[1]) * getPatternBias(v[1])
-    for i = 2, #v do
-        local q = gQ(s, v[i]) * getPatternBias(v[i])
-        if q > bQ then bA = v[i]; bQ = q end
+    -- UCB: argmax( Q(s,a) * bias + C * sqrt(ln(N_total) / (n(s,a) + 1)) )
+    if not visitCount[s] then visitCount[s] = {} end
+    local bA, bestScore = v[1], -math.huge
+    for i = 1, #v do
+        local act = v[i]
+        local qVal = gQ(s, act) * getPatternBias(act)
+        local n = visitCount[s][act] or 0
+        local ucbBonus = UCB_C * math.sqrt(math.log(totalSteps + 1) / (n + 1))
+        local score = qVal + ucbBonus
+        if score > bestScore then bA = act; bestScore = score end
     end
+    -- Track visit
+    visitCount[s][bA] = (visitCount[s][bA] or 0) + 1
     return bA
 end
 
@@ -1668,11 +1710,69 @@ local function dUQ(s, a, rw, ns)
     local rr = h()
     local rp = rr and rr.Position or Vector3.zero
     local tR = rw + gPB(a, rp)
+
+    -- === INTERMEDIATE REWARD SHAPING (Idea #9) ===
+    tR = tR + flamesHitThisStep * 2           -- +2 per flame lit while moving
+    tR = tR + chDetourThisStep * 1            -- +1 per stray CH picked by detour
+    if abortedThisStep then tR = tR - 5 end  -- -5 for abort (stuck)
+
+    -- === TIME PENALTY (Idea #7) ===
+    local now = tick()
+    if lastActionTime > 0 then
+        local dt = now - lastActionTime
+        tR = tR - dt * 0.5  -- -0.5 per second of idle/movement
+    end
+    lastActionTime = now
+
+    -- === X-FLAME + SCORCH TIMING REWARD ===
+    -- Perfect timing: X-Flame spawns in center when scorch has 27+/30 stacks
+    local prevXF = aB.XF.st  -- current value before this action
+    -- Check after: did X-Flame just activate?
+    if xfProgress == 0 and prevXF >= 24 and scorchProgress >= 27 then
+        local cc = gFC()
+        local rPos = rr and rr.Position
+        -- Bonus if player is near center (within XCR*1.5)
+        if cc ~= Vector3.zero and rPos and d3(rPos, cc) <= XCR * 1.5 then
+            tR = tR + 100  -- massive bonus for perfect XF+Scorch timing at center
+        elseif cc ~= Vector3.zero and rPos and d3(rPos, cc) <= XCR * 4 then
+            tR = tR + 40   -- decent bonus, close to center
+        else
+            tR = tR - 20   -- penalty: X-Flame wasted in corner
+        end
+    end
+
+    -- === TD-LAMBDA ELIGIBILITY TRACES (Idea #2) ===
+    if not eligibility[s] then eligibility[s] = {} end
+    -- Decay all traces first
+    for st, acts in pairs(eligibility) do
+        for act, trace in pairs(acts) do
+            eligibility[st][act] = trace * GA * TD_LAMBDA
+            if eligibility[st][act] < 0.001 then eligibility[st][act] = nil end
+        end
+    end
+    -- Accumulating trace for current state-action
+    eligibility[s][a] = (eligibility[s][a] or 0) + 1
+
+    -- Compute TD error
     local v = gAWB(); local mN = 0
     for i = 1, #v do local q = gQ(ns, v[i]); if q > mN then mN = q end end
-    sQ(s, a, gQ(s, a) + AL * (tR + GA * mN - gQ(s, a)))
+    local tdError = tR + GA * mN - gQ(s, a)
+
+    -- Apply TD error to ALL state-actions weighted by their eligibility trace
+    for st, acts in pairs(eligibility) do
+        for act, trace in pairs(acts) do
+            sQ(st, act, gQ(st, act) + AL * tdError * trace)
+        end
+    end
+
     st.tR = st.tR + tR; st.dc = st.dc + 1
+    totalSteps = totalSteps + 1
     EP = math.max(0.02, EP * ED)
+
+    -- Reset step counters
+    flamesHitThisStep = 0
+    chDetourThisStep = 0
+    abortedThisStep = false
 end
 
 -- ===== EXECUTE ACTION =====
@@ -2375,6 +2475,7 @@ _G.BSSAI_HB = RunService.Heartbeat:Connect(function()
                 writefile("bss_ai_q_v15.json", Http:JSONEncode({
                     version = Q_VERSION, qtable = QT, scorchSessions = scorchSessions,
                     bestScorch = bestScorchHoney, top10 = top10patterns,
+                    eligibility = eligibility, visitCount = visitCount, totalSteps = totalSteps,
                     meta = { sc = qc, sa = os.time() }
                 }))
             end) end
@@ -2415,6 +2516,7 @@ _G.BSSAI_HB = RunService.Heartbeat:Connect(function()
     if isA then return end
     if hbF % 2 == 0 then
         isA = true
+        flamesHitThisStep = 0; chDetourThisStep = 0; abortedThisStep = false
         local s_ = eS(); local a_ = cAB(s_)
         local ok, rw = pcall(eA, a_)
         if not ok then rw = -1; logErr(a_ .. " fail: " .. tostring(rw)) end
@@ -2433,6 +2535,9 @@ function lQ()
             if d.scorchSessions then scorchSessions = d.scorchSessions end
             if d.bestScorch then bestScorchHoney = d.bestScorch end
             if d.top10 then top10patterns = d.top10 end
+            if d.eligibility then eligibility = d.eligibility end
+            if d.visitCount then visitCount = d.visitCount end
+            if d.totalSteps then totalSteps = d.totalSteps end
         end
     end
 end
@@ -2440,10 +2545,12 @@ end
 local function rQ()
     QT = {}; EP = 0.1; st.tR = 0; st.dc = 0
     scorchSessions = {}; bestScorchHoney = 0; top10patterns = {}
+    eligibility = {}; visitCount = {}; totalSteps = 0
     if writefile then pcall(function()
         writefile("bss_ai_q_v15.json", Http:JSONEncode({
             version = Q_VERSION, qtable = {}, scorchSessions = {},
-            bestScorch = 0, top10 = {}, meta = { ra = os.time() }
+            bestScorch = 0, top10 = {}, eligibility = {}, visitCount = {}, totalSteps = 0,
+            meta = { ra = os.time() }
         }))
     end) end
 end
@@ -2556,6 +2663,7 @@ LP.CharacterAdded:Connect(function()
     aT = {}; cQ = {}; lP = nil; curF = nil; tL = "start"
     smT = nil; isCS = false; INT = false; cyc = { chC = 0 }; fP = {}
     igT = 0; rCC = 0; dupCnt = 0; pollenMarkStacks = 0
+    eligibility = {}; visitCount = {}; totalSteps = 0
     scorchActive = false; scorchRecording = false; scorchActions = {}
     scorchStartHoney = 0; scorchStartTime = 0
     fixedXFlameCenter = nil; lastTokenLinkTime = 0; lastFocusCHTime = 0
@@ -2572,6 +2680,7 @@ LP.CharacterAdded:Connect(function()
                 writefile("bss_ai_q_v15.json", Http:JSONEncode({
                     version = Q_VERSION, qtable = QT, scorchSessions = scorchSessions,
                     bestScorch = bestScorchHoney, top10 = top10patterns,
+                    eligibility = eligibility, visitCount = visitCount, totalSteps = totalSteps,
                     meta = { sc = qc, sa = os.time() }
                 }))
             end)
@@ -2579,4 +2688,4 @@ LP.CharacterAdded:Connect(function()
     end)
 end)
 
-print("✅ BSS AI v16.5 MERGED — Active Super Scorch + All Timers + Backpack Dump + Showers")
+print("✅ BSS AI v16.5 MERGED — Advanced Q-Learning + XF/Scorch Timing + UCB + TD-lambda")
