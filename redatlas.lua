@@ -152,26 +152,27 @@ local pollenMarkStacks = 0
 
 -- ===== ALL TOKEN DEFINITIONS (timers for every type) =====
 local TKS = {}
-TKS[1629547638] = { n = "Token Link", base = 4, p = 99, prefix = "TL ", normalColor = Color3.new(0,0,0), bgColor = Color3.new(1,1,1) }
-TKS[8173559749] = { n = "TP", base = 8, p = 95, prefix = "TP ", normalColor = Color3.new(0.7, 0.2, 0.9), dupedColor = Color3.new(0.5, 0.1, 0.7), bgColor = Color3.new(0,0,0) }
+-- battle=true: haste, focus, rage, token link, baby love, melody, inferno, flame fuel, target practice, all morphs, glitch/smile
+TKS[1629547638] = { n = "Token Link", base = 4, p = 99, prefix = "TL ", normalColor = Color3.new(0,0,0), bgColor = Color3.new(1,1,1), battle = true }
+TKS[8173559749] = { n = "TP", base = 8, p = 95, prefix = "TP ", normalColor = Color3.new(0.7, 0.2, 0.9), dupedColor = Color3.new(0.5, 0.1, 0.7), bgColor = Color3.new(0,0,0), battle = true }
 TKS[2000457501] = { n = "Inspire", base = 8, p = 25, prefix = "IN ", normalColor = Color3.new(1, 1, 0), dupedColor = Color3.new(1, 0.84, 0), bgColor = Color3.new(0,0,0) }
-TKS[1472256444] = { n = "Baby Love", base = 8, p = 22, prefix = "BL ", normalColor = Color3.new(1, 0.7, 0.8), dupedColor = Color3.new(0.8, 0.5, 0.6), bgColor = Color3.new(0,0,0) }
-TKS[1629649299] = { n = "Focus", base = 4, p = 15, prefix = "FC ", normalColor = Color3.new(0.3, 0.6, 1), bgColor = Color3.new(0,0,0) }
-TKS[65867881] = { n = "Haste", base = 4, p = 15, prefix = "HS ", normalColor = Color3.new(0.2, 1, 0.2), bgColor = Color3.new(0,0,0) }
+TKS[1472256444] = { n = "Baby Love", base = 8, p = 22, prefix = "BL ", normalColor = Color3.new(1, 0.7, 0.8), dupedColor = Color3.new(0.8, 0.5, 0.6), bgColor = Color3.new(0,0,0), battle = true }
+TKS[1629649299] = { n = "Focus", base = 4, p = 15, prefix = "FC ", normalColor = Color3.new(0.3, 0.6, 1), bgColor = Color3.new(0,0,0), battle = true }
+TKS[65867881] = { n = "Haste", base = 4, p = 15, prefix = "HS ", normalColor = Color3.new(0.2, 1, 0.2), bgColor = Color3.new(0,0,0), battle = true }
 TKS[1442863423] = { n = "Blue Boost", base = 4, p = 12, prefix = "BB ", normalColor = Color3.new(0.2, 0.4, 1), bgColor = Color3.new(0,0,0) }
 TKS[1442859163] = { n = "Red Boost", base = 4, p = 12, prefix = "RB ", normalColor = Color3.new(1, 0.2, 0.2), bgColor = Color3.new(0,0,0) }
 TKS[3877732821] = { n = "White Boost", base = 4, p = 12, prefix = "WB ", normalColor = Color3.new(1, 1, 1), bgColor = Color3.new(0,0,0) }
 TKS[1442764904] = { n = "Red Bomb+", base = 4, p = 12, prefix = "RB+ ", normalColor = Color3.new(1, 0.3, 0.1), bgColor = Color3.new(0,0,0) }
-TKS[1442700745] = { n = "Rage", base = 8, p = 10, prefix = "RG ", normalColor = Color3.new(1, 0.1, 0.1), bgColor = Color3.new(0,0,0) }
-TKS[253828517] = { n = "Melody", base = 8, p = 10, prefix = "ML ", normalColor = Color3.new(1, 0.5, 1), bgColor = Color3.new(0,0,0) }
+TKS[1442700745] = { n = "Rage", base = 8, p = 10, prefix = "RG ", normalColor = Color3.new(1, 0.1, 0.1), bgColor = Color3.new(0,0,0), battle = true }
+TKS[253828517] = { n = "Melody", base = 8, p = 10, prefix = "ML ", normalColor = Color3.new(1, 0.5, 1), bgColor = Color3.new(0,0,0), battle = true }
 TKS[2499514197] = { n = "Honey Mark", base = 8, p = 9, prefix = "HM ", normalColor = Color3.new(1, 0.8, 0.2), bgColor = Color3.new(0,0,0) }
 TKS[2499540966] = { n = "Pollen Mark", base = 8, p = 9, prefix = "PM ", normalColor = Color3.new(1, 0.9, 0.4), bgColor = Color3.new(0,0,0) }
-TKS[1472532912] = { n = "Polar Bear", base = 15, p = 8, mo = true, prefix = "MO ", normalColor = Color3.new(0.9, 0.7, 0.5), dupedColor = Color3.new(0.6, 0.4, 0.2), bgColor = Color3.new(0,0,0) }
-TKS[1472491940] = { n = "Black Bear", base = 15, p = 8, mo = true, prefix = "MO ", normalColor = Color3.new(0.9, 0.7, 0.5), dupedColor = Color3.new(0.6, 0.4, 0.2), bgColor = Color3.new(0,0,0) }
-TKS[1472425802] = { n = "Brown Bear", base = 15, p = 8, mo = true, prefix = "MO ", normalColor = Color3.new(0.9, 0.7, 0.5), dupedColor = Color3.new(0.6, 0.4, 0.2), bgColor = Color3.new(0,0,0) }
-TKS[2032949183] = { n = "Mother Bear", base = 15, p = 8, mo = true, prefix = "MO ", normalColor = Color3.new(0.9, 0.7, 0.5), dupedColor = Color3.new(0.6, 0.4, 0.2), bgColor = Color3.new(0,0,0) }
-TKS[1472580249] = { n = "Panda", base = 15, p = 8, mo = true, prefix = "MO ", normalColor = Color3.new(0.9, 0.7, 0.5), dupedColor = Color3.new(0.6, 0.4, 0.2), bgColor = Color3.new(0,0,0) }
-TKS[1489734171] = { n = "Science Bear", base = 15, p = 8, mo = true, prefix = "MO ", normalColor = Color3.new(0.9, 0.7, 0.5), dupedColor = Color3.new(0.6, 0.4, 0.2), bgColor = Color3.new(0,0,0) }
+TKS[1472532912] = { n = "Polar Bear", base = 15, p = 8, mo = true, prefix = "MO ", normalColor = Color3.new(0.9, 0.7, 0.5), dupedColor = Color3.new(0.6, 0.4, 0.2), bgColor = Color3.new(0,0,0), battle = true }
+TKS[1472491940] = { n = "Black Bear", base = 15, p = 8, mo = true, prefix = "MO ", normalColor = Color3.new(0.9, 0.7, 0.5), dupedColor = Color3.new(0.6, 0.4, 0.2), bgColor = Color3.new(0,0,0), battle = true }
+TKS[1472425802] = { n = "Brown Bear", base = 15, p = 8, mo = true, prefix = "MO ", normalColor = Color3.new(0.9, 0.7, 0.5), dupedColor = Color3.new(0.6, 0.4, 0.2), bgColor = Color3.new(0,0,0), battle = true }
+TKS[2032949183] = { n = "Mother Bear", base = 15, p = 8, mo = true, prefix = "MO ", normalColor = Color3.new(0.9, 0.7, 0.5), dupedColor = Color3.new(0.6, 0.4, 0.2), bgColor = Color3.new(0,0,0), battle = true }
+TKS[1472580249] = { n = "Panda", base = 15, p = 8, mo = true, prefix = "MO ", normalColor = Color3.new(0.9, 0.7, 0.5), dupedColor = Color3.new(0.6, 0.4, 0.2), bgColor = Color3.new(0,0,0), battle = true }
+TKS[1489734171] = { n = "Science Bear", base = 15, p = 8, mo = true, prefix = "MO ", normalColor = Color3.new(0.9, 0.7, 0.5), dupedColor = Color3.new(0.6, 0.4, 0.2), bgColor = Color3.new(0,0,0), battle = true }
 TKS[1874564120] = { n = "Pulse", base = 12, p = 7, prefix = "PL ", normalColor = Color3.new(0.2, 1, 1), bgColor = Color3.new(0,0,0) }
 TKS[4528379338] = { n = "Mark Surge", base = 4, p = 7, prefix = "MS ", normalColor = Color3.new(0.8, 0.5, 1), bgColor = Color3.new(0,0,0) }
 TKS[3582501342] = { n = "Rain Call", base = 24, p = 6, prefix = "RC ", normalColor = Color3.new(0.3, 0.5, 1), bgColor = Color3.new(0,0,0) }
@@ -181,11 +182,11 @@ TKS[8083943936] = { n = "Surprise Party", base = 24, p = 6, prefix = "SP ", norm
 TKS[177997841] = { n = "Glob", base = 4, p = 6, prefix = "GB ", normalColor = Color3.new(0.2, 0.8, 1), bgColor = Color3.new(0,0,0) }
 TKS[1839454544] = { n = "Gummy Storm", base = 4, p = 6, prefix = "GS ", normalColor = Color3.new(0.2, 1, 0.5), bgColor = Color3.new(0,0,0) }
 TKS[1442725244] = { n = "Bomb", base = 4, p = 5, prefix = "BM ", normalColor = Color3.new(0.5, 0.5, 0.5), bgColor = Color3.new(0,0,0) }
-TKS[5877939956] = { n = "Glitch", base = 4, p = 5, prefix = "SM ", normalColor = Color3.new(1,1,1), dupedColor = Color3.new(1,1,1), bgColor = Color3.new(0,0,0) }
-TKS[4519549299] = { n = "Inferno", base = 4, p = 5, prefix = "IF ", normalColor = Color3.new(1, 0.4, 0.1), bgColor = Color3.new(0,0,0) }
+TKS[5877939956] = { n = "Glitch", base = 4, p = 5, prefix = "SM ", normalColor = Color3.new(1,1,1), dupedColor = Color3.new(1,1,1), bgColor = Color3.new(0,0,0), battle = true }
+TKS[4519549299] = { n = "Inferno", base = 4, p = 5, prefix = "IF ", normalColor = Color3.new(1, 0.4, 0.1), bgColor = Color3.new(0,0,0), battle = true }
 TKS[4519523935] = { n = "Triangulate", base = 4, p = 5, prefix = "TR ", normalColor = Color3.new(0.2, 0.8, 0.3), bgColor = Color3.new(0,0,0) }
 TKS[4528414666] = { n = "Summon Frog", base = 8, p = 5, prefix = "SF ", normalColor = Color3.new(0.2, 1, 0.2), bgColor = Color3.new(0,0,0) }
-TKS[4528208186] = { n = "Flame Fuel", base = 8, p = 5, prefix = "FF ", normalColor = Color3.new(1, 0.5, 0.1), bgColor = Color3.new(0,0,0) }
+TKS[4528208186] = { n = "Flame Fuel", base = 8, p = 5, prefix = "FF ", normalColor = Color3.new(1, 0.5, 0.1), bgColor = Color3.new(0,0,0), battle = true }
 TKS[1671281844] = { n = "Beamstorm", base = 12, p = 4, prefix = "BS ", normalColor = Color3.new(0.9, 0.9, 0.2), bgColor = Color3.new(0,0,0) }
 TKS[8083436978] = { n = "Blue Balloon", base = 4, p = 4, prefix = "BBL ", normalColor = Color3.new(0.3, 0.5, 1), bgColor = Color3.new(0,0,0) }
 TKS[1104415222] = { n = "BondToken", base = 4, p = 4, prefix = "BT ", normalColor = Color3.new(1, 0.8, 0.5), bgColor = Color3.new(0,0,0) }
@@ -236,13 +237,13 @@ aB.PollM = { combo = 0, active = false, ringPos = nil }  -- Pollen Mark x3
 
 local stP = setmetatable({}, { __mode = "k" })
 local rCC = 0; local rST = 0
-local hB = {}; local aBf = {}; local pH = {}; local bAH = 0; local laT = 0
+local hB = {}; local pH = {}; local bAH = 0; local laT = 0
 local pF = "bss_ai_pat_v15.json"
 local QT = {}; local lMT = tick(); local stW = false
 local xfE = false; local xfC = nil; local lPT = 0
 local qTables = {}; local pHTables = {}; local fldHash = nil; local dupCnt = 0
 local cS = SB["НАБОР"]; local hbF = 0; local isA = false
-local focusRenew = false; local rbSkip = false
+-- focusRenew/rbSkip removed
 local scorchActive = false; local scorchRecording = false
 local scorchActions = {}; local scorchSessions = {}; local top10patterns = {}
 local bestScorchHoney = 0; local lastPatternSave = 0
@@ -250,8 +251,13 @@ local scytheParts = setmetatable({}, { __mode = "k" })
 local lastScytheHit = 0; local scVis = nil; local syVis = nil
 local fixedXFlameCenter = nil
 local lastTokenLinkTime = 0; local lastFocusCHTime = 0
+local goSmileGuard = false  -- restricts sticky detours during go_smile
 local activeCoconuts = {}; local activeShowers = {}
 local activeTokenGuis = {}; local activeBlooms = {}
+-- ===== X-Flame & Scorch progress tracking =====
+local xfProgress = 0      -- from PlayerAbilityEvent
+local scorchProgress = 0  -- from PlayerAbilityEvent
+local lastBloomHit = 0
 
 -- ===== TIMER CREATION FOR ALL TOKENS =====
 local function createTimer(part, id, totalLifetime, duped, def)
@@ -376,9 +382,7 @@ local function getCoreHoney()
 end
 
 local function getCtxKey()
-    local fcS = aB.FC.combo >= 10 and "F1" or "F0"
-    local rbS = aB.RB.combo >= 10 and "R1" or "R0"
-    return string.format("%s|%s|%s|%d", ph(), fcS, rbS, math.min(3, aB.PoM.m))
+    return string.format("%s|PM%d|PLL%d", ph(), math.min(3, aB.PoM.m), math.min(1, pollenMarkStacks >= 3 and 1 or 0))
 end
 
 local function fldHashFn()
@@ -664,7 +668,6 @@ end
 local cATCache = {}; local cATFrame = 0
 
 local function gRCT(mP, dP)
-    if focusRenew then return {} end
     if not prec.isX or prec.nR then return {} end
     if cATFrame == hbF and cATCache[mP] then return cATCache[mP] end
     local mf = Vector3.new(mP.X, 0, mP.Z)
@@ -746,7 +749,138 @@ local function tryRedirectToCH(origTarget)
     return true
 end
 
+-- ===== BLOOM SCYTHE INTEGRATION =====
+local function hitNearbyBloom()
+    local r = h()
+    if not r then return end
+    local n = tick()
+    if n - lastBloomHit < SCYTHE_CD then return end
+    local isScorchActive = (aB.SS.st > 0)
+    local bestBloom, bestPetals = nil, math.huge
+    for bloom in pairs(activeBlooms) do
+        if bloom.Parent then
+            local dist = d3(r.Position, bloom.Position)
+            if dist <= SCYTHE_DIST then
+                -- Count petals
+                local petalCount = 0
+                for _, p in ipairs(bloom:GetChildren()) do
+                    if p.Name == "Petal" then petalCount = petalCount + 1 end
+                end
+                -- Count nearby flames for scorch-aware decision
+                local flamesNearby = 0
+                if isScorchActive then
+                    for fl in pairs(scytheParts) do
+                        if fl.Parent and d3(bloom.Position, fl.Position) < 15 then
+                            flamesNearby = flamesNearby + 1
+                        end
+                    end
+                end
+                -- During scorch: only hit bloom if ≤3 flames nearby
+                local eligible = isScorchActive and (flamesNearby <= 3) or (not isScorchActive)
+                if eligible and petalCount < bestPetals then
+                    bestPetals = petalCount
+                    bestBloom = bloom
+                end
+            end
+        else
+            activeBlooms[bloom] = nil
+        end
+    end
+    if not bestBloom then return end
+    lastBloomHit = n
+    local bg = r:FindFirstChild("AI_BG_Bloom")
+    if not bg then
+        bg = Instance.new("BodyGyro"); bg.Name = "AI_BG_Bloom"
+        bg.MaxTorque = Vector3.new(0, 40000, 0); bg.P = 10000; bg.D = 500
+        bg.Parent = r
+    end
+    local dir = bestBloom.Position - r.Position
+    dir = Vector3.new(dir.X, 0, dir.Z)
+    if dir.Magnitude > 0.1 then bg.CFrame = CFrame.lookAt(r.Position, r.Position + dir) end
+    local ev = RS:FindFirstChild("Events")
+    local tce = ev and ev:FindFirstChild("ToolCollect")
+    if tce then pcall(function() tce:FireServer() end) end
+    task.spawn(function()
+        task.wait(0.15)
+        if bg then bg:Destroy() end
+    end)
+end
+
+-- ===== FLAME CLUSTER PATH WEAVING =====
+-- Scans flames near the movement corridor and returns a nudge position
+-- to steer the player through the densest flame cluster along the way.
+local function computeFlameStrafe(mP, dP)
+    local mf = Vector3.new(mP.X, 0, mP.Z)
+    local df = Vector3.new(dP.X, 0, dP.Z)
+    local tt = df - mf
+    if tt.Magnitude < 1 then return nil end
+    local tD = tt.Unit
+    local bestCluster = nil
+    local bestScore = -1
+    local n = tick()
+    -- Group flames into clusters (simple: find flame with most neighbors)
+    local flameList = {}
+    for fl, data in pairs(scytheParts) do
+        if fl.Parent then
+            local isDark = (fl.Name:find("Dark") or fl.BrickColor.Name == "Really black")
+            local cd = flameCooldowns[fl]
+            if not isDark and (not cd or n >= cd) and (n - data.sT) >= 6.0 then
+                table.insert(flameList, fl)
+            end
+        end
+    end
+    if #flameList == 0 then return nil end
+    -- For each flame, check if near the path corridor
+    for _, fl in ipairs(flameList) do
+        local fp = Vector3.new(fl.Position.X, 0, fl.Position.Z)
+        local toFl = fp - mf
+        local alongDist = toFl:Dot(tD)
+        -- Only consider flames ahead of us (0 to 40 studs forward)
+        if alongDist > 0 and alongDist < 40 then
+            local crossDist = math.abs(toFl.X * tD.Z - toFl.Z * tD.X)
+            -- Within 10 studs of the path
+            if crossDist < 10 then
+                -- Count neighbors within 8 studs (cluster density)
+                local neighbors = 0
+                for _, fl2 in ipairs(flameList) do
+                    if fl2 ~= fl then
+                        if d3(fl.Position, fl2.Position) < 8 then
+                            neighbors = neighbors + 1
+                        end
+                    end
+                end
+                -- Score: cluster size * (1 - crossDist/10) * age factor
+                local age = n - scytheParts[fl].sT
+                -- Invert: prioritize flames with LESS time remaining (<2s left = high priority)
+                local remLife = math.max(0, 7.0 - age)  -- normal flame lives ~7s
+                local ageScore = math.min(1.0, remLife / 2.0)  -- max urgency when <2s remain
+                local score = (1 + neighbors) * (1 - crossDist / 10) * (0.5 + ageScore * 0.5)
+                if score > bestScore then
+                    bestScore = score
+                    -- Nudge towards the flame, but limit deviation from path
+                    local nudgeDist = math.min(6, crossDist * 0.7 + 2)
+                    local sign = (toFl.X * tD.Z - toFl.Z * tD.X) > 0 and 1 or -1
+                    local perpX = -tD.Z * sign
+                    local perpZ = tD.X * sign
+                    bestCluster = {
+                        pos = Vector3.new(
+                            mP.X + tD.X * alongDist + perpX * nudgeDist,
+                            mP.Y,
+                            mP.Z + tD.Z * alongDist + perpZ * nudgeDist
+                        ),
+                        score = score
+                    }
+                end
+            end
+        end
+    end
+    return bestCluster
+end
+
 -- ===== HIT NON-DARK FLAMES WHILE MOVING (superficial) =====
+-- ===== FLAME COOLDOWN TRACKING =====
+local flameCooldowns = setmetatable({}, { __mode = "k" })
+
 local function hitNearbyFlames()
     local r = h()
     if not r then return end
@@ -755,18 +889,12 @@ local function hitNearbyFlames()
     for fl, data in pairs(scytheParts) do
         if fl.Parent then
             local isDark = (fl.Name:find("Dark") or fl.BrickColor.Name == "Really black")
-            if not isDark then
+            local cd = flameCooldowns[fl]
+            if not isDark and (not cd or n >= cd) then
                 local dist = d3(r.Position, fl.Position)
                 if dist <= SCYTHE_DIST * 2 and (n - data.sT) >= 6.0 then
                     lastScytheHit = n
-                    -- Position player so flame is in front at scythe range
-                    local dirFromFlame = (r.Position - fl.Position).Unit
-                    if dirFromFlame.Magnitude < 0.1 then dirFromFlame = Vector3.new(1, 0, 0) end
-                    local targetPos = fl.Position + dirFromFlame * SCYTHE_DIST * 0.8
-                    local hm_ = hm()
-                    if hm_ and dist > SCYTHE_DIST * 1.1 then
-                        hm_:MoveTo(Vector3.new(targetPos.X, r.Position.Y, targetPos.Z))
-                    end
+                    flameCooldowns[fl] = n + 5.0
                     local bg = r:FindFirstChild("AI_BG_Scythe")
                     if not bg then
                         bg = Instance.new("BodyGyro"); bg.Name = "AI_BG_Scythe"
@@ -776,26 +904,28 @@ local function hitNearbyFlames()
                     local dir = fl.Position - r.Position
                     dir = Vector3.new(dir.X, 0, dir.Z)
                     if dir.Magnitude > 0.1 then bg.CFrame = CFrame.lookAt(r.Position, r.Position + dir) end
-                    task.wait(0.08)
+                    -- Fire tool collect immediately (no wait), then clean up in background
                     local ev = RS:FindFirstChild("Events")
                     local tce = ev and ev:FindFirstChild("ToolCollect")
-                    local hit = false
-                    if tce then pcall(function() tce:FireServer() end); hit = true end
-                    if not hit then
+                    if tce then pcall(function() tce:FireServer() end)
+                    else
                         pcall(function()
                             local cam = workspace.CurrentCamera; local vp = cam.ViewportSize
                             VIM:SendMouseButtonEvent(vp.X / 2, vp.Y / 2, 0, true, game, 1)
-                            task.wait(0.05)
                             VIM:SendMouseButtonEvent(vp.X / 2, vp.Y / 2, 0, false, game, 1)
                         end)
                     end
-                    task.wait(0.1)
-                    if bg then bg:Destroy() end
+                    -- Background cleanup: remove BodyGyro after short delay
+                    task.spawn(function()
+                        task.wait(0.15)
+                        if bg then bg:Destroy() end
+                    end)
                     break
                 end
             end
         else
             scytheParts[fl] = nil
+            flameCooldowns[fl] = nil
         end
     end
 end
@@ -818,13 +948,22 @@ local function goTo(tP, rad, to, sk)
     if av then cM = Vector3.new(av.X, r.Position.Y, av.Z) end
     hm_:MoveTo(cM)
     local t0 = tick(); local lM = tick(); local lA = tick(); local lPC = tick()
+    local stickyUsedThisGo = false
+    local abortTimer = tick(); local abortLastPos = r.Position
     while tick() - t0 < to do
         task.wait(0.04)
         if not ENABLED or INT then return false end
         r = h()
         if not r then return false end
-        -- Superficial: hit nearby flames while moving
-        pcall(hitNearbyFlames)
+        -- Superficial: hit nearby blooms (scorch-aware) + flames while moving
+        pcall(hitNearbyBloom)
+        local hasFlameNearby = false
+        for fl, data in pairs(scytheParts) do
+            if fl.Parent and d3(r.Position, fl.Position) <= SCYTHE_DIST * 2 then
+                hasFlameNearby = true; break
+            end
+        end
+        if hasFlameNearby then pcall(hitNearbyFlames) end
         -- Superficial: collect nearby petals while moving
         if #fP > 0 then
             for i = 1, #fP do
@@ -836,11 +975,74 @@ local function goTo(tP, rad, to, sk)
                 end
             end
         end
+        -- Sticky-token: whitelist (BL, Inspire, Morphs, TL non-duped), max 1 per goTo, go_smile guard
+        if hbF % 3 == 0 and not stickyUsedThisGo then
+            local nSticky = tick()
+            local bestSticky, bestScore = nil, -1
+            for p, t in pairs(aT) do
+                if not t.col and p.Parent then
+                    local def = TKS[t.id]
+                    local whitelisted = false
+                    if def then
+                        if t.id == 1472256444 or t.id == 2000457501 or def.mo
+                           or (t.id == 1629547638 and not t.dp) then
+                            whitelisted = true
+                        end
+                    end
+                    if whitelisted then
+                        local rem = t.l - (nSticky - t.s)
+                        local maxDist = (goSmileGuard and smTR < 3.0) and 5 or 12
+                        if rem > 0 and rem < 3.0 and d3(r.Position, p.Position) < maxDist then
+                            local score = t.p * (1 - rem / t.l)
+                            if score > bestScore then bestScore = score; bestSticky = p end
+                        end
+                    end
+                end
+            end
+            if bestSticky and not INT then
+                stickyUsedThisGo = true
+                local detourPos = bestSticky.Position
+                local hmDetour = hm()
+                if hmDetour then hmDetour:MoveTo(Vector3.new(detourPos.X, r.Position.Y, detourPos.Z)) end
+                local tDetour = tick()
+                while tick() - tDetour < 0.8 do
+                    task.wait(0.04)
+                    if INT then break end
+                    local rDetour = h()
+                    if not rDetour then break end
+                    if d3(rDetour.Position, detourPos) < 5 then
+                        if aT[bestSticky] then aT[bestSticky].col = true; st.tk = st.tk + 1 end
+                        break
+                    end
+                end
+                hm_ = hm()
+                if hm_ then hm_:MoveTo(cM) end
+            end
+        end
+
+        -- goTo abort: if stuck (distance reduced < 2 studs in 4s) -> abort
+        if tick() - abortTimer > 4.0 then
+            if d3(r.Position, abortLastPos) < 2 then
+                return false
+            end
+            abortTimer = tick()
+            abortLastPos = r.Position
+        end
+
         if d3(r.Position, oT) <= rad then return true end
         if tick() - lA >= 0.15 then
             lA = tick()
             local na = cAT(r.Position, oT)
             cM = na and Vector3.new(na.X, r.Position.Y, na.Z) or oT
+            -- Flame cluster weaving: nudge cM toward densest flame cluster along path
+            local strafe = computeFlameStrafe(r.Position, cM)
+            if strafe then
+                cM = Vector3.new(
+                    cM.X + (strafe.pos.X - cM.X) * 0.4,
+                    cM.Y,
+                    cM.Z + (strafe.pos.Z - cM.Z) * 0.4
+                )
+            end
         end
         if cM ~= oT and d3(r.Position, cM) <= 4 then
             local na = cAT(r.Position, oT)
@@ -907,7 +1109,21 @@ game.DescendantRemoving:Connect(function(o)
         aT[o] = nil
     end
     if activeTokenGuis[o] then activeTokenGuis[o].gui:Destroy(); activeTokenGuis[o] = nil end
+    -- Clean up flame cooldowns when flame part is removed
+    if scytheParts[o] then scytheParts[o] = nil; flameCooldowns[o] = nil end
 end)
+
+-- ===== BATTLE TOKEN FIELD COUNTER (for X-Flame prediction) =====
+local function countBattleTokensNear(pos, radius)
+    local count = 0
+    for _, t in pairs(aT) do
+        if not t.col and t.dp and d3(t.part.Position or pos, pos) <= radius then
+            local def = TKS[t.id]
+            if def and def.battle then count = count + 1 end
+        end
+    end
+    return count
+end
 
 RunService.Heartbeat:Connect(function()
     local now = tick()
@@ -925,9 +1141,33 @@ RunService.Heartbeat:Connect(function()
 end)
 
 local rps = nil
+local PlayerAbilityEvent = nil
 do
     local e = RS:FindFirstChild("Events")
-    if e then rps = e:FindFirstChild("RetrievePlayerStats") end
+    if e then
+        rps = e:FindFirstChild("RetrievePlayerStats")
+        PlayerAbilityEvent = e:FindFirstChild("PlayerAbilityEvent")
+    end
+end
+
+-- ===== PLAYER ABILITY EVENT (X-Flame + Scorch progress) =====
+if PlayerAbilityEvent then
+    PlayerAbilityEvent.OnClientEvent:Connect(function(data)
+        if type(data) ~= "table" then return end
+        for tag, info in pairs(data) do
+            if type(tag) == "string" and type(info) == "table" and info.Action == "Update" then
+                local stacks = info.Values and info.Values[1]
+                if stacks then
+                    local lower = tag:lower()
+                    if lower:find("flame") then
+                        xfProgress = stacks
+                    elseif lower:find("scorching") then
+                        scorchProgress = stacks
+                    end
+                end
+            end
+        end
+    end)
 end
 
 local function flatBuffs(t, d)
@@ -961,24 +1201,12 @@ local function sBf()
         aB.PoM.m = tonumber(rawget(pm, "Combo") or 0) or 1
         if aR then aB.PoM.pos = aR.Position end
     else aB.PoM.a = false; aB.PoM.m = 0 end
-    local fc = fd[FOCI]
-    if fc and rawget(fc, "Removed") ~= true then
-        aB.FC.combo = tonumber(rawget(fc, "Combo") or 0) or 0
-        aB.FC.dur = tonumber(rawget(fc, "Dur") or 20) or 20
-        local fcStart = tonumber(rawget(fc, "Start") or os.clock()) or os.clock()
-        aB.FC.tL = math.max(0, aB.FC.dur - (os.clock() - fcStart))
-    else aB.FC.combo = 0; aB.FC.tL = 0 end
-    local rb = fd[RBOI]
-    if rb and rawget(rb, "Removed") ~= true then
-        aB.RB.combo = tonumber(rawget(rb, "Combo") or 0) or 0
-        aB.RB.dur = tonumber(rawget(rb, "Dur") or 15) or 15
-        local rbStart = tonumber(rawget(rb, "Start") or os.clock()) or os.clock()
-        aB.RB.tL = math.max(0, aB.RB.dur - (os.clock() - rbStart))
-    else aB.RB.combo = 0; aB.RB.tL = 0 end
+    -- FC/RB tracking removed
     local curH = getCoreHoney()
     if aB.SS.st > 0 and prevSS == 0 then
         scorchStartHoney = curH; scorchStartTime = tick()
         scorchActive = true; scorchRecording = true; scorchActions = {}
+        scorchProgress = 0  -- reset progress when scorch activates
     elseif aB.SS.st == 0 and prevSS > 0 then
         scorchActive = false
         if scorchRecording and scorchStartTime > 0 then
@@ -1073,17 +1301,6 @@ local function sSm()
     if smT and not isCS then INT = true end
 end
 
-local function uHB()
-    local n = tick()
-    if tL and tL ~= "старт" then
-        local r = h()
-        table.insert(aBf, { time = n, action = tL, pos = r and r.Position or Vector3.zero,
-            phase = ph(), isSc = aB.SS.st > 0, scPh = scPh() })
-    end
-    local cut = n - 300
-    while #aBf > 0 and aBf[1].time < cut do table.remove(aBf, 1) end
-end
-
 local function gPB(action, pos)
     if #pH == 0 then return 0 end
     local be = 0
@@ -1152,6 +1369,10 @@ end
 local function scanScythes()
     local pf = Workspace:FindFirstChild("PlayerFlames")
     if not pf then return end
+    -- Clean up stale flame entries
+    for fl, _ in pairs(scytheParts) do
+        if not fl.Parent then scytheParts[fl] = nil; flameCooldowns[fl] = nil end
+    end
     for _, f in ipairs(pf:GetChildren()) do
         local nm = f.Name or ""
         if nm:sub(1, 3) == "Flm" or nm:find("Scythe") or nm:find("Flame") then
@@ -1226,7 +1447,7 @@ local function eS()
         end
     end
     local zn = "mid"
-    if curF and curF.part and curF.part.Parent then
+    if curF and curF.part and curF.part.Size then
         local c = curF.part.Position; local s = curF.part.Size
         if s.X > 0 and s.Z > 0 then
             local rx = math.abs(r.Position.X - c.X) / (s.X / 2)
@@ -1245,12 +1466,11 @@ local function eS()
         end
         if ct > 2 then chT = "many" elseif ct > 0 then chT = "some" end
     end
-    return string.format("PH:%s|SC:%s|TL:%s|CH:%d|PR:%d|SM:%s|NT:%s|Z:%s|CT:%s|PT:%s|XF:%s|FC:%s|RB:%s|PM:%d|PLL:%d",
+    return string.format("PH:%s|SC:%s|TL:%s|CH:%d|PR:%d|SM:%s|NT:%s|Z:%s|CT:%s|PT:%s|XF:%s|PM:%d|PLL:%d|SSp:%d|XFp:%d",
         p_, scPh(), tlD, rN, prN, sU, tostring(nT), zn, chT, hP,
         (aB.XF.st >= 19 and "1" or "0"),
-        (aB.FC.combo >= 10 and "1" or "0"),
-        (aB.RB.combo >= 10 and "1" or "0"),
-        math.min(3, aB.PoM.m), pollenMarkStacks)
+        math.min(3, aB.PoM.m), pollenMarkStacks,
+        scorchProgress, xfProgress)
 end
 
 -- ===== ACTIVE SUPER SCORCH: patrol near flames =====
@@ -1278,10 +1498,9 @@ end
 local function gAWB()
     local ba = {}
     local p_ = ph(); local n = tick()
-    focusRenew = (aB.FC.combo >= 10 and aB.FC.tL > 0 and aB.FC.tL <= FOCUS_RENEW)
-    rbSkip = (aB.RB.combo >= 10 and aB.RB.tL > 0 and aB.RB.tL <= RB_RENEW)
     local isScorchActive = (aB.SS.st > 0)
-    local isSuperScorch = (isScorchActive and prec.isX and aB.PoM.m >= 3)
+    -- Super Scorch: Scorch active + Precision X10 + Precision of Marks x3 + Pollen Mark x3
+    local isSuperScorch = (isScorchActive and prec.isX and aB.PoM.m >= 3 and pollenMarkStacks >= 3)
 
     local hasDupedMorph = false
     for p, t in pairs(aT) do
@@ -1321,11 +1540,6 @@ local function gAWB()
 
     -- ===== ACTIVE SUPER SCORCH: patrol flames, collect tokens + CH =====
     if isSuperScorch then
-        local rbScorch = (aB.RB.combo >= 10 and aB.RB.tL > 0 and aB.RB.tL <= RB_SCORCH_RENEW)
-        if rbScorch then
-            local pp = gPCH()
-            if #pp > 0 then return { "go_purple_rb_renew" } end
-        end
         -- Collect tokens near scorch center
         local sc, _ = getScorchFlameCenter()
         if sc ~= Vector3.zero and r then
@@ -1371,10 +1585,6 @@ local function gAWB()
         end
     end
 
-    if focusRenew then
-        local all = gCH(false, false, false)
-        if #all > 0 then return { "go_focus_renew" } end
-    end
     if hTL() then return { "go_tokenlink" } end
 
     for i, coco in ipairs(activeCoconuts) do
@@ -1393,10 +1603,6 @@ local function gAWB()
             elseif td and td.id == TPI and td.dp then table.insert(ba, 1, "go_dup_area") end
         end
     end
-    if rbSkip then
-        local pp = gPCH()
-        if #pp > 0 then return { "go_purple_rb_renew" } end
-    end
     if p_ == "REFRESH" then
         local all = gCH(false, false, true)
         if #all > 0 then return { "go_crosshair_refresh_all" } end
@@ -1404,10 +1610,7 @@ local function gAWB()
     end
     if p_ == "X10" then
         if isSuperOutside then
-            if tick() - lastFocusCHTime > 6.0 then
-                local all = gCH(false, false, false)
-                if #all > 0 then return { "go_focus_ch" } end
-            end
+            -- Just patrol, no focus_ch action
         else
             local pp = gCH(true, false, false)
             if #pp > 0 then return { "go_purple" } end
@@ -1422,7 +1625,10 @@ local function gAWB()
         if #fP > 0 then table.insert(ba, "go_petal") end
         for fl, data in pairs(scytheParts) do
             if fl.Parent and not (fl.Name:find("Dark") or fl.BrickColor.Name == "Really black") then
-                if (n - data.sT) > 2.0 then table.insert(ba, "go_touch_flame"); break end
+                local cd = flameCooldowns[fl]
+                if (not cd or n >= cd) and (n - data.sT) > 2.0 then
+                    table.insert(ba, "go_touch_flame"); break
+                end
             end
         end
         if next(aT) ~= nil then
@@ -1463,7 +1669,7 @@ end
 local function eA(action)
     local r = h(); local hm_ = hm()
     if not r then return -1 end
-    tL = action; recordScorchAction(action); uHB()
+    tL = action; recordScorchAction(action)
 
     -- Hit nearby non-dark flames while running to smile
     if action == "go_smile" then
@@ -1480,14 +1686,19 @@ local function eA(action)
 
     if action == "patrol_scorch_flames" then
         local sc, hasFlames = getScorchFlameCenter()
-        tL = hasFlames and "🔥SS Flames" or "🔥SS Patrol"
+        tL = hasFlames and "🔥SS Orbital" or "🔥SS Patrol"
         INT = false
-        if sc ~= Vector3.zero then
+        if sc ~= Vector3.zero and hasFlames then
+            -- Orbital patrol: move along circle at SCYTHE_DIST * 0.9 from flame center
+            local orbAngle = (tick() * 0.8) % (2 * math.pi)  -- continuous rotation
+            local orbDist = SCYTHE_DIST * 0.9
+            local px = sc.X + math.cos(orbAngle) * orbDist
+            local pz = sc.Z + math.sin(orbAngle) * orbDist
+            goTo(Vector3.new(px, r.Position.Y, pz), 4, PT)
+        elseif sc ~= Vector3.zero then
             local ang = math.random() * 2 * math.pi
-            local dist = hasFlames and math.random() * 12 or math.random() * aRR * 0.5
-            local px = sc.X + math.cos(ang) * dist
-            local pz = sc.Z + math.sin(ang) * dist
-            goTo(Vector3.new(px, r.Position.Y, pz), 5, PT)
+            local dist = math.random() * aRR * 0.5
+            goTo(Vector3.new(sc.X + math.cos(ang) * dist, r.Position.Y, sc.Z + math.sin(ang) * dist), 5, PT)
         else
             goTo(r.Position, 5, 2)
         end
@@ -1517,7 +1728,13 @@ local function eA(action)
     if action == "go_backpack_dump" then
         local all = gCH(false, false, false)
         if #all == 0 then return -1 end
-        local t = all[1]
+        -- Pick NEAREST CH, not first by spawn time
+        local best, bestD = nil, math.huge
+        for _, ch in ipairs(all) do
+            local d = d3(r.Position, ch.part.Position)
+            if d < bestD then bestD = d; best = ch end
+        end
+        local t = best
         tL = "🎒 90% dump"
         INT = false
         local ok = goTo(t.part.Position, 4, 3)
@@ -1547,7 +1764,7 @@ local function eA(action)
                 sh.collected = true
                 -- Teleport to next uncollected shower every 2 seconds
                 local nextFound = true
-                while nextFound do
+                while nextFound and not INT do
                     nextFound = false
                     for j = 1, #activeShowers do
                         local ns = activeShowers[j]
@@ -1639,18 +1856,24 @@ local function eA(action)
     if action == "go_touch_flame" then
         local bestFl, bestD = nil, math.huge; local n = tick()
         for fl, data in pairs(scytheParts) do
-            if fl.Parent and not (fl.Name:find("Dark") or fl.BrickColor.Name == "Really black") and (n - data.sT) > 2.0 then
-                local d = d3(r.Position, fl.Position)
-                if d < bestD then bestD = d; bestFl = fl end
+            if fl.Parent and not (fl.Name:find("Dark") or fl.BrickColor.Name == "Really black") then
+                local cd = flameCooldowns[fl]
+                if (not cd or n >= cd) and (n - data.sT) > 2.0 then
+                    local d = d3(r.Position, fl.Position)
+                    if d < bestD then bestD = d; bestFl = fl end
+                end
             end
         end
         if bestFl then
             tL = "🔥 Flame"; INT = false
-            -- Position so flame is SCYTHE_DIST in front of player (scythe range)
+            -- Position so flame is SCYTHE_DIST in front of player (scythe visual range)
             local dirFromFlame = (r.Position - bestFl.Position).Unit
             if dirFromFlame.Magnitude < 0.1 then dirFromFlame = Vector3.new(1, 0, 0) end
             local approachPos = bestFl.Position + dirFromFlame * SCYTHE_DIST * 0.85
-            if goTo(approachPos, 3, 3) then return 10 end
+            if goTo(approachPos, 3, 3) then
+                flameCooldowns[bestFl] = tick() + 5.0
+                return 10
+            end
         end
         return -2
     end
@@ -1691,33 +1914,6 @@ local function eA(action)
         return rw > 0 and rw or -2
     end
 
-    if action == "go_focus_renew" then
-        local all = gCH(false, false, false)
-        if #all == 0 then return -1 end
-        tL = "🎯 Focus renew"; INT = false
-        local ok = goTo(all[1].part.Position, 4, 4)
-        if ok and all[1].part.Parent then all[1].col = true; if all[1].isP then st.pr = st.pr + 1 else st.ch = st.ch + 1 end; return 15 end
-        return -2
-    end
-
-    if action == "go_focus_ch" then
-        local all = gCH(false, false, false)
-        if #all == 0 then return -1 end
-        tL = "🎯 Focus (6s)"; INT = false
-        local ok = goTo(all[1].part.Position, 4, 4)
-        if ok and all[1].part.Parent then all[1].col = true; st.ch = st.ch + 1; lastFocusCHTime = tick(); return 15 end
-        return -2
-    end
-
-    if action == "go_purple_rb_renew" then
-        local pp = gPCH()
-        if #pp == 0 then return -1 end
-        tL = "🟣 RB renew"; INT = false
-        local ok = goTo(pp[1].part.Position, 4, 4)
-        if ok and pp[1].part.Parent then pp[1].col = true; st.pr = st.pr + 1; return 20 end
-        return -2
-    end
-
     if action == "go_multi_purple" then
         local pp = gPCH()
         if #pp < 2 then return -1 end
@@ -1736,7 +1932,7 @@ local function eA(action)
     if action == "go_crosshair_all" then
         local all = gCH(false, false, true)
         if #all == 0 then return -1 end
-        table.sort(all, function(a, b) return a.sT < b.sT end)
+        -- gCH already sorted (purples first by spawn time, then regular by spawn time)
         local rw = 0; INT = false
         for i = 1, #all do
             local ch = all[i]
@@ -1794,19 +1990,39 @@ local function eA(action)
         local td = aT[smT]
         if not td or td.col then smT = nil; return -1 end
         isCS = true; tL = "Smile"; INT = false
-        -- Hit ALL non-dark flames while running to smile
-        local ok = goTo(smT.Position, 4, math.min(3, smTR - 0.3))
+        -- Set goSmileGuard so sticky detours use tighter radius
+        goSmileGuard = true
+        -- Hit ALL non-dark flames while running to smile (aggressive strafe)
+        for fl, data in pairs(scytheParts) do
+            if fl.Parent then
+                local isDark = (fl.Name:find("Dark") or fl.BrickColor.Name == "Really black")
+                if not isDark and d3(r.Position, fl.Position) <= SCYTHE_DIST * 2 then
+                    pcall(hitNearbyFlames)
+                end
+            end
+        end
+        local timeout = math.max(0.5, math.min(3, smTR - 0.3))  -- clamp to positive
+        local ok = goTo(smT.Position, 4, timeout)
+        goSmileGuard = false
         if ok and smT.Parent then
-            if not td.dp then td.col = true; smT = nil; st.sm = st.sm + 1; isCS = false; dupCnt = 0; return 45 end
+            if not td.dp then
+                td.col = true; smT = nil; st.sm = st.sm + 1; isCS = false
+                dupCnt = 0
+                -- Recalc dupCnt immediately
+                for _, tt in pairs(aT) do if tt.dp and not tt.col then dupCnt = dupCnt + 1 end end
+                return 45
+            end
             local st_ = tick()
             while tick() - st_ < TSD do
                 task.wait(0.1)
                 if not smT.Parent then break end
                 local h__ = hm(); if h__ then h__:MoveTo(Vector3.new(smT.Position.X, smT.Position.Y, smT.Position.Z)) end
             end
-            td.col = true; smT = nil; st.sm = st.sm + 1; isCS = false; dupCnt = 0; return 45
+            td.col = true; smT = nil; st.sm = st.sm + 1; isCS = false; dupCnt = 0
+            for _, tt in pairs(aT) do if tt.dp and not tt.col then dupCnt = dupCnt + 1 end end
+            return 45
         end
-        isCS = false; smT = nil; return -10
+        isCS = false; smT = nil; goSmileGuard = false; return -10
     end
 
     if action == "go_purple" then
@@ -1830,23 +2046,59 @@ local function eA(action)
     end
 
     if action == "go_tokenlink" then
-        local cc = xfE and gFC() or Vector3.zero
+        -- Find all TLs, sort by remaining life (pick most urgent)
+        local tlList = {}
+        local n_ = tick()
         for p, t in pairs(aT) do
             if not t.col and p.Parent and t.p >= 90 then
-                if xfE and cc ~= Vector3.zero then
-                    if d3(p.Position, cc) <= XCR * 2 then
-                        tL = "Link"; INT = false
-                        if goTo(p.Position, 5, 5) and p.Parent then t.col = true; igT = tick() + TLC; lastTokenLinkTime = tick(); return 50 end
-                        return -5
-                    end
-                else
-                    tL = "Link"; INT = false
-                    if goTo(p.Position, 5, 5) and p.Parent then t.col = true; igT = tick() + TLC; lastTokenLinkTime = tick(); return 50 end
-                    return -5
-                end
+                table.insert(tlList, { p = p, t = t, rem = t.l - (n_ - t.s) })
             end
         end
-        return -2
+        if #tlList == 0 then return -2 end
+        table.sort(tlList, function(a, b) return a.rem < b.rem end)
+        -- X-Flame aware: if TL in corner would trigger X-Flame at 25, skip it
+        local bestTL = tlList[1]
+        for _, entry in ipairs(tlList) do
+            local shouldSkip = false
+            if aB.XF.st > 0 then
+                local cc = gFC()
+                if cc ~= Vector3.zero then
+                    local inCenter = d3(entry.p.Position, cc) <= XCR * 2
+                    if not inCenter then
+                        -- TL not in center: check if collecting it would trigger X-Flame
+                        local battleNear = countBattleTokensNear(entry.p.Position, 40)
+                        if aB.XF.st + battleNear >= 25 then
+                            shouldSkip = true  -- would trigger X-Flame in corner, skip
+                        end
+                    end
+                end
+            end
+            if not shouldSkip then bestTL = entry; break end
+        end
+        tL = "Link"; INT = false
+        if goTo(bestTL.p.Position, 5, 5) and bestTL.p.Parent then
+            bestTL.t.col = true; igT = tick() + TLC; lastTokenLinkTime = tick()
+            -- TL duo: if another TL nearby with >3s life, wait 2-3s then collect
+            for _, entry2 in ipairs(tlList) do
+                if entry2.p ~= bestTL.p and entry2.p.Parent and not entry2.t.col then
+                    local dist2 = d3(bestTL.p.Position, entry2.p.Position)
+                    if dist2 < 40 and entry2.rem > 3.0 then
+                        task.wait(math.min(2.5, entry2.rem - 1.0))
+                        if entry2.p.Parent and not entry2.t.col then
+                            goTo(entry2.p.Position, 5, 4)
+                            if entry2.p.Parent then entry2.t.col = true end
+                        end
+                    elseif dist2 < 40 and entry2.rem <= 3.0 then
+                        -- Both urgent, grab second immediately
+                        goTo(entry2.p.Position, 5, 4)
+                        if entry2.p.Parent then entry2.t.col = true end
+                    end
+                    break
+                end
+            end
+            return 50
+        end
+        return -5
     end
 
     if action == "go_crosshair" then
@@ -1916,9 +2168,17 @@ local function eA(action)
     end
 
     if action == "go_token_best" then
-        local be, bP = nil, -1; local n = tick()
+        local be, bestScore = nil, -1; local n = tick()
         for p, t in pairs(aT) do
-            if not t.col and p.Parent and (t.l - (n - t.s)) > 0.5 and t.p > bP then be = p; bP = t.p end
+            if not t.col and p.Parent then
+                local rem = t.l - (n - t.s)
+                if rem > 0.5 then
+                    -- Score = priority * urgency (remaining fraction)
+                    local score = t.p * (rem / t.l)
+                    if t.dp then score = score * 1.3 end  -- duped tokens more urgent
+                    if score > bestScore then bestScore = score; be = p end
+                end
+            end
         end
         if be then tL = "💎⭐ " .. aT[be].n; INT = false; if goTo(be.Position, 5, 5) and be.Parent then aT[be].col = true; return 5 + aT[be].p * 0.3 end; return -3 end
         return -1
@@ -1938,7 +2198,14 @@ local function eA(action)
             end
             if curF then
                 local c = curF.part.Position; local s = curF.part.Size
-                return cP(Vector3.new(c.X + (math.random() * 2 - 1) * math.max(s.X / 2 * 0.3, 5), 0, c.Z + (math.random() * 2 - 1) * math.max(s.Z / 2 * 0.3, 5)))
+                local rp = Vector3.new(c.X + (math.random() * 2 - 1) * math.max(s.X / 2 * 0.3, 5), 0, c.Z + (math.random() * 2 - 1) * math.max(s.Z / 2 * 0.3, 5))
+                -- Centripetal bias: if near edge, pull 40% toward center
+                local rx = math.abs(rp.X - c.X) / math.max(s.X / 2, 1)
+                local rz = math.abs(rp.Z - c.Z) / math.max(s.Z / 2, 1)
+                if rx > 0.6 or rz > 0.6 then
+                    rp = Vector3.new(rp.X + (c.X - rp.X) * 0.4, 0, rp.Z + (c.Z - rp.Z) * 0.4)
+                end
+                return cP(rp)
             end
             local rp = h(); return rp and cP(rp.Position + Vector3.new((math.random() * 2 - 1) * 30, 0, (math.random() * 2 - 1) * 30)) or cP(Vector3.zero)
         end
@@ -1953,7 +2220,13 @@ local function eA(action)
         local function rF()
             if curF then
                 local c = curF.part.Position; local s = curF.part.Size
-                return cP(Vector3.new(c.X + (math.random() * 2 - 1) * math.max(s.X / 2 - 3, 1), 0, c.Z + (math.random() * 2 - 1) * math.max(s.Z / 2 - 3, 1)))
+                local rp = Vector3.new(c.X + (math.random() * 2 - 1) * math.max(s.X / 2 - 3, 1), 0, c.Z + (math.random() * 2 - 1) * math.max(s.Z / 2 - 3, 1))
+                local rx = math.abs(rp.X - c.X) / math.max(s.X / 2, 1)
+                local rz = math.abs(rp.Z - c.Z) / math.max(s.Z / 2, 1)
+                if rx > 0.6 or rz > 0.6 then
+                    rp = Vector3.new(rp.X + (c.X - rp.X) * 0.4, 0, rp.Z + (c.Z - rp.Z) * 0.4)
+                end
+                return cP(rp)
             end
             local rp = h(); return rp and cP(rp.Position + Vector3.new((math.random() * 2 - 1) * 30, 0, (math.random() * 2 - 1) * 30)) or cP(Vector3.zero)
         end
@@ -2075,11 +2348,17 @@ _G.BSSAI_HB = RunService.Heartbeat:Connect(function()
         local h_ = hm()
         if h_ then local ts = gAS(); if math.abs(h_.WalkSpeed - ts) > 0.5 then h_.WalkSpeed = ts end end
     end
-    if hbF % 6 == 0 then pcall(uHB) end
+    -- uHB removed (action buffer was never read, only grew infinitely)
     if hbF % 3 == 0 then sSm() end
     if hbF % 180 == 0 then fF() end
     if hbF % 60 == 0 then clnCH() end
     if hbF % 30 == 0 then saveScorchSessions() end
+    -- Q-table decay every ~10 min (hbF ~60/sec => 36000 frames)
+    if hbF % 36000 == 0 then
+        for _, tbl in pairs(qTables) do
+            for k, v in pairs(tbl) do tbl[k] = v * 0.99 end
+        end
+    end
     if hbF % 18000 == 0 then
         task.spawn(function()
             local qc = 0; for _ in pairs(QT) do qc = qc + 1 end
@@ -2208,7 +2487,7 @@ pl_.TextXAlignment = Enum.TextXAlignment.Center
 
 local bf = Instance.new("TextLabel", fr)
 bf.Size = UDim2.new(1, 0, 0, 14); bf.Position = UDim2.new(0, 0, 0, 76)
-bf.BackgroundTransparency = 1; bf.Text = "FC:-- RB:-- PM:-- PLM:-- dup:--"
+bf.BackgroundTransparency = 1; bf.Text = "PM:-- PLM:-- dup:-- XF:-- SS:--"
 bf.TextColor3 = Color3.fromRGB(255, 180, 100)
 bf.Font = Enum.Font.Gotham; bf.TextSize = 9
 bf.TextXAlignment = Enum.TextXAlignment.Center
@@ -2240,11 +2519,10 @@ task.spawn(function()
         local hp40m = elapsedMin > 0 and (curH - scriptStartHoney) / elapsedMin * 40 or 0
         hl.Text = "HP40M: " .. fmtHoney(hp40m) .. " | " .. fmtHoney(curH)
         local pStacksText = prec.isX and "[X10]" or ("[" .. prec.st .. "/10]")
-        sl.Text = "S: " .. string.format("%.0f", cS) .. " | PREC: " .. pStacksText
+        local precTimer = prec.tL > 0 and string.format("%.0fs", prec.tL) or "--"
+        sl.Text = "S: " .. string.format("%.0f", cS) .. " | PREC: " .. precTimer .. " " .. pStacksText
         pl_.Text = ph() .. " CH:" .. #cQ .. " Tk:" .. st.tk .. " Pr:" .. st.pr .. " Sm:" .. st.sm
-        local fcLabel = aB.FC.combo >= 10 and "x10" or ("x" .. aB.FC.combo)
-        local rbLabel = aB.RB.combo >= 10 and "x10" or ("x" .. aB.RB.combo)
-        bf.Text = "FC:" .. fcLabel .. " " .. string.format("%.0f", aB.FC.tL) .. "s RB:" .. rbLabel .. " " .. string.format("%.0f", aB.RB.tL) .. "s PM:" .. aB.PoM.m .. " PLM:" .. pollenMarkStacks .. " dup:" .. dupCnt
+        bf.Text = "PM:" .. aB.PoM.m .. " PLM:" .. pollenMarkStacks .. " dup:" .. dupCnt .. " XF:" .. xfProgress .. "/25 SS:" .. scorchProgress .. "/30"
         if scorchActive and scorchStartTime > 0 then
             local se = (tick() - scorchStartTime) / 60
             sh.Text = "🔥 " .. fmtHoney(curH - scorchStartHoney) .. " " .. string.format("%.1f", se) .. "min | " .. fmtHoney(bestScorchHoney)
@@ -2269,10 +2547,12 @@ LP.CharacterAdded:Connect(function()
     aT = {}; cQ = {}; lP = nil; curF = nil; tL = "start"
     smT = nil; isCS = false; INT = false; cyc = { chC = 0 }; fP = {}
     igT = 0; rCC = 0; dupCnt = 0; pollenMarkStacks = 0
-    focusRenew = false; rbSkip = false
     scorchActive = false; scorchRecording = false; scorchActions = {}
     scorchStartHoney = 0; scorchStartTime = 0
     fixedXFlameCenter = nil; lastTokenLinkTime = 0; lastFocusCHTime = 0
+    xfProgress = 0; scorchProgress = 0
+    activeShowers = {}; activeBlooms = {}; activeCoconuts = {}
+    for fl in pairs(flameCooldowns) do flameCooldowns[fl] = nil end
     if xfC then xfC:Destroy(); xfC = nil end
     if scVis then scVis:Destroy(); scVis = nil end
     if syVis then syVis:Destroy(); syVis = nil end
