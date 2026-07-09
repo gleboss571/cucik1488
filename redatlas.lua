@@ -1,4 +1,4 @@
--- BSS AI v16.5 MERGED (Active Super Scorch + All Timers + Advanced Q-Learning)
+-- BSS AI v16.5 MERGED
 -- ============================================================
 -- SERVICES
 -- ============================================================
