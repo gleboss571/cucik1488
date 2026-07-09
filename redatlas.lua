@@ -1267,21 +1267,16 @@ local function pollAllBuffs()
         local rawVal = rawget(b, "Value")
         prec.val = tonumber(rawVal or 0) or 0
         -- Stacks = Value / 0.02 (e.g. 0.14 / 0.02 = 7)
-        local newSt = 0
         if prec.val > 0 then
-            newSt = math.min(PMX, math.round(prec.val / PPK))
+            prec.st = math.min(PMX, math.round(prec.val / PPK))
+        else
+            prec.st = 0
         end
-        prec.isX = (newSt >= PMX)
+        prec.isX = (prec.st >= PMX)
+        -- Track timer independently
+        if prec.ls == 0 then prec.ls = os.clock() end
         local bDur = tonumber(rawget(b, "Dur") or 60) or 60
         prec.sD = bDur
-        -- Reset timer on stack increase OR new Precision session (Refresh extends Start time)
-        local bStart = tonumber(rawget(b, "Start"))
-        if newSt ~= prec.st or (bStart and bStart ~= prec.sS) then
-            prec.st = newSt
-            prec.ls = os.clock()
-            if bStart then prec.sS = bStart end
-            if prec.isX then prec.nR = false; rCC = 0 end
-        end
     else
         prec.st = 0; prec.val = 0; prec.isX = false
         prec.ls = 0; prec.tL = 0; prec.nR = false
@@ -1711,7 +1706,7 @@ local function gAWB()
         end
         local dt, _ = gDTP()
         if dt then table.insert(ba, "go_dup_tp") end
-        table.insert(ba, "patrol_ring")
+        table.insert(ba, "patrol_ring"); table.insert(ba, "patrol_random")
         return ba
     end
     return { "patrol_ring" }
@@ -2363,34 +2358,28 @@ local function eA(action)
         local t = rR()
         if t == Vector3.zero or (not xfE and not iF(t)) then t = gFC() end
         if t == Vector3.zero then return 0 end
-        -- Superficial token grab while patrolling: quick detour only for close tokens
-        local bestTok, bestD = nil, math.huge
-        local n_ = tick()
-        for p, td in pairs(aT) do
-            if not td.col and p.Parent then
-                local d = d3(r.Position, p.Position)
-                if d < 8 and d < bestD then
-                    local rem = td.l - (n_ - td.s)
-                    if rem > 1 and td.p >= 5 then bestD = d; bestTok = p end
-                end
-            end
-        end
-        if bestTok then
-            local hm_ = hm()
-            if hm_ then hm_:MoveTo(Vector3.new(bestTok.Position.X, r.Position.Y, bestTok.Position.Z)) end
-            local tDet = tick()
-            while tick() - tDet < 0.5 do
-                task.wait(0.03)
-                local rd = h(); if not rd then break end
-                if d3(rd.Position, bestTok.Position) < 5 then
-                    if aT[bestTok] and not aT[bestTok].col then
-                        aT[bestTok].col = true; st.tk = st.tk + 1
-                    end
-                    break
-                end
-            end
-        end
         goTo(t, xfE and 2 or 6, PT); task.wait(0.1 + math.random() * 0.3); return 0
+    end
+
+    if action == "patrol_random" then
+        local function rF()
+            if curF then
+                local c = curF.part.Position; local s = curF.part.Size
+                local rp = Vector3.new(c.X + (math.random() * 2 - 1) * math.max(s.X / 2 - 3, 1), 0, c.Z + (math.random() * 2 - 1) * math.max(s.Z / 2 - 3, 1))
+                local rx = math.abs(rp.X - c.X) / math.max(s.X / 2, 1)
+                local rz = math.abs(rp.Z - c.Z) / math.max(s.Z / 2, 1)
+                if rx > 0.6 or rz > 0.6 then
+                    rp = Vector3.new(rp.X + (c.X - rp.X) * 0.4, 0, rp.Z + (c.Z - rp.Z) * 0.4)
+                end
+                return cP(rp)
+            end
+            local rp = h(); return rp and cP(rp.Position + Vector3.new((math.random() * 2 - 1) * 30, 0, (math.random() * 2 - 1) * 30)) or cP(Vector3.zero)
+        end
+        tL = "Rand"; INT = false
+        local t = rF()
+        if t == Vector3.zero or not iF(t) then t = gFC() end
+        if t == Vector3.zero then return 0 end
+        goTo(t, 4, PT); task.wait(0.2 + math.random() * 0.4); return 0
     end
 
     if action == "go_xflame_center" then
