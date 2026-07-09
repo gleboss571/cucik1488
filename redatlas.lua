@@ -1,4 +1,4 @@
--- BSS AI v16.5 — MERGED (Active Super Scorch + All Timers + Advanced Q-Learning)
+-- BSS AI v16.5 MERGED (Active Super Scorch + All Timers + Advanced Q-Learning)
 -- ============================================================
 -- SERVICES
 -- ============================================================
@@ -4694,4 +4694,4 @@ LP.CharacterAdded:Connect(function()
     end)
 end)
 
-print("BSS AI v16.5 — Active Super Scorch + All Timers + Advanced Q-Learning")
+print("BSS AI v16.5 - Active Super Scorch + All Timers + Advanced Q-Learning")
