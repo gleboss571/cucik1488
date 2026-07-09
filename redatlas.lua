@@ -2474,17 +2474,33 @@ local function getScorchFlameCenter()
             count = count + w
         end
     end
+    -- Count dark flames near player for scorch acceleration
+    local darkNear = 0
+    local r = h()
+    if r then
+        for fl, _ in pairs(scytheParts) do
+            if fl and fl.Parent then
+                local nm = fl.Name or ""
+                local bcName = safeBrickColorName(fl)
+                if (nm:find("Dark") or bcName == "Really black") then
+                    if d3(r.Position, fl.Position) <= SCYTHE_DIST * 2 then
+                        darkNear = darkNear + 1
+                    end
+                end
+            end
+        end
+    end
     if count > 0 then
-        return Vector3.new(cx / count, 0, cz / count), true
+        return Vector3.new(cx / count, 0, cz / count), true, darkNear
     end
     if curF and curF.part then
-        return curF.part.Position, false
+        return curF.part.Position, false, 0
     end
     local r = h()
     if r then
-        return r.Position, false
+        return r.Position, false, 0
     end
-    return Vector3.zero, false
+    return Vector3.zero, false, 0
 end
 
 -- ============================================================
@@ -2553,7 +2569,7 @@ local function gAWB()
 
     -- Super Scorch
     if isSuperScorch then
-        local sc, _ = getScorchFlameCenter()
+        local sc, _, _ = getScorchFlameCenter()
         if sc ~= Vector3.zero and r then
             local bestTok = nil
             local bestD = math.huge
@@ -2871,19 +2887,32 @@ local function eA(action)
 
     -- patrol_scorch_flames
     if action == "patrol_scorch_flames" then
-        local sc, hasFlames = getScorchFlameCenter()
+        local sc, hasFlames, darkNear = getScorchFlameCenter()
         if hasFlames then
-            tL = "SS Orbital"
+            if darkNear >= 5 then
+                tL = "SS Tight"
+            elseif darkNear >= 2 then
+                tL = "SS Close"
+            else
+                tL = "SS Orbital"
+            end
         else
             tL = "SS Patrol"
         end
         INT = false
         if sc ~= Vector3.zero and hasFlames then
             local orbAngle = (tick() * 0.8) % (2 * math.pi)
+            -- Tighter orbit when many dark flames (scorch acceleration)
+            local orbRadius = SCYTHE_DIST * 0.9
+            if darkNear >= 5 then
+                orbRadius = SCYTHE_DIST * 0.5
+            elseif darkNear >= 2 then
+                orbRadius = SCYTHE_DIST * 0.7
+            end
             goTo(Vector3.new(
-                sc.X + math.cos(orbAngle) * SCYTHE_DIST * 0.9,
+                sc.X + math.cos(orbAngle) * orbRadius,
                 r.Position.Y,
-                sc.Z + math.sin(orbAngle) * SCYTHE_DIST * 0.9
+                sc.Z + math.sin(orbAngle) * orbRadius
             ), 4, PT)
         elseif sc ~= Vector3.zero then
             local ang = math.random() * 2 * math.pi
@@ -3774,7 +3803,11 @@ local function eA(action)
     if action == "go_token_best" then
         local be = nil
         local bestScore = -1
+        local bestRem = 0
+        local bestIsDp = false
         local n = tick()
+        -- Collect all eligible tokens sorted by score
+        local candidates = {}
         for p, t in pairs(aT) do
             if not t.col and p.Parent then
                 local rem = t.l - (n - t.s)
@@ -3783,14 +3816,82 @@ local function eA(action)
                     if t.dp then
                         score = score * 1.3
                     end
-                    if score > bestScore then
-                        bestScore = score
-                        be = p
-                    end
+                    table.insert(candidates, {
+                        p = p, t = t, score = score, rem = rem, dp = t.dp
+                    })
                 end
             end
         end
+        if #candidates == 0 then
+            return -1
+        end
+        table.sort(candidates, function(a, b) return a.score > b.score end)
+        be = candidates[1].p
+        bestScore = candidates[1].score
+        bestRem = candidates[1].rem
+        bestIsDp = candidates[1].dp
+
+        local boostedSpeed = cS + 5  -- always defined for both cases
+        -- Path planning: can we chain 2 tokens? Use speed boost if needed
+        local second = nil
+        if #candidates >= 2 and r then
+            local d1 = d3(r.Position, candidates[1].p.Position)
+            local d12 = d3(candidates[1].p.Position, candidates[2].p.Position)
+            local minRem = math.min(candidates[1].rem, candidates[2].rem)
+            -- Try normal speed first
+            local time1 = d1 / cS
+            local time12 = d12 / cS
+            if time1 + time12 < minRem then
+                second = candidates[2]
+            -- If not, try with +5 speed boost
+            else
+                local time1b = d1 / boostedSpeed
+                local time12b = d12 / boostedSpeed
+                if time1b + time12b < minRem then
+                    second = candidates[2]
+                    -- Apply speed boost for this run
+                    local h_ = hm()
+                    if h_ then h_.WalkSpeed = boostedSpeed end
+                    task.spawn(function()
+                        task.wait(math.min(4, time1b + time12b + 0.5))
+                        local h__ = hm()
+                        if h__ then h__.WalkSpeed = cS end
+                    end)
+                end
+            end
+        end
+
+        if second then
+            -- Speed boost already applied during path planning
+            tL = aT[be].n .. "+" .. aT[second.p].n
+            INT = false
+            if goTo(be.Position, 4, 4) and be.Parent then
+                aT[be].col = true
+                st.tk = st.tk + 1
+                if goTo(second.p.Position, 4, 4) and second.p.Parent then
+                    aT[second.p].col = true
+                    st.tk = st.tk + 1
+                    return 10 + (aT[be].p + aT[second.p].p) * 0.2
+                end
+                return 5 + aT[be].p * 0.3
+            end
+            return -3
+        end
+
         if be then
+            -- Speed boost for single token if it's about to expire
+            local d1 = d3(r.Position, be.Position)
+            local timeNormal = d1 / cS
+            local timeBoosted = d1 / boostedSpeed
+            if timeNormal > bestRem and timeBoosted < bestRem then
+                local h_ = hm()
+                if h_ then h_.WalkSpeed = boostedSpeed end
+                task.spawn(function()
+                    task.wait(math.min(4, timeBoosted + 0.5))
+                    local h__ = hm()
+                    if h__ then h__.WalkSpeed = cS end
+                end)
+            end
             tL = aT[be].n
             INT = false
             if goTo(be.Position, 5, 5) and be.Parent then
@@ -4426,6 +4527,16 @@ task.spawn(function()
         task.wait(0.3)
         pcall(function()
             lb.Text = tL
+            -- GUI flash: title color changes based on XF/SS readiness
+            if scorchProgress >= 27 then
+                ti_gui.TextColor3 = Color3.fromRGB(255, 80, 80)
+            elseif xfProgress >= 22 then
+                ti_gui.TextColor3 = Color3.fromRGB(255, 160, 40)
+            elseif scorchActive then
+                ti_gui.TextColor3 = Color3.fromRGB(255, 200, 80)
+            else
+                ti_gui.TextColor3 = Color3.fromRGB(100, 200, 255)
+            end
             local curH = getCoreHoney()
             local elapsedMin = (tick() - scriptStartTime) / 60
             local hp40m = 0
