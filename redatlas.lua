@@ -268,10 +268,6 @@ local activeTokenGuis = {}; local activeBlooms = {}
 local xfProgress = 0      -- from PlayerAbilityEvent
 local scorchProgress = 0  -- from PlayerAbilityEvent
 local lastBloomHit = 0
--- ===== Bloom petal buff tracking =====
-local redPetalTimer = 0   -- tick() when last red petal collected (8s buff)
--- ===== Session statistics =====
-local stChMin = 0; local stTkMin = 0; local stFlMin = 0; local stBloomMin = 0
 
 -- ===== TIMER CREATION FOR ALL TOKENS =====
 local function createTimer(part, id, totalLifetime, duped, def)
@@ -928,7 +924,6 @@ local function hitNearbyFlames()
                     lastScytheHit = n
                     flameCooldowns[fl] = n + 5.0
                     flamesHitThisStep = flamesHitThisStep + 1
-                    stFlMin = stFlMin + 1
                     local bg = r:FindFirstChild("AI_BG_Scythe")
                     if not bg then
                         bg = Instance.new("BodyGyro"); bg.Name = "AI_BG_Scythe"
@@ -1025,9 +1020,7 @@ local function goTo(tP, rad, to, sk)
                     end
                     if whitelisted then
                         local rem = t.l - (nSticky - t.s)
-                        -- Adaptive radius: tighter during X10 to avoid wasting Precision time
-                        local baseDist = prec.isX and 8 or 14
-                        local maxDist = (goSmileGuard and smTR < 3.0) and 4 or baseDist
+                        local maxDist = (goSmileGuard and smTR < 3.0) and 5 or 12
                         if rem > 0 and rem < 3.0 and d3(r.Position, p.Position) < maxDist then
                             local score = t.p * (1 - rem / t.l)
                             if score > bestScore then bestScore = score; bestSticky = p end
@@ -1357,18 +1350,6 @@ local function sPt()
             end
         end
     end
-    -- Bloom petal buff: red petal buff lasts 8s, with <4s remaining prioritize red
-    if redPetalTimer > 0 then
-        local rem = 8.0 - (tick() - redPetalTimer)
-        if rem > 0 and rem < 4.0 then
-            -- Prioritize red petals above all others
-            for _, fp in ipairs(fP) do
-                if fp.cn == "Red" then fp.pr = 0 end -- force top priority
-            end
-        elseif rem <= 0 then
-            redPetalTimer = 0 -- buff expired
-        end
-    end
     table.sort(fP, function(a, b)
         if a.pr ~= b.pr then return a.pr < b.pr end
         return a.dist < b.dist
@@ -1620,14 +1601,6 @@ local function gAWB()
                     return { "go_shower" }
                 end
             end
-        end
-    end
-
-    -- Pre-emptive centering: XF≥22 and SS≥20 → drop everything, rush to center
-    if xfProgress >= 22 and scorchProgress >= 20 and not isSuperScorch then
-        local cc = gFC()
-        if cc ~= Vector3.zero and r and d3(r.Position, cc) > XCR * 2 then
-            return { "go_xflame_center" }
         end
     end
 
@@ -2325,9 +2298,7 @@ local function eA(action)
             else
                 tL = "🌸 " .. pt.cn; INT = false
                 if goTo(Vector3.new(pt.part.Position.X, 0, pt.part.Position.Z), PCD, 2.5) then
-                    st.pt = st.pt + 1; tr = tr + 8 + (14 - pt.pr); ca = true
-                    if pt.cn == "Red" then redPetalTimer = tick() end  -- 8s buff timer
-                    task.wait(0.05); i = i + 1
+                    st.pt = st.pt + 1; tr = tr + 8 + (14 - pt.pr); ca = true; task.wait(0.05); i = i + 1
                 else stP[pt.part] = tick() + 5; table.remove(fP, i) end
             end
         end
@@ -2691,22 +2662,15 @@ bf.TextColor3 = Color3.fromRGB(255, 180, 100)
 bf.Font = Enum.Font.Gotham; bf.TextSize = 9
 bf.TextXAlignment = Enum.TextXAlignment.Center
 
-local xfLine = Instance.new("TextLabel", fr)
-xfLine.Size = UDim2.new(1, 0, 0, 14); xfLine.Position = UDim2.new(0, 0, 0, 90)
-xfLine.BackgroundTransparency = 1; xfLine.Text = "XF:--/25 SS:--/30 PM:-- PLM:-- dup:--"
-xfLine.TextColor3 = Color3.fromRGB(255, 180, 100)
-xfLine.Font = Enum.Font.Gotham; xfLine.TextSize = 9
-xfLine.TextXAlignment = Enum.TextXAlignment.Center
-
 local sh = Instance.new("TextLabel", fr)
-sh.Size = UDim2.new(1, 0, 0, 14); sh.Position = UDim2.new(0, 0, 0, 105)
+sh.Size = UDim2.new(1, 0, 0, 14); sh.Position = UDim2.new(0, 0, 0, 90)
 sh.BackgroundTransparency = 1; sh.Text = "🔥 --"
 sh.TextColor3 = Color3.fromRGB(255, 140, 80)
 sh.Font = Enum.Font.Gotham; sh.TextSize = 9
 sh.TextXAlignment = Enum.TextXAlignment.Center
 
 local stopBtn = Instance.new("TextButton", fr)
-stopBtn.Size = UDim2.new(1, -8, 0, 24); stopBtn.Position = UDim2.new(0, 4, 0, 135)
+stopBtn.Size = UDim2.new(1, -8, 0, 24); stopBtn.Position = UDim2.new(0, 4, 0, 120)
 stopBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40); stopBtn.BorderSizePixel = 0
 stopBtn.Text = "STOP"; stopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 stopBtn.Font = Enum.Font.GothamBold; stopBtn.TextSize = 12
@@ -2726,17 +2690,9 @@ task.spawn(function()
         hl.Text = "HP40M: " .. fmtHoney(hp40m) .. " | " .. fmtHoney(curH)
         local pStacksText = prec.isX and "[X10]" or ("[" .. prec.st .. "/10]")
         local precTimer = prec.tL > 0 and string.format("%.0fs", prec.tL) or "--"
-        local precColor = ""
-        if prec.isX and prec.tL > 0 and prec.tL <= PRAT then precColor = "⏳"
-        elseif prec.isX then precColor = "✅" end
-        sl.Text = "S: " .. string.format("%.0f", cS) .. " | " .. precColor .. "PREC: " .. precTimer .. " " .. pStacksText
+        sl.Text = "S: " .. string.format("%.0f", cS) .. " | PREC: " .. precTimer .. " " .. pStacksText
         pl_.Text = ph() .. " CH:" .. #cQ .. " Tk:" .. st.tk .. " Pr:" .. st.pr .. " Sm:" .. st.sm
-        -- Session stats per minute
-        local chRate = elapsedMin > 0 and math.floor(st.chP / elapsedMin) or 0
-        local tkRate = elapsedMin > 0 and math.floor(st.tk / elapsedMin) or 0
-        local flRate = elapsedMin > 0 and math.floor(stFlMin / elapsedMin) or 0
-        bf.Text = "CH:" .. chRate .. "/m Tk:" .. tkRate .. "/m Fl:" .. flRate .. "/m"
-        xfLine.Text = "XF:" .. xfProgress .. "/25 SS:" .. scorchProgress .. "/30 PM:" .. aB.PoM.m .. " PLM:" .. pollenMarkStacks .. " dup:" .. dupCnt
+        bf.Text = "PM:" .. aB.PoM.m .. " PLM:" .. pollenMarkStacks .. " dup:" .. dupCnt .. " XF:" .. xfProgress .. "/25 SS:" .. scorchProgress .. "/30"
         if scorchActive and scorchStartTime > 0 then
             local se = (tick() - scorchStartTime) / 60
             sh.Text = "🔥 " .. fmtHoney(curH - scorchStartHoney) .. " " .. string.format("%.1f", se) .. "min | " .. fmtHoney(bestScorchHoney)
@@ -2765,8 +2721,7 @@ LP.CharacterAdded:Connect(function()
     scorchActive = false; scorchRecording = false; scorchActions = {}
     scorchStartHoney = 0; scorchStartTime = 0
     fixedXFlameCenter = nil; lastTokenLinkTime = 0; lastFocusCHTime = 0
-    xfProgress = 0; scorchProgress = 0; lastBloomHit = 0; redPetalTimer = 0
-    stFlMin = 0
+    xfProgress = 0; scorchProgress = 0; lastBloomHit = 0
     for _, v in pairs(activeTokenGuis) do if v.gui then pcall(function() v.gui:Destroy() end) end end
     activeShowers = {}; activeBlooms = {}; activeCoconuts = {}; activeTokenGuis = {}
     for fl in pairs(flameCooldowns) do flameCooldowns[fl] = nil end
