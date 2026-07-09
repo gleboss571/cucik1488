@@ -1,7 +1,6 @@
--- BSS AI v16.5 MERGED
--- ============================================================
+
+-- BSS AI v16.5 - Active Super Scorch + All Timers + Advanced Q-Learning
 -- SERVICES
--- ============================================================
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
