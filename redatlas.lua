@@ -1,29 +1,11 @@
--- Marmot Z v5.0 — Hachapuri Method, Planters, Nectar Balance, Precise FaceTexture Detect
--- NEW v5.0: таймеры над ВСЕМИ токенами (в т.ч. неизвестными, с ретраем FrontDecal); кокосы — ближайший, а не первый по спавну;
--- обход кросхейров упрощён: просто держим ~6 студов, без кругов; убраны все бинды; выпилен код FC/RB;
--- новый детект диагонали прецайсов по FaceTexture (анти-лаг их не удаляет); спидхак работает всегда, даже при STOP;
--- вкладка Farm pattern (Hachapuri method: :43 плантеры, :50 сдача пыльцы, :58 тикеты+гора, :00 Мондо Чик, шрайн, спринклер, смузи-цепочка);
--- вкладка Planters (авторасстановка по дефициту нектара, ротация полей, остатки баффов, автосбор плантеров).
--- FIX v5.0.8: мёртвый линк (goTo нарезками с проверкой живости токена); обход — объездная точка не ложится на соседний кросхейр; кросхейры приоритетнее дюпед бустов; больше петалов (от 2 шт, кластер от 3); шовер запрещён при x10<16с; при 19+ XF ближайший к центру кросхейр в ЛЮБОЙ фазе; акцент на огни в скорче (каденс ~12с у кластера/пауза 10с — старая ветка была мёртвой) + возврат на кластер после лута; AllCH строго: скорч + 3 фиолетовых + окно 45с.
--- FIX v5.0.7: go_center_ch ожил — при 19+ XF бот ВСТАЁТ на ближайший к центру кросхейр (раньше ветка была мёртвой: xfE-кемп перехватывал раньше, а goTo убивался INT=true); NEW: вкладка Patterns — анализатор паттернов (топ действий, лучшие/худшие связки, награда/мин), лог действий подгружается из marmot_z_pat.json при старте.
--- FIX v5.0.1: FPS-спайки (рескан токенов только по нужным папкам, кэш PreBee-скана); PreBee не перебивает лут; обход к фиолетовому работает и до X10; смайл снова лутается при 6+ дюпед.
--- NEW v4.9: строже стрейф (меньше перелёт, прямая на цель вблизи); фиолетовый кросхейр всегда первый (не наступаем сначала на обычный);
--- видимые точки предикта высоких кросхейров (raycast из v4.0); обход кросхейров снова только в X10 — до X10 бот лутает напрямую без рывков;
--- лут шоверов из v4.0 (цепочка TP по всем свежим + токен + кросхейр); таймеры над токенами из v4.0 (префиксы, цвета, дюпед-цвет).
--- NEW v4.8: реализованы недостающие действия (go_duped_boost/babylove/inspire/inferno/tp, backpack_dump, super_outside, center_ch, refresh_all) — бот больше не стоит AFK;
--- новый обход кросхейров: работает во всех фазах, выбирает сторону обхода с учётом ВСЕХ угроз, обход добавлен в standOnPurple (go_purple);
--- таймеры над токенами; Scorch-статистика сохраняется после окончания, клик по строке Scorch открывает топ-24 скорчей по мёду;
--- визуальные точки предикта кросхейров (голубые сферы); решения каждый кадр, убраны лишние задержки.
--- FIXED v4.7.2: закрыт if canHit в hitFlames (ошибка :1085); закрыт while в go_flame_cluster_center; hm_/h_ в goTo и Heartbeat; форвард-объявления gFCB/gFCPath/scanPreciseBee;
--- коннект Heartbeat хранится в getgenv(), а не как свойство PlayerGui; кэш gRCT не затирается в пределах кадра;
--- оптимизированный getSpatialState/getCK с ленивым пересчётом; восстановлены операторы, испорченные копированием.
+-- Marmot Z v5.2.8
 local P=game:GetService("Players");local W=game:GetService("Workspace")
 local R=game:GetService("RunService");local U=game:GetService("UserInputService")
 local RS=game:GetService("ReplicatedStorage");local H=game:GetService("HttpService")
 local V=game:GetService("VirtualInputManager");local D=game:GetService("Debris")
 local L=P.LocalPlayer;local G=L:WaitForChild("PlayerGui");local ENABLED=true;local ELA=true
 if not math.round then math.round=function(n)return math.floor(n+.5)end end
-Q_VERSION="Marmot Z - HRL & Velocity Overdrive v4.7"
+Q_VERSION="Marmot Z - HRL & Velocity Overdrive v5.2.8"
 task.wait(2)
 
 -- COMPAT
@@ -41,7 +23,7 @@ local b=Instance.new("Frame",egui);b.Size=UDim2.new(0,380,0,240);b.Position=UDim
 b.BackgroundColor3=Color3.fromRGB(15,15,25);b.BackgroundTransparency=.08;b.BorderSizePixel=0;b.Active=true;b.Draggable=true
 Instance.new("UICorner",b).CornerRadius=UDim.new(0,8)
 local t=Instance.new("TextLabel",b);t.Size=UDim2.new(1,-16,0,24);t.Position=UDim2.new(0,8,0,8);t.BackgroundTransparency=1
-t.Text="Marmot Z v4.7.1";t.TextColor3=Color3.fromRGB(255,180,60);t.Font=Enum.Font.GothamBold;t.TextSize=14;t.TextXAlignment=Enum.TextXAlignment.Left
+t.Text="Marmot Z v5.2.5";t.TextColor3=Color3.fromRGB(255,180,60);t.Font=Enum.Font.GothamBold;t.TextSize=14;t.TextXAlignment=Enum.TextXAlignment.Left
 elbl=Instance.new("TextLabel",b);elbl.Size=UDim2.new(1,-16,0,130);elbl.Position=UDim2.new(0,8,0,42);elbl.BackgroundTransparency=1
 elbl.Text="Marmot Z boot...";elbl.TextColor3=Color3.fromRGB(200,200,200);elbl.Font=Enum.Font.Code;elbl.TextSize=11;elbl.TextWrapped=true;elbl.RichText=true
 ebtn=Instance.new("TextButton",b);ebtn.Size=UDim2.new(0,140,0,28);ebtn.Position=UDim2.new(0,8,0,180)
@@ -86,19 +68,52 @@ PBI=2574507284;PLMBI=2577647417;PPK=0.02;PMX=10;PRAT=25
 PURP=Color3.fromRGB(119,85,255);PTOL=12;SMI=5877939956;TSD=1.1
 ARR=20;TLID=20;PCD=8;PFM=20;TPI=8173559749
 TLC=2;PT=8;XCR=15;PCHR=10;SCYTHE_DIST=14;SCYTHE_CD=0.1
-AL=0.5;GA=0.95;EP=0.3;ED=0.9995;PMBI=2577647416
+AL=0.5;GA=0.95;EP=0.3;ED=0.9995;PMBI=2577647416;epT0=0;lastActA="";lastActRw=0;xfcCd=0
 SCORCH_BIAS=1.15;PAT_WINDOW=2400;PAT_TOP=10;TD_LAMBDA=0.7;UCB_C=1.5
-FLAME_CLUSTER_RADIUS=8;FLAME_CLUSTER_MIN=4;FLAME_PATH_STEP=6
+FLAME_CLUSTER_RADIUS=8;FLAME_CLUSTER_MIN=3;FLAME_PATH_STEP=6-- v5.1.8: min кластера 4->3, флейм-патхи формируются чаще (больше бега по огням); кемп одиночного кластера по-прежнему требует size>=4 (явные проверки)
 DPRI={[4519549299]=true,[2499540966]=true,[2499514197]=true,[4528379338]=true,[1442859163]=true,[1442863423]=true,[3877732821]=true,[1442764904]=true,[4528208186]=true,[8173559749]=true}
--- TOKEN DEFS (v4.9: префиксы и цвета таймеров из v4.0; dc — цвет для дюпед-токенов)
-TKS={};TKS[1629547638]={n="TL",base=4,p=99,bt=true,pre="TL ",nc=Color3.new(0,0,0),bg=Color3.new(1,1,1)};TKS[8173559749]={n="TP",base=8,p=95,bt=true,pre="TP ",nc=Color3.new(.7,.2,.9),dc=Color3.new(.5,.1,.7),bg=Color3.new(0,0,0)}
-TKS[2000457501]={n="IN",base=8,p=25,pre="IN ",nc=Color3.new(1,1,0),dc=Color3.new(1,.84,0),bg=Color3.new(0,0,0)};TKS[1472256444]={n="BL",base=8,p=22,bt=true,pre="BL ",nc=Color3.new(1,.7,.8),dc=Color3.new(.8,.5,.6),bg=Color3.new(0,0,0)}
-TKS[65867881]={n="HS",base=4,p=15,bt=true,pre="HS ",nc=Color3.new(.2,1,.2),bg=Color3.new(0,0,0)}
-for _,id in ipairs({1472532912,1472491940,1472425802,2032949183,1472580249,1489734171})do TKS[id]={n="MO",base=15,p=8,mo=true,bt=true,pre="MO ",nc=Color3.new(.9,.7,.5),dc=Color3.new(.6,.4,.2),bg=Color3.new(0,0,0)}end
-TKS[4528379338]={n="MS",base=4,p=7,pre="MS ",nc=Color3.new(.8,.5,1),bg=Color3.new(0,0,0)};TKS[5877939956]={n="SM",base=4,p=5,bt=true,pre="SM ",nc=Color3.new(1,1,1),dc=Color3.new(1,1,1),bg=Color3.new(0,0,0)}
-TKS[4519549299]={n="IF",base=4,p=5,bt=true,pre="IF ",nc=Color3.new(1,.4,.1),bg=Color3.new(0,0,0)};TKS[1442863423]={n="BB",base=4,p=12,pre="BB ",nc=Color3.new(.2,.4,1),bg=Color3.new(0,0,0)}
+-- TOKEN DEFS (v5.1: ПОЛНЫЙ сет из v4.0 — префиксы, цвета, dc для дюпед; bt=true — батл-токен)
+TKS={}
+TKS[1629547638]={n="TL",base=4,p=99,pre="TL ",nc=Color3.new(0,0,0),bg=Color3.new(1,1,1),bt=true}
+TKS[8173559749]={n="TP",base=8,p=95,pre="TP ",nc=Color3.new(.7,.2,.9),dc=Color3.new(.5,.1,.7),bg=Color3.new(0,0,0),bt=true}
+TKS[2000457501]={n="IN",base=8,p=25,pre="IN ",nc=Color3.new(1,1,0),dc=Color3.new(1,.84,0),bg=Color3.new(0,0,0)}
+TKS[1472256444]={n="BL",base=8,p=22,pre="BL ",nc=Color3.new(1,.7,.8),dc=Color3.new(.8,.5,.6),bg=Color3.new(0,0,0),bt=true}
+TKS[1629649299]={n="FC",base=4,p=15,pre="FC ",nc=Color3.new(.3,.6,1),bg=Color3.new(0,0,0),bt=true}
+TKS[65867881]={n="HS",base=4,p=15,pre="HS ",nc=Color3.new(.2,1,.2),bg=Color3.new(0,0,0),bt=true}
+TKS[1442863423]={n="BB",base=4,p=12,pre="BB ",nc=Color3.new(.2,.4,1),bg=Color3.new(0,0,0)}
+TKS[1442859163]={n="RB",base=4,p=12,pre="RB ",nc=Color3.new(1,.2,.2),bg=Color3.new(0,0,0)}
 TKS[3877732821]={n="WB",base=4,p=12,pre="WB ",nc=Color3.new(1,1,1),bg=Color3.new(0,0,0)}
-AV={};for _,v in ipairs({1674871631,1471882621})do AV[v]=true end
+TKS[1442764904]={n="R+",base=4,p=12,pre="R+ ",nc=Color3.new(1,.3,.1),bg=Color3.new(0,0,0)}
+TKS[1442700745]={n="RG",base=8,p=10,pre="RG ",nc=Color3.new(1,.1,.1),bg=Color3.new(0,0,0),bt=true}
+TKS[253828517]={n="ML",base=8,p=10,pre="ML ",nc=Color3.new(1,.5,1),bg=Color3.new(0,0,0),bt=true}
+TKS[2499514197]={n="HM",base=8,p=9,pre="HM ",nc=Color3.new(1,.8,.2),bg=Color3.new(0,0,0)}
+TKS[2499540966]={n="PM",base=8,p=9,pre="PM ",nc=Color3.new(1,.9,.4),bg=Color3.new(0,0,0)}
+for _,id in ipairs({1472532912,1472491940,1472425802,2032949183,1472580249,1489734171})do TKS[id]={n="MO",base=15,p=8,mo=true,pre="MO ",nc=Color3.new(.9,.7,.5),dc=Color3.new(.6,.4,.2),bg=Color3.new(0,0,0),bt=true}end
+TKS[1874564120]={n="PL",base=12,p=7,pre="PL ",nc=Color3.new(.2,1,1),bg=Color3.new(0,0,0)}
+TKS[4528379338]={n="MS",base=4,p=7,pre="MS ",nc=Color3.new(.8,.5,1),bg=Color3.new(0,0,0)}
+TKS[3582501342]={n="RC",base=24,p=6,pre="RC ",nc=Color3.new(.3,.5,1),bg=Color3.new(0,0,0)}
+TKS[3582519526]={n="TN",base=24,p=6,pre="TN ",nc=Color3.new(.5,.5,.5),bg=Color3.new(0,0,0)}
+TKS[5877998606]={n="MH",base=16,p=6,pre="MH ",nc=Color3.new(.8,.2,.8),bg=Color3.new(0,0,0)}
+TKS[8083943936]={n="SP",base=24,p=6,pre="SP ",nc=Color3.new(1,.8,.2),bg=Color3.new(0,0,0)}
+TKS[177997841]={n="GB",base=4,p=6,pre="GB ",nc=Color3.new(.2,.8,1),bg=Color3.new(0,0,0)}
+TKS[1839454544]={n="GS",base=4,p=6,pre="GS ",nc=Color3.new(.2,1,.5),bg=Color3.new(0,0,0)}
+TKS[1442725244]={n="BM",base=4,p=5,pre="BM ",nc=Color3.new(.5,.5,.5),bg=Color3.new(0,0,0)}
+TKS[5877939956]={n="SM",base=4,p=5,pre="SM ",nc=Color3.new(1,1,1),dc=Color3.new(1,1,1),bg=Color3.new(0,0,0),bt=true}
+TKS[4519549299]={n="IF",base=4,p=5,pre="IF ",nc=Color3.new(1,.4,.1),bg=Color3.new(0,0,0),bt=true}
+TKS[4519523935]={n="TR",base=4,p=5,pre="TR ",nc=Color3.new(.2,.8,.3),bg=Color3.new(0,0,0)}
+TKS[4528414666]={n="SF",base=8,p=5,pre="SF ",nc=Color3.new(.2,1,.2),bg=Color3.new(0,0,0)}
+TKS[4528208186]={n="FF",base=8,p=5,pre="FF ",nc=Color3.new(1,.5,.1),bg=Color3.new(0,0,0),bt=true}
+TKS[1671281844]={n="BS",base=12,p=4,pre="BS ",nc=Color3.new(.9,.9,.2),bg=Color3.new(0,0,0)}
+TKS[8083436978]={n="BBL",base=4,p=4,pre="BBL ",nc=Color3.new(.3,.5,1),bg=Color3.new(0,0,0)}
+TKS[1104415222]={n="BT",base=4,p=4,pre="BT ",nc=Color3.new(1,.8,.5),bg=Color3.new(0,0,0)}
+TKS[2319100769]={n="FT",base=8,p=4,pre="FT ",nc=Color3.new(.7,.5,.3),bg=Color3.new(0,0,0)}
+TKS[4889322534]={n="FB",base=4,p=4,pre="FB ",nc=Color3.new(.9,.7,.2),bg=Color3.new(0,0,0)}
+TKS[2319083910]={n="IP",base=24,p=4,pre="IP ",nc=Color3.new(.6,.3,.1),bg=Color3.new(0,0,0)}
+TKS[3080529618]={n="JB",base=4,p=4,pre="JB ",nc=Color3.new(1,.5,.8),bg=Color3.new(0,0,0)}
+TKS[4889470194]={n="PH",base=4,p=4,pre="PH ",nc=Color3.new(.9,.9,.5),bg=Color3.new(0,0,0)}
+TKS[107187190]={n="HG",base=4,p=2,pre="HG ",nc=Color3.new(1,.8,.3),bg=Color3.new(0,0,0)}
+TKS[183390139]={n="CG",base=4,p=2,pre="CG ",nc=Color3.new(.6,.6,.6),bg=Color3.new(0,0,0)}
+AV={};for _,v in ipairs({1674871631,1471882621,1952740625,8055428094,2319943273,3030569073,3036899811,3080740120,3012679515,1838129169,2584584968,1471849394,1952682401,6087969886,2028574353,2028453802})do AV[v]=true end
 PC={Red=Color3.fromRGB(249,34,34),Pink=Color3.fromRGB(255,130,201)};PP={Red=1,Pink=2}
 
 -- STATE
@@ -118,9 +133,9 @@ activeCocos={};activeShowers={};activeTG={};activeBlooms={};flameCD=setmetatable
 scriptStartH=0;scriptStartT=0;scorchStartH=0;scorchStartT=0;pollMS=0
 scorchPurpleCount=0;scorchPurpleTime=0;scorchAllCHMode=false;scorchPurpleTotal=0;lastSOTime=0;scorchDupedMorphDone=false
 xfP=0;scP=0;lastBH=0;redPT=0;stFlMin=0;xGCH=0;lastTLT=0;goSm=false
-tokenVerify={};ndMorph=nil;scorchTPIndex=0;scorchTPTable={};scorchTPCycle=false;actLog={};scorchAllCHT0=0;flCampAcc=0;flCampCd=0
+tokenVerify={};ndMorph=nil;scorchTPIndex=0;scorchTPTable={};scorchTPCycle=false;actLog={};scorchAllCHT0=0;flCampAcc=0;flCampCd=0;ptSeen={};tcFires=0;pabCalls=0;_tcPrev=0;_pabPrev=0;_tkPrev=0;smCd=0;cATLastSide=0;prPauseUntil=0;prPauseNext=os.clock()+900-- v5.2.8: пауза лута прецов: раз в 15 мин (900с) вне скорча — 30с без прецов. v5.2.5: _tkPrev(база собранных токенов для дельты col), smCd(кулдаун смайла), cATLastSide(сторона обхода для гистерезиса). v5.2.4: счётчики частоты ремоутов (tcFires=ToolCollect:FireServer, pabCalls=RetrievePlayerStats:InvokeServer) для замера в кик-снапшоте (гипотеза E3: 277 от спама синхронных ремоутов)
 local xfStartTime=0;local flameCampStart=0
-local cocoCnt=0;local showerCnt=0;local purpleMarkCnt=0
+local cocoCnt=0;local showerCnt=0;local purpleMarkCnt=0;cocoCycle=0;showerCycle=0-- v5.2.6: счётчики цикла по ворнинг-дискам (глобалы): сбрасываются, когда все диски кокоса/шовера исчезли
 local tokenBL=setmetatable({},{__mode="k"})
 local greenCH_cache={};local preciseLearn={}
 -- v5.0: нектары и Hachapuri (глобалы, чтобы не упереться в лимит локалов)
@@ -129,14 +144,28 @@ nectarRem={inv=0,ref=0,sat=0,mot=0,comf=0}
 hchDodge=false;hchBusy=false;hchSmT0=0
 
 -- CONFIG
-local cfg={ss_on=false,sp_x10=90,sp_nab=70,sp_ref=75,coco_on=true,coco_lim=0,shower_on=true,shower_lim=0,purple_on=true,purple_lim=0,hachapuri=false,pl_auto=false,pl_inv=false,pl_ref=false,pl_sat=false,pl_mot=false,pl_comf=false,pl_inv_h=22,pl_ref_h=22,pl_sat_h=22,pl_mot_h=22,pl_comf_h=22}
-local function saveCfg()if writefile then pcall(function()writefile("marmot_z_config.json",H:JSONEncode(cfg))end)end end
-local function loadCfg()if not readfile then return end;local ok,raw=pcall(readfile,"marmot_z_config.json");if ok and raw then local ok2,d=pcall(H.JSONDecode,H,raw);if ok2 and type(d)=="table"then for k,v in pairs(d)do if cfg[k]~=nil then cfg[k]=v end end;SB.X10=cfg.sp_x10;SB.NABOR=cfg.sp_nab;SB.REFRESH=cfg.sp_ref end end end
+local cfg={ss_on=false,sp_x10=90,sp_nab=70,sp_ref=75,coco_on=true,coco_lim=0,shower_on=true,shower_lim=0,purple_on=true,purple_lim=0,hachapuri=false,pl_auto=false,pl_inv=false,pl_ref=false,pl_sat=false,pl_mot=false,pl_comf=false,pl_inv_h=22,pl_ref_h=22,pl_sat_h=22,pl_mot_h=22,pl_comf_h=22,pl_min=43,mv_mode="tp",tw_speed=150,ac_test=false,rejoin_on=true}
+-- v5.1.4: конфиг и история плантеров в ОДНОМ файле marmot_z_data.json ({cfg=...,plHist=...}); старые marmot_z_config.json/marmot_z_planters.json читаются один раз как фолбэк для миграции
+local function saveCfg()if writefile then pcall(function()writefile("marmot_z_data.json",H:JSONEncode({cfg=cfg,plHist=plHist or PLHIST_LOADED}))end)end end
+local function loadCfg()if not readfile then return end
+local d=nil
+local ok,raw=pcall(readfile,"marmot_z_data.json")
+if ok and raw then local ok2,dd=pcall(H.JSONDecode,H,raw);if ok2 and type(dd)=="table"then d=dd.cfg;if type(dd.plHist)=="table"then PLHIST_LOADED=dd.plHist end end end
+if not d then local ok3,raw3=pcall(readfile,"marmot_z_config.json");if ok3 and raw3 then local ok4,d4=pcall(H.JSONDecode,H,raw3);if ok4 and type(d4)=="table"then d=d4 end end end
+if type(d)=="table"then for k,v in pairs(d)do if cfg[k]~=nil then cfg[k]=v end end;SB.X10=cfg.sp_x10;SB.NABOR=cfg.sp_nab;SB.REFRESH=cfg.sp_ref end
+end
 loadCfg()
 -- v5.0.5: диагностика прав на файлы — если экзекутор не дал writefile, ни один JSON не сохранится — теперь об этом будет красное сообщение в GUI ошибок
 task.spawn(function()task.wait(3)
-if not writefile then le("writefile НЕДОСТУПЕН: JSON (config/scorch/q/planters) НЕ сохраняются! Включи доступ к файлам в настройках executor")
-else local okW=pcall(function()writefile("marmot_z_wtest.json","{}")end);if not okW then le("writefile есть, но запись падает — проверь папку workspace у executor")end end
+if not writefile then le("writefile НЕДОСТУПЕН: JSON (data/scorch/q/pat) НЕ сохраняются! Включи доступ к файлам в настройках executor")
+else local okW=pcall(function()writefile("marmot_z_wtest.json","{}")end)
+if not okW then le("writefile есть, но запись падает — проверь папку workspace у executor")
+else
+-- v5.1.4: тест-файл marmot_z_wtest.json удаляем сразу после проверки; после первой записи marmot_z_data.json подчищаем старые config/planters json
+if delfile then pcall(delfile,"marmot_z_wtest.json")end
+pcall(saveCfg)
+if delfile and isfile and isfile("marmot_z_data.json")then pcall(delfile,"marmot_z_config.json");pcall(delfile,"marmot_z_planters.json")end
+end end
 end)
 
 -- SPATIAL STATE (оптимизировано: кэш + ленивый пересчёт только при реальном движении)
@@ -281,7 +310,9 @@ end)
 Pt.DescendantRemoving:Connect(function(o)
 for i=#cQ,1,-1 do if cQ[i].part==o then if cQ[i].dot then pcall(function()cQ[i].dot:Destroy()end)end;table.remove(cQ,i);break end end
 for i=#activeCocos,1,-1 do if activeCocos[i].part==o then table.remove(activeCocos,i);break end end
+if #activeCocos==0 then cocoCycle=0 end-- v5.2.6: все ворнинг-диски кокоса исчезли — сброс счётчика цикла, следующая пачка снова лутается до лимита Farm Coconuts
 for i=#activeShowers,1,-1 do if activeShowers[i].part==o then table.remove(activeShowers,i);break end end
+if #activeShowers==0 then showerCycle=0 end-- v5.2.6: все ворнинг-диски шовера исчезли — сброс счётчика цикла
 end)
 for _,o in ipairs(Pt:GetDescendants())do aCH(o)end
 end
@@ -295,7 +326,7 @@ pcall(function()if ch.part and ch.part.Parent then alive=true end end)
 if not alive then table.remove(cQ,i)
 elseif not ch.col then
 if(op or purpFirst)and not ch.isP and ch.part.Parent then ch.isP=iP(ch.part)end
-if(op and ch.isP)or(oR and not ch.isP)or(not op and not oR)then
+if(grnBad==nil or not grnBad(ch))and((op and ch.isP)or(oR and not ch.isP)or(not op and not oR))then -- v5.1.5: зелёные при x10 в списки лута не попадают
 if purpFirst and ch.isP then table.insert(pl,ch)else table.insert(lst,ch)end
 end
 end
@@ -311,7 +342,7 @@ end
 return lst
 end
 local function gPCH()return gCH(true,false,false)end
-local function gCH_n()local r=h();if not r then return nil end;local best,bestD=nil,math.huge;for i=1,#cQ do local ch=cQ[i];if not ch.col and ch.part.Parent then local d=d3(r.Position,ch.part.Position);if d<bestD then bestD=d;best=ch end end end;return best end
+local function gCH_n()local r=h();if not r then return nil end;local best,bestD=nil,math.huge;for i=1,#cQ do local ch=cQ[i];if not ch.col and ch.part.Parent and not(grnBad and grnBad(ch))then local d=d3(r.Position,ch.part.Position);if d<bestD then bestD=d;best=ch end end end;return best end -- v5.1.5: ближайший кросхейр — не зелёный при x10
 local function hasNearPurpleCH()local r=h();if not r then return false end;for i=1,#cQ do if not cQ[i].col and cQ[i].part.Parent and cQ[i].isP and d2Sq(r.Position,cQ[i].part.Position)<900 then return true end end;return false end
 local function gCH_nc()local cc=gFC();if cc==ZERO then return nil end;local best,bestD=nil,math.huge;for i=1,#cQ do local ch=cQ[i];if not ch.col and ch.part.Parent then local d=d3(ch.part.Position,cc);if d<bestD then bestD=d;best=ch end end end;return best end
 function gFCPath(rPos)
@@ -340,13 +371,14 @@ local hasPurp=hasNearPurpleCH()
 local isScActive=(aB.SS.st>0)
 for i=1,#cQ do
 local ch=cQ[i]
-if not ch.col and ch.part.Parent and not ch.isP and d2Sq(df,ch.part.Position)>16 then -- v4.9: кросхейр-цель не считается угрозой
+if not ch.col and ch.part.Parent and not ch.isP and d2Sq(df,ch.part.Position)>(tp and 4 or 16)then -- v5.1.5: при цели-ФИОЛЕТОВОМ обычные кросхейры рядом с ним тоже угрозы (бот шёл на пролом через пару CH и лутал их)
 local cf=Vector3.new(ch.part.Position.X,0,ch.part.Position.Z)
 local dSq=d2Sq(mf,cf)
 local sz=math.max(ch.part.Size.X,ch.part.Size.Z,4)
 local effR=sz*0.5+8 -- v5.0.4: держим ~8 студов от края кросхейра (было 6 — бот наступал на них)
-if isScActive then effR=sz*0.5+3 end
-if dSq<((effR+8)*(effR+8))and dSq>0.04 then -- v5.0.5: детект угрозы заранее (+8 студов), реакция ДО того как наступили
+if isScActive then effR=sz*0.5+6 end -- v5.1.5: в скорче было +3 — главная причина GREEN CH -80; теперь +6
+if isGrnCH and isGrnCH(ch)then effR=effR+4 end -- v5.1.5: зелёным — доп. запас +4
+if dSq<((effR+14)*(effR+14))and dSq>0.04 then -- v5.1.6: детект угрозы за +14 студов — обход начинается заранее и идёт широкой дугой
 local toCh=cf-mf
 if toCh.Unit:Dot(tD)>-0.25 then
 local cross=math.abs(toCh.X*tD.Z-toCh.Z*tD.X)
@@ -361,7 +393,7 @@ end
 local function cAT(mP,dP,targetIsPurple)local th=gRCT(mP,dP,targetIsPurple);if #th==0 then return nil end
 local mf=Vector3.new(mP.X,0,mP.Z);local df=Vector3.new(dP.X,0,dP.Z);local tD=(df-mf).Unit
 table.sort(th,function(a,b)return a.dist<b.dist end);local t=th[1];local uCh=(t.pos-mf).Unit
-local pD=math.min(t.sz*0.5+8,(df-mf).Magnitude*0.8)-- v5.0.4: боковой шаг ~8 студов (было 6)
+local pD=math.max(math.min(t.sz*0.5+(targetIsPurple and 22 or 14),(df-mf).Magnitude*0.95),targetIsPurple and 12 or 6)-- v5.2.5: к ФИОЛЕТОВОМУ боковой шаг шире (22 студа, мин 12) — заходим на фиолетовый в плотном кластере сбоку, а не толкаемся в соседние. v5.1.6: базовый ~14 студов
 local tA=Vector3.new(-uCh.Z,0,uCh.X);local tB=Vector3.new(uCh.Z,0,-uCh.X)
 local function sideScore(tang)
 local wp=Vector3.new(t.pos.X+tang.X*pD,0,t.pos.Z+tang.Z*pD)
@@ -376,21 +408,25 @@ end
 end
 return sc
 end
-local tang=(sideScore(tA)>=sideScore(tB))and tA or tB
+-- v5.2.5: гистерезис стороны обхода — сторона не флипается каждый кадр (причина дрожи в кластере из 6 кросхейров: sideScore почти равны и знак прыгал -> бот дрожал на месте)
+local sA,sB=sideScore(tA),sideScore(tB)
+local tang
+if cATLastSide==1 then tang=(sA>=sB-8)and tA or tB elseif cATLastSide==2 then tang=(sB>=sA-8)and tB or tA else tang=(sA>=sB)and tA or tB end
+cATLastSide=(tang==tA)and 1 or 2
 st.chA=st.chA+1
 -- v5.0.8: объездная точка отодвигается, пока не очистит ВСЕ соседние кросхейры — раньше могла лечь прямо на соседний, и бот наступал на него по пути к фиолетовому
 local wpX,wpZ=t.pos.X+tang.X*pD,t.pos.Z+tang.Z*pD
-for _=1,4 do
+for _=1,8 do-- v5.2.5: было 4 итерации — в углу с 6 кросхейрами точка не очищалась; 8 x (+4) = до +32 студов
 local bad=false
 for i=1,#cQ do local ch2=cQ[i]
 if not ch2.col and ch2.part.Parent and not ch2.isP then
 local sz2=math.max(ch2.part.Size.X,ch2.part.Size.Z,4)
 local dxw,dzw=wpX-ch2.part.Position.X,wpZ-ch2.part.Position.Z
-if dxw*dxw+dzw*dzw<(sz2*0.5+6)*(sz2*0.5+6)then bad=true;break end
+if dxw*dxw+dzw*dzw<(sz2*0.5+8)*(sz2*0.5+8)then bad=true;break end -- v5.1.5: объездная точка держит +8 от соседних кросхейров (было +6)
 end
 end
 if not bad then break end
-pD=pD+5;wpX,wpZ=t.pos.X+tang.X*pD,t.pos.Z+tang.Z*pD
+pD=pD+4;wpX,wpZ=t.pos.X+tang.X*pD,t.pos.Z+tang.Z*pD
 end
 return cP(Vector3.new(wpX,mP.Y,wpZ))
 end
@@ -398,6 +434,9 @@ end
 -- GREEN CH
 local GREEN_RGB={R=17/255,G=134/255,B=19/255};local GREEN_TOL=8
 local function isGreenCH(ch)if not ch.part.Parent then return false end;local ok,c=pcall(function()return ch.part.Color end);if ok and c then return math.abs(c.R-GREEN_RGB.R)*255<=GREEN_TOL and math.abs(c.G-GREEN_RGB.G)*255<=GREEN_TOL and math.abs(c.B-GREEN_RGB.B)*255<=GREEN_TOL end;return false end
+function isGrnCH(ch)return isGreenCH(ch)end -- v5.1.5: глобальный доступ для gRCT/gCH (объявлены выше по файлу, вызов в рантайме)
+function grnBad(ch)return prec and prec.isX and not prec.nR and not ch.isP and isGreenCH(ch)end -- v5.1.5: зелёный кросхейр НЕЛЬЗЯ лутать при активном x10-прецизионе (-80)
+function moHold(t)if not(t and t.mo and t.dp)then return false end;local nH=os.clock();if(t.l-(nH-t.s))<6 then return false end;if aB.SS.st>0 and scorchStartT>0 and(nH-scorchStartT)>=15 then return false end;return true end -- v5.1.6: дюпед морф «на удержании»: лутать можно ТОЛЬКО при остатке <6с или после 15с от начала скорча — все универсальные сборщики токенов его пропускают
 local function sBC(obj)if not obj then return""end;local ok,bc=pcall(function()return obj.BrickColor end);if ok and bc then local ok2,nm=pcall(function()return bc.Name end);if ok2 and nm then return nm end end;return""end
 -- BLOOM + FLAMES
 local function hitBloom()
@@ -415,7 +454,7 @@ local dir=bb.Position-r.Position;dir=Vector3.new(dir.X,0,dir.Z)
 if dir.Magnitude>0.1 then bg.CFrame=cfLookAt(r.Position,r.Position+dir)end
 local ev=RS:FindFirstChild("Events")
 local tce=ev and ev:FindFirstChild("ToolCollect")
-if tce then pcall(function()tce:FireServer()end)end
+if tce then tcFires=tcFires+1;pcall(function()tce:FireServer()end)end
 D:AddItem(bg,0.15)
 end
 function gFCB()local clusters={};local visited={};for fl,data in pairs(scytheParts)do if fl and fl.Parent and not visited[fl]then local nm=fl.Name or"";local bn=sBC(fl);local isD=(nm:find("Dark")or bn=="Really black");if not isD then local cluster={fl};visited[fl]=true;local changed=true;while changed do changed=false;for fl2 in pairs(scytheParts)do if fl2 and fl2.Parent and not visited[fl2]then local nm2=fl2.Name or"";local bn2=sBC(fl2);local isD2=(nm2:find("Dark")or bn2=="Really black");if not isD2 then for _,cf in ipairs(cluster)do if d3(cf.Position,fl2.Position)<=FLAME_CLUSTER_RADIUS then table.insert(cluster,fl2);visited[fl2]=true;changed=true;break end end end end end end;if #cluster>=FLAME_CLUSTER_MIN then local cx,cz=0,0;for _,cf in ipairs(cluster)do cx=cx+cf.Position.X;cz=cz+cf.Position.Z end;table.insert(clusters,{center=Vector3.new(cx/#cluster,0,cz/#cluster),size=#cluster,flames=cluster})end end end end;table.sort(clusters,function(a,b)return a.size>b.size end);return clusters end
@@ -424,7 +463,7 @@ for fl,data in pairs(scytheParts)do if fl and fl.Parent then local nm=fl.Name or
 if canHit and(not cd or n>=cd)and d2Sq(r.Position,fl.Position)<=784 and data and(n-data.sT)>=6.0 then lastSHit=n;flameCD[fl]=n+(allFlames and 2.0 or 5.0);flHit=flHit+1
 local bg=r:FindFirstChild("BG_S")or Instance.new("BodyGyro");bg.Name="BG_S";bg.MaxTorque=Vector3.new(0,40000,0);bg.P=10000;bg.D=500;bg.Parent=r
 local dir=fl.Position-r.Position;dir=Vector3.new(dir.X,0,dir.Z);if dir.Magnitude>0.1 then bg.CFrame=cfLookAt(r.Position,r.Position+dir)end
-local ev=RS:FindFirstChild("Events");local tce=ev and ev:FindFirstChild("ToolCollect");if tce then pcall(function()tce:FireServer()end)else pcall(function()V:SendMouseButtonEvent(0,0,0,true,game,1);task.wait(0.05);V:SendMouseButtonEvent(0,0,0,false,game,1)end)end;D:AddItem(bg,0.15);if not allFlames then break end end -- FIX v4.7.2: этот end закрывает if canHit (причина ошибки :1085)
+local ev=RS:FindFirstChild("Events");local tce=ev and ev:FindFirstChild("ToolCollect");if tce then tcFires=tcFires+1;pcall(function()tce:FireServer()end)else pcall(function()V:SendMouseButtonEvent(0,0,0,true,game,1);task.wait(0.05);V:SendMouseButtonEvent(0,0,0,false,game,1)end)end;D:AddItem(bg,0.15);if not allFlames then break end end -- FIX v4.7.2: этот end закрывает if canHit (причина ошибки :1085)
 else scytheParts[fl]=nil;flameCD[fl]=nil end end end
 
 -- GOTO with Momentum Strafing
@@ -471,16 +510,22 @@ end
 -- STAND ON PURPLE
 local function standOnPurple(ch,timeout)local r=h();local hm_=hm();if not r or not hm_ or not ch.part.Parent then return false end;tL="P Stand";INT=false
 goTo(ch.part.Position,3,math.min(timeout,8),true)-- v4.8: подход к пурпурной метке через goTo с обходом кросхейров, а не напролом
-r=h();if not r or not ch.part.Parent then return false end;local t0=os.clock()
+r=h();if not r or not ch.part.Parent then return false end;local t0=os.clock();local bestD=math.huge;local stuckT=os.clock()
 while os.clock()-t0<timeout do task.wait(0.03);r=h();if not r or not ch.part.Parent then break end;if INT or not ENABLED then return false end;pcall(hitBloom);pcall(hitFlames)
-if d2Sq(r.Position,ch.part.Position)<=9 then hm_:MoveTo(ch.part.Position)else local dir=(ch.part.Position-r.Position).Unit;hm_:MoveTo(ch.part.Position+Vector3.new(dir.X*1.5,0,dir.Z*1.5))end end
+local dNow=d2Sq(r.Position,ch.part.Position)
+if dNow<=9 then hm_:MoveTo(ch.part.Position)
+else
+if dNow<bestD-1 then bestD=dNow;stuckT=os.clock()end
+if os.clock()-stuckT>1.0 then local toP=ch.part.Position-r.Position;toP=Vector3.new(toP.X,0,toP.Z);if toP.Magnitude>0.1 then local u=toP.Unit;hm_:MoveTo(cP(r.Position+Vector3.new(-u.Z,0,u.X)*12+u*4))end;stuckT=os.clock();bestD=math.huge else local dir=(ch.part.Position-r.Position).Unit;hm_:MoveTo(ch.part.Position+Vector3.new(dir.X*1.5,0,dir.Z*1.5))end
+end
+end
 if not ch.part.Parent then ch.col=true;st.pr=st.pr+1;lP=ch.part;st.chP=st.chP+1;return true end;return false end
 
 -- TOKEN REG
 -- v4.9: таймеры над токенами в стиле v4.0 — префикс, фон, цвет по типу токена, отдельный цвет для дюпед
 local function cT(part,id,tl,dp,df)if activeTG[part]then return end;local gui=Instance.new("BillboardGui");gui.Adornee=part;gui.Size=dp and UDim2.new(0,100,0,30)or UDim2.new(0,80,0,24);gui.StudsOffset=Vector3.new(0,2,0);gui.AlwaysOnTop=true;gui.Parent=part;local lb=Instance.new("TextLabel",gui);lb.Size=UDim2.new(1,0,1,0);lb.BackgroundTransparency=0.2;lb.BackgroundColor3=df.bg or Color3.new(0,0,0);lb.TextColor3=dp and(df.dc or df.nc or Color3.new(1,1,1))or(df.nc or Color3.new(1,1,1));lb.TextScaled=true;lb.Font=Enum.Font.SourceSansBold;lb.TextStrokeTransparency=0;lb.TextStrokeColor3=Color3.new(0,0,0);lb.Text=(df.pre or"")..string.format("%.1f",tl);activeTG[part]={gui=gui,label=lb,startTime=os.clock(),totalLifetime=tl,prefix=df.pre or""}end
-GEN_DF={n="?",base=8,p=0,pre="",nc=Color3.new(1,1,1),dc=Color3.new(1,.85,.3),bg=Color3.new(0,0,0)}-- v5.0.6: таймеры СНОВА над всеми токенами: известные — стиль v4.0 (префикс/цвет из TKS), неизвестные — белый GEN_DF
-local function rT(o)if o.Name~="C"or not o:IsA("BasePart")or aT[o]or tokenBL[o]then return end;local fr=o:FindFirstChild("FrontDecal");if not fr or not fr:IsA("Decal")then return end;local id=ti(fr.Texture);if not id or AV[id]then return end;local df=TKS[id]or GEN_DF;local r=h();local dp=false;if r then dp=(o.Position.Y-r.Position.Y)>5 end;local lf=df.base*AM;if dp then lf=lf*(2+0.05*(DGL-1));dupCnt=dupCnt+1 end;aT[o]={id=id,n=df.n,p=df.p,mo=df.mo or false,s=os.clock(),l=lf,dp=dp,col=false};tokenVerify[o]=(os.clock()+0.5);pcall(cT,o,id,lf,dp,df)end
+-- v5.1: таймеры ТОЛЬКО над токенами из TKS (полный сет v4.0, как ты и просил), GEN_DF выпилен — неизвестные токены не трекаем; в aT добавлен bt (батл-токен)
+local function rT(o)if o.Name~="C"or not o:IsA("BasePart")or aT[o]or tokenBL[o]then return end;local fr=o:FindFirstChild("FrontDecal");if not fr or not fr:IsA("Decal")then return end;local id=ti(fr.Texture);if not id or AV[id]then return end;local df=TKS[id];if not df then return end;local r=h();local dp=false;if r then dp=(o.Position.Y-r.Position.Y)>5 end;local lf=df.base*AM;if dp then lf=lf*(2+0.05*(DGL-1));dupCnt=dupCnt+1 end;aT[o]={id=id,n=df.n,p=df.p,mo=df.mo or false,bt=df.bt or false,s=os.clock(),l=lf,dp=dp,col=false};tokenVerify[o]=(os.clock()+0.5);pcall(cT,o,id,lf,dp,df)end
 -- v5.0.1: ретраи FrontDecal остались, но рескан теперь ТОЛЬКО по папкам, где реально спавнятся токены (фикс FPS-спайков от W:GetDescendants каждые 2с)
 local tokParents={}
 local function remTokParent(par)if par then tokParents[par]=true end end
@@ -500,6 +545,7 @@ if PAE then PAE.OnClientEvent:Connect(function(data)if type(data)~="table"then r
 local function fb(t,d)if type(t)~="table"then return end;local bid=rawget(t,"BuffID");if bid then d[bid]=t end;local src=rawget(t,"Src");if src then d[src]=t end;for _,val in pairs(t)do if type(val)=="table"then fb(val,d)end end end
 local function pAB()
 if not rps then return end
+pabCalls=pabCalls+1
 local ok,res=pcall(function()return rps:InvokeServer()end)
 if not ok or type(res)~="table"then return end
 local fd={};fb(res,fd)
@@ -587,38 +633,51 @@ local function sPt()
 fP={};if not ENABLED or not curF then return end
 local pt=W:FindFirstChild("Particles");if not pt then return end
 local r=h();if not r then return end
+-- v5.1.2: запоминаем время первого появления каждого петала (ptSeen) — они летают ~2-3с после спавна
+local seen2={}
 for _,o in ipairs(pt:GetChildren())do
 if o.Name=="PetalPart"and o:IsA("BasePart")then
+seen2[o]=ptSeen[o]or os.clock()
 local cn=gPC(o)
 if cn and PP[cn]then
 table.insert(fP,{part=o,cn=cn,pr=PP[cn],dist=d3d(r.Position,o.Position)})
 end
 end
 end
-table.sort(fP,function(a,b)if a.pr~=b.pr then return a.pr<b.pr end;return a.dist<b.dist end)
+ptSeen=seen2
+-- v5.1.3: мягкий приоритет вместо жёсткого фильтра: севшие петалы (age>=2.5) идут первыми, летящие — в конце списка, но лутабельны в любой момент
+table.sort(fP,function(a,b)local n5=os.clock();local la=(n5-(ptSeen[a.part]or 0))>=2.5;local lb=(n5-(ptSeen[b.part]or 0))>=2.5;if la~=lb then return la end;if a.pr~=b.pr then return a.pr<b.pr end;return a.dist<b.dist end)
 end
 local function sSm()local n=os.clock();smT=nil;smTR=math.huge;local r=h();if not r then return end;if dupCnt<6 then return end
 local bestInRing,bestInRem=nil,math.huge;local bestOut,bestOutRem=nil,math.huge
 for p,t in pairs(aT)do if not t.col and p.Parent and t.id==SMI and not tokenBL[p]then local rem=t.l-(n-t.s);if rem>0 then local inRing=(aR and aR.Parent and d2Sq(p.Position,aR.Position)<=aRR*aRR*1.2);if inRing and rem<bestInRem then bestInRem=rem;bestInRing=p elseif not inRing and rem<bestOutRem then bestOutRem=rem;bestOut=p end end end end
-if bestInRing then smT=bestInRing;smTR=bestInRem elseif bestOut then smT=bestOut;smTR=bestOutRem end;if smT and not isCS then INT=true end end
+if bestInRing then smT=bestInRing;smTR=bestInRem elseif bestOut then smT=bestOut;smTR=bestOutRem end;if smT and not isCS and not chBusy then INT=true end end -- v5.1.6: смайл не прерывает активную серию кросхейров
 local function scS()local pf=W:FindFirstChild("PlayerFlames");if not pf then return end;for fl,_ in pairs(scytheParts)do if not fl.Parent then scytheParts[fl]=nil;flameCD[fl]=nil end end;for _,f in ipairs(pf:GetChildren())do local nm=f.Name or"";if nm:sub(1,3)=="Flm"or nm:find("Scythe")or nm:find("Flame")then if not scytheParts[f]then scytheParts[f]={sT=os.clock(),hit=false}end end end end
 local PETAL_CLUSTER_R=12;local PETAL_CLUSTER_MIN=3-- v5.0.8: кластер петалов уже от 3 шт (больше акцент на петалы)
 local function gPetCluster()if #fP<PETAL_CLUSTER_MIN then return nil end;local clusters={};local used={}
 for i=1,#fP do if not used[i]then local cl={fP[i]};used[i]=true;local changed=true;while changed do changed=false;for j=1,#fP do if not used[j]then for _,m in ipairs(cl)do if d3(m.part.Position,fP[j].part.Position)<=PETAL_CLUSTER_R then table.insert(cl,fP[j]);used[j]=true;changed=true;break end end end end end;if #cl>=PETAL_CLUSTER_MIN then local cx,cz=0,0;for _,m in ipairs(cl)do cx=cx+m.part.Position.X;cz=cz+m.part.Position.Z end;table.insert(clusters,{center=Vector3.new(cx/#cl,0,cz/#cl),size=#cl,members=cl})end end end;table.sort(clusters,function(a,b)return a.size>b.size end);return #clusters>0 and clusters or nil end
-local function hTL()local n=os.clock();for p,t in pairs(aT)do if not t.col and p.Parent and t.p>=90 and not tokenBL[p]and(t.l-(n-t.s))>0.3 then return true end end;return false end
+-- v5.1: батл-токены (bt=true). При 22+ XF НЕ лутаем батл-токены в углу (дальше XCR*2 от центра). Калькулятор линка: если XF-пассивка + ВСЕ живые батл-токены на поле >= 24, угловой линк можно лутать — XF в углу уже не заспавнится (пример: 20 XF + линк + 3 БТ = 24 -> лутаем)
+function cntBT()local n=os.clock();local c=0;for p,t in pairs(aT)do if not t.col and p.Parent and t.bt and(t.l-(n-t.s))>0.3 then c=c+1 end end;return c end
+function btBlocked(p,t)if not t or not t.bt then return false end;if xfP<22 then return false end;local cc=gFC();if cc==ZERO then return false end;if d3(p.Position,cc)<=XCR*2 then return false end;if xfP+cntBT()>=24 then return false end;return true end
+local function hTL()local n=os.clock();for p,t in pairs(aT)do if not t.col and p.Parent and t.p>=90 and not tokenBL[p]and(t.l-(n-t.s))>0.3 and not btBlocked(p,t)then return true end end;return false end
 local function eS()local r=h();if not r then return"dead"end;return string.format("PH:%s|CH:%d|PR:%d|XF:%d|SS:%d",ph(),#cQ,st.pr,xfP,scP)end
 local function gSC()local cx,cz,ct=0,0,0;local dw=5;for fl,_ in pairs(scytheParts)do if fl and fl.Parent then local nm=fl.Name or"";local bn=sBC(fl);local isD=(nm:find("Dark")or bn=="Really black");local w=isD and dw or 1;cx=cx+fl.Position.X*w;cz=cz+fl.Position.Z*w;ct=ct+w end end;if ct>0 then return Vector3.new(cx/ct,0,cz/ct),true,0 end;if curF and curF.part then return curF.part.Position,false,0 end;local r2=h();if r2 then return r2.Position,false,0 end;return ZERO,false,0 end
 -- ACTION BUILDER
 local function gAWB()local ba={};local p_=ph();local n=os.clock();local isSc=(aB.SS.st>0);local isSS=(isSc and prec.isX and aB.PoM.m>=3 and pollMS>=3)
+if not isSc and n>=prPauseNext then prPauseUntil=n+30;prPauseNext=n+900;pcall(klog,"PREC PAUSE: 30s без прецов (цикл 15 мин)")end-- v5.2.8: раз в 15 минут ВНЕ скорча стартует 30с-пауза лута прецов (если на 15-й минуте идёт скорч — пауза ждёт его конца)
 if scorchAllCHMode and(os.clock()-scorchAllCHT0)>45 then scorchAllCHMode=false;scorchPurpleCount=0 end -- v5.0.8: окно AllCH ровно 45с, потом снова копим 3 фиолетовых
 local hdm=false;for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.mo then hdm=true;break end end;local isSO=(not isSc)and prec.isX and hdm
 ndMorph=nil;for p,t in pairs(aT)do if not t.col and p.Parent and t.mo and not t.dp then ndMorph=p;break end end
 local cs=L:FindFirstChild("CoreStats");if cs then local cap=cs:FindFirstChild("Capacity");local pol=cs:FindFirstChild("Pollen");if cap and pol and cap.Value>0 and(pol.Value/cap.Value)>=0.9 then local pp=gPCH();if #pp>0 then return{"go_backpack_dump_purple"}end;local all=gCH(false,false,false);if #all>0 then return{"go_backpack_dump"}end end end
 local r=h();if not r then return{"patrol_ring"}end
 -- SHOWER (with limit)
-if cfg.shower_on and(cfg.shower_lim==0 or showerCnt<cfg.shower_lim)and not(prec.isX and prec.tL>0 and prec.tL<16)then-- v5.0.8: шовер НЕ лутаем, если x10-прецизиону осталось <16с
+if cfg.shower_on and(cfg.shower_lim==0 or showerCycle<cfg.shower_lim)and not(prec.isX and prec.tL>0 and prec.tL<16)then-- v5.0.8: шовер НЕ лутаем, если x10-прецизиону осталось <16с
 for i=1,#activeShowers do local sh=activeShowers[i];if not sh.collected and sh.part.Parent and(n-sh.spawnTime)<1.2 then if d3(r.Position,sh.part.Position)<80 then return{"go_shower"}end end end
 for i=1,#activeShowers do local sh=activeShowers[i];if not sh.collected and sh.part.Parent and(n-sh.spawnTime)<0.8 and d3(r.Position,sh.part.Position)<60 then if not(prec.isX and prec.tL>0 and prec.tL<15)then return{"go_shower"}end end end end
+-- v5.1.5: умирающий дюпед морф (<6с) — ФОРСИРОВАННО поверх всего: раньше ветка стояла ниже кемпа/петалов/флеймов и её перебивали — морф протухал
+for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.mo then local remM=t.l-(n-t.s);if remM<6 and remM>0 then return{"go_duped_morph"}end end end
+-- v5.1.6: смайл при 6+ дюпед — сразу после форс-морфа: раньше его перебивали ветки скорча/19+ XF/ndMorph и смайл в ареаринге протухал
+if smT and smT.Parent and dupCnt>=6 and not isSS and smTR<10 and(smTR<4 or os.clock()>=(smCd or 0))then if aB.PoM.a and aR and aR.Parent then return{"go_smile_area"}end;return{"go_smile"}end-- v5.2.5: топ-приоритет смайла ТОЛЬКО для срочного (<10с) и с кулдауном 12с (жалоба: при 6+ дюпед смайл собирался слишком часто и перебивал скорч/кросхейры); совсем срочный <4с игнорит кулдаун
 -- v5.0.6: 24+ пассивок скорча: <10 X-Flame — лутаем ВСЕ кросхейры (копим X-Flame); 10+ — ВСТАЁМ на фиолетовые (счёт в scorchPurpleCount); после 3 фиолетовых — все кросхейры до конца скорча
 if scP>=24 and xfP<10 and not scorchAllCHMode then local allW=gCH(false,false,true);if #allW>0 then return{"go_crosshair_all"}end end
 if scP>=24 and xfP>=10 then
@@ -646,27 +705,29 @@ if scorchPurpleCount>=3 then scorchAllCHMode=true;scorchAllCHT0=os.clock();scorc
 -- v5.0.6: убран фолбэк "AllCH через 1с после ПЕРВОГО фиолетового" — из-за него режим всех кросхейров включался после 1 фиолетового, а не после 3; теперь СТРОГО scorchPurpleCount>=3
 local pp=gCH(true,false,false);if #pp>0 then return{"go_purple_scorch"}end end
 -- v5.0.8: вне окна AllCH массовый лут запрещён: акцент на огни (кемп кластера ~12с/пауза 10с), одиночный ближайший кросхейр — можно
+local nc2=gCH_n();if nc2 then return{"go_crosshair"}end -- v5.1.5: кросхейр ПЕРЕД кемпом кластера
 if os.clock()>flCampCd then local clF=gFCB();if #clF>0 and clF[1].size>=4 then return{"go_flame_cluster_center"}end end
-local nc2=gCH_n();if nc2 then return{"go_crosshair"}end
 local path2=gFCPath(r.Position);if path2 then return{"go_flame_path"}end;return{"patrol_scorch_flames"}end
 if isSc and scorchStartT>0 and(n-scorchStartT)>=15 and not scorchDupedMorphDone then if smT and smT.Parent then return{"go_smile"}end;for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.mo then return{"go_duped_morph_scorch"}end end end
 -- Scorch petal+flame focus
 if isSc and not isSS then local ptCl=gPetCluster();if ptCl and #ptCl>0 then return{"go_petal_cluster"}end;if #fP>=2 then return{"go_petal"}end-- v5.0.8: в скорче петалы уже от 2 шт 
 -- v5.0.8: акцент на огни ЖИВОЙ: старое условие n-flameCampStart<=15 при flameCampStart=0 было всегда ложным (мёртвая ветка). Теперь каденс: ~12с у кластера, потом пауза 10с
+local ncS=gCH_n();if ncS then return{"go_crosshair"}end -- v5.1.5: в скорче ближайший кросхейр приоритетнее стояния у флеймов
+local spth=gFCPath(r.Position);if spth then return{"go_flame_path"}end -- v5.1.8: ПРИОРИТЕТ флейм-патха в скорче — бот бежит по цепочке кластеров огня вместо стояния у одного (запрос: больше бегать по флеймам)
 if os.clock()>flCampCd then local clust=gFCB();if #clust>0 then local bestC,bestSz=nil,0;for i=1,math.min(3,#clust)do if clust[i].size>bestSz and clust[i].size>=4 then bestSz=clust[i].size;bestC=clust[i].center end end;if bestC then return{"go_flame_cluster_center"}end end end end
 if isSO then
 if n-lastSOTime>=10 then return{"go_super_outside"}end;local nearCH=gCH_n();if nearCH and not smT and not xfE then return{"go_crosshair"}end
 if hTL()then return{"go_tokenlink"}end
-for i,coco in ipairs(activeCocos)do if not coco.collected and coco.part.Parent and(3.0-(n-coco.spawnTime))<=1.0 and cfg.coco_on and(cfg.coco_lim==0 or cocoCnt<cfg.coco_lim)then return{"go_coconut"}end end
+for i,coco in ipairs(activeCocos)do if not coco.collected and coco.part.Parent and(3.0-(n-coco.spawnTime))<=1.0 and cfg.coco_on and(cfg.coco_lim==0 or cocoCycle<cfg.coco_lim)then return{"go_coconut"}end end
 if p_=="REFRESH"then local all=gCH(false,false,true);if #all>0 then return{"go_crosshair_refresh_all"}end;return{"patrol_ring"}end
 if p_=="X10"then return{"patrol_ring"}end;table.insert(ba,"patrol_ring");return ba end
 -- v5.0.8: при 19+ XF ближайший к центру кросхейр в ЛЮБОЙ фазе (был кейс: 22 XF, фаза REFRESH — бот ушёл на фиолетовый в углу); дальше XCR*2 от центра — игнор, ждём у центра
-if xfP>=19 and not isSS and not isSO then local cc=gFC();if cc~=ZERO then local bC=gCH_nc();if bC and d3(bC.part.Position,cc)<=XCR*2 then return{"go_center_ch"}end end;if p_=="X10"or p_=="REFRESH"then return{"go_xflame_center"}end end
+if xfP>=19 and not isSS and not isSO then local cc=gFC();if cc~=ZERO then local bC=gCH_nc();if bC and d3(bC.part.Position,cc)<=XCR*2 then return{"go_center_ch"}end end;if(p_=="X10"or p_=="REFRESH")and os.clock()>=xfcCd then return{"go_xflame_center"}end end
 if ndMorph and not isSc and not isSO then local hasSmiles=false;for p,t in pairs(aT)do if not t.col and p.Parent and t.id==SMI then hasSmiles=true;break end end;if hasSmiles then return{"go_smile_stand"}end;return{"go_noduped_morph"}end
-for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.mo then local rem=t.l-(n-t.s);if rem<2.5 and rem>0 then return{"go_duped_morph"}end end end -- v5.0.5: морф ждёт скорча, подбор вне скорча — только последний шанс
+-- v5.1.5: форс-лут морфа <6с перенесён в САМЫЙ ВЕРХ gAWB
 if isSc then
 -- v5.0.2: go_scorch_token — свежий TL/TP токен во время скорча (из v4.0)
-for p,t in pairs(aT)do if not t.col and p.Parent and not t.dp and(t.id==TPI or t.id==1629547638)and(n-t.s)<2.5 then return{"go_scorch_token"}end end
+for p,t in pairs(aT)do if not t.col and p.Parent and not t.dp and(t.id==TPI or t.id==1629547638)and(n-t.s)<2.5 and not btBlocked(p,t)then return{"go_scorch_token"}end end
 -- v5.0.2: go_scorch_tp_cycle — цикл по дюпед TP в скорче
 if scorchTPCycle then for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.id==TPI then return{"go_scorch_tp_cycle"}end end end
 for p,t in pairs(aT)do if not t.col and p.Parent and t.id==2000457501 and t.dp and(n-t.s)>2.0 then return{"go_duped_inspire_scorch"}end end
@@ -675,10 +736,10 @@ if t.id==2000457501 and rem<2.0 and rem>0 then return{"go_duped_inspire_normal"}
 if #gCH(false,false,true)==0 then for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.id==1472256444 then local rem=t.l-(n-t.s);if rem<5.0 and rem>0 then return{"go_duped_babylove"}end end end end
 -- v5.0.2: go_duped_pri — при 9+ дюпед собрать цепочку приоритетных DPRI (из v4.0 go_duped_pri)
 if dupCnt>=9 then local hasDpri=false;for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and DPRI[t.id]then hasDpri=true;break end end;if hasDpri then return{"go_duped_pri"}end end
--- v5.0.2: go_smile_area — при активном PoM лутать смайл с края AreaRing (из v4.0 go_smile_area)
-if smT and dupCnt>=6 and aB.PoM.a and aR and aR.Parent then return{"go_smile_area"}end
-if smT and dupCnt>=6 then return{"go_smile"}end -- v5.0.1: фикс — битое условие фактически требовало 9+ дюпед, смайл снова лутается при 6+
-if p_=="X10"and not isSO then local pp=gCH(true,false,false);if #pp>0 and cfg.purple_on and(cfg.purple_lim==0 or purpleMarkCnt<cfg.purple_lim)then return{"go_purple"}end end
+-- v5.1.6: ветки смайла (go_smile_area/go_smile при 6+ дюпед) перенесены в самый верх gAWB — сразу после форс-морфа
+-- v5.1.5: в фазе REFRESH таргет-практика приоритетнее петалов/линка/предикта (раньше ветка REFRESH стояла в самом низу)
+if p_=="REFRESH"and not isSc and not isSS then local allR=gCH(false,false,true);if #allR>0 then return{"go_crosshair_refresh_all"}end end
+if p_=="X10"and not isSO and xfP<19 then local pp=gCH(true,false,false);if #pp>0 and n>=prPauseUntil and cfg.purple_on and(cfg.purple_lim==0 or purpleMarkCnt<cfg.purple_lim)then return{"go_purple"}end end-- v5.2.8: в паузу прецов на фиолетовые не встаём -- v5.1.5: при 19+ XF на фиолетовый НЕ встаём — ждём/кемпим X-Flame
 local ptCl=gPetCluster();if ptCl and #ptCl>0 then return{"go_petal_cluster"}end
 if #fP>=2 and not isSS then return{"go_petal"}end-- v5.0.8: больше акцент на петалы — лутаем уже от 2 шт и вне скорча (раньше go_petal вне скорча вообще не возвращался)
 -- v5.0.2: go_diagonal_loot — при 6+ кросхейров лут вдоль длинной оси (из v4.0)
@@ -687,21 +748,40 @@ local allForDiag=gCH(false,false,true);if #allForDiag>=6 and not isSc and not is
 for _i2=1,#cQ do local _ch2=cQ[_i2];if not _ch2.col and _ch2.pPos and _ch2.part.Position.Y>20 then return{"go_predictive_ch"}end end
 local nearCH=gCH_n()
 -- v4.9: если на поле есть хоть один фиолетовый — сперва он, а не ближайший обычный
-if nearCH and not smT and not xfE and not isSS and not isSO then if not nearCH.isP then local pp=gCH(true,false,false);if #pp>0 then return{"go_purple"}end end;return{"go_crosshair"}end
+if nearCH and nearCH.isP and n<prPauseUntil then nearCH=nil end-- v5.2.8: пауза прецов: ближайший фиолетовый не лутаем
+if nearCH and not smT and not xfE and not isSS and not isSO then if not nearCH.isP and xfP<19 and n>=prPauseUntil then local pp=gCH(true,false,false);if #pp>0 then return{"go_purple"}end end;return{"go_crosshair"}end -- v5.1.5: при 19+ XF не переключаемся с ближнего кросхейра на фиолетовый
 if hTL()then return{"go_tokenlink"}end
-for i,coco in ipairs(activeCocos)do if not coco.collected and coco.part.Parent and(3.0-(n-coco.spawnTime))<=1.0 and cfg.coco_on and(cfg.coco_lim==0 or cocoCnt<cfg.coco_lim)then return{"go_coconut"}end end
-if smT and dupCnt>=6 and not isSO then return{"go_smile"}end
-if not isSc then local predPos=scanPreciseBee();if predPos then return{"go_precise_predict"}end end -- v5.0.1: PreBee теперь здесь, после кросхейров/смайла/кокосов
+for i,coco in ipairs(activeCocos)do if not coco.collected and coco.part.Parent and(3.0-(n-coco.spawnTime))<=1.0 and cfg.coco_on and(cfg.coco_lim==0 or cocoCycle<cfg.coco_lim)then return{"go_coconut"}end end
+if smT and dupCnt>=6 and not isSO and os.clock()>=(smCd or 0)then return{"go_smile"}end-- v5.2.5: кулдаун смайла 12с и на нижнем приоритете
+if not isSc and n>=prPauseUntil then local predPos=scanPreciseBee();if predPos then return{"go_precise_predict"}end end -- v5.0.1: PreBee теперь здесь, после кросхейров/смайла/кокосов
 if p_=="REFRESH"then local all=gCH(false,false,true);if #all>0 then return{"go_crosshair_refresh_all"}end;return{"patrol_ring"}end
 if p_=="X10"then return{"patrol_ring"}end
 if p_=="NABOR"then
 -- v5.0.2: go_token_near — ближайший ценный токен в NABOR (из v4.0)
-local r3=h();if r3 then local bt3,bd3=nil,math.huge;for p,t in pairs(aT)do if not t.col and p.Parent and not tokenBL[p]and t.p>=7 and(t.l-(n-t.s))>0.3 then local d=d3(r3.Position,p.Position);if d<bd3 then bd3=d;bt3=p end end end;if bt3 and bd3<25 then return{"go_token_near"}end end
+local r3=h();if r3 then local bt3,bd3=nil,math.huge;for p,t in pairs(aT)do if not t.col and p.Parent and not tokenBL[p]and t.p>=7 and(t.l-(n-t.s))>0.3 and not btBlocked(p,t)and not moHold(t)then local d=d3(r3.Position,p.Position);if d<bd3 then bd3=d;bt3=p end end end;if bt3 and bd3<25 then return{"go_token_near"}end end
 if hTL()then return{"go_tokenlink"}end;table.insert(ba,"patrol_ring");return ba end
 return{"patrol_ring"}end
 
 -- UCB
-local function cAB(s)local v=gAWB();if #v==0 then return"patrol_ring"end;if math.random()<EP then return v[math.random(1,#v)]end;if not visitCount[s]then visitCount[s]={}end;local bA,bS=v[1],-math.huge;for i=1,#v do local act=v[i];local qV=gQ(s,act);local nv=visitCount[s][act]or 0;local ub=UCB_C*math.sqrt(math.log(totalSteps+1)/(nv+1));local sc=qV+ub;if sc>bS then bA=act;bS=sc end end;visitCount[s][bA]=(visitCount[s][bA]or 0)+1;return bA end
+-- v5.1: выводы из анализатора паттернов вшиты в выбор действия: худшие связки — самоповторы (duped_boost>duped_boost n=225 avg=-1.3, dump_purple>dump_purple, duped_pri>duped_pri, inspire_scorch>inspire_scorch) — запрещаем то же действие два раза подряд; лучшие связки (линк/кокос/предикт -> петалы avg 70-77, фиолетовый -> линк avg 74) — форсим, когда оба доступны
+PAT_REPBAD={go_duped_boost=true,go_backpack_dump_purple=true,go_duped_pri=true,go_duped_inspire_scorch=true};lastPatAct=""
+-- v5.1.2: адаптивный эпсилон исследования — линейный спад 0.2 -> 0.03 за 2000 шагов; epT0 сбрасывается кнопкой Reset во вкладке Patterns — обучение перезапускается
+function gEP()local st2=math.max(0,totalSteps-(epT0 or 0));if st2>=2000 then return 0.03 end;return 0.2-(0.17*st2/2000)end
+local function cAB(s)local v=gAWB();if #v==0 then return"patrol_ring"end
+local function has(a)for i=1,#v do if v[i]==a then return true end end;return false end
+if(lastPatAct=="go_tokenlink"or lastPatAct=="go_coconut"or lastPatAct=="go_predictive_ch")and(has("go_petal_cluster")or has("go_petal"))then local pk=has("go_petal_cluster")and"go_petal_cluster"or"go_petal";lastPatAct=pk;return pk end
+if lastPatAct=="go_purple"and has("go_tokenlink")then lastPatAct="go_tokenlink";return"go_tokenlink"end
+local bA
+if math.random()<gEP()then bA=v[math.random(1,#v)]
+else
+if not visitCount[s]then visitCount[s]={}end
+local bS=-math.huge;bA=v[1]
+for i=1,#v do local act=v[i];local qV=gQ(s,act);local nv=visitCount[s][act]or 0;local ub=UCB_C*math.sqrt(math.log(totalSteps+1)/(nv+1));local sc=qV+ub;if sc>bS then bA=act;bS=sc end end
+visitCount[s][bA]=(visitCount[s][bA]or 0)+1
+end
+-- v5.1.3: динамический анти-повтор: не повторяем подряд ЛЮБОЕ действие, чей последний результат <=0 (ловит спам go_petal/go_xflame_center), плюс статический PAT_REPBAD
+if bA==lastPatAct and(PAT_REPBAD[bA]or(lastActA==bA and(tonumber(lastActRw)or 0)<=0))then local alt=nil;for i=1,#v do if v[i]~=bA then alt=v[i];break end end;bA=alt or"patrol_ring"end
+lastPatAct=bA;return bA end
 
 -- Q-UPDATE (eligibility traces + prioritized replay)
 local replayBuffer={};local replayMaxSize=100;local replayIndex=1
@@ -717,6 +797,7 @@ local function stToken(p)if not p or not p.Parent then return end;local t0=os.cl
 local function eA(action)
 local r=h();if not r then return-1 end
 tL=action;pcall(hitBloom);pcall(hitFlames)
+chBusy=(action=="go_crosshair"or action=="go_crosshair_all"or action=="go_crosshair_refresh_all"or action=="go_diagonal_loot"or action=="go_backpack_dump"or action=="go_backpack_dump_purple")-- v5.1.6: серия кросхейров дожимается до конца: пока идёт лут кросхейров, смайл-скан не дёргает INT
 if action=="go_xflame_center_camp"then
 local cc=gFC();if cc==ZERO then return-1 end
 tL="XF Camp";INT=true
@@ -734,6 +815,10 @@ for i=1,#path do
 local wp=path[i]
 if goTo(Vector3.new(wp.X,r.Position.Y,wp.Z),4,2.5)then
 rw=rw+5
+-- v5.2.5: во время флейм-паса добираем ОДИН ближайший истекающий/ценный токен (Token Link p>=90 или любой с остатком <3с, радиус ~50 студов) — жалоба: линк <1с и короткоживущие токены пропускались
+local gp,gk=nil,math.huge
+for p,t in pairs(aT)do if not t.col and p.Parent and not tokenBL[p]and not btBlocked(p,t)and not moHold(t)then local rem=t.l-(os.clock()-t.s);if rem>0 and d2Sq(r.Position,p.Position)<=2500 and(t.p>=90 or rem<3.0)then local key=(t.p>=90 and-1000 or 0)+rem;if key<gk then gk=key;gp=p end end end end
+if gp and aT[gp]then tL="FPth+tk";if goTo(Vector3.new(gp.Position.X,r.Position.Y,gp.Position.Z),3,2)and gp.Parent then aT[gp].col=true;tokenBL[gp]=os.clock()+1.5;st.tk=st.tk+1;rw=rw+8 end;r=h()or r end
 local st_=os.clock()
 while os.clock()-st_<0.5 do task.wait(0.05);pcall(hitFlames);pcall(hitBloom)end
 else break end end
@@ -753,7 +838,7 @@ tL="FlClust";INT=false
 goTo(Vector3.new(bestC.X,r.Position.Y,bestC.Z),4,3)
 local campRw=bestSz;local st_=os.clock();local dashCd=0
 while os.clock()-st_<1.5 do task.wait(0.03);pcall(hitFlames);pcall(hitBloom);if INT or not ENABLED then break end;r=h();if r then
-local nearCH=nil;local nearD=math.huge;for i=1,#cQ do local ch=cQ[i];if not ch.col and ch.part.Parent then local dd=d2Sq(r.Position,ch.part.Position);if dd<nearD and dd<900 then nearD=dd;nearCH=ch end end end
+local nearCH=nil;local nearD=math.huge;for i=1,#cQ do local ch=cQ[i];if not ch.col and ch.part.Parent and not(grnBad and grnBad(ch))then local dd=d2Sq(r.Position,ch.part.Position);if dd<nearD and dd<900 then nearD=dd;nearCH=ch end end end -- v5.1.5: дэш из кемпа тоже не на зелёные
 if nearCH and nearD>16 and os.clock()>dashCd then
 if goTo(nearCH.part.Position,2,2,(nearCH.isP or nil))and nearCH.part.Parent then
 nearCH.col=true
@@ -778,7 +863,7 @@ end
 end
 end -- closes if r then
 end -- FIX v4.7.1: этот end закрывает while (его не хватало в v4.7 — причина ошибки на строке 1055)
-flCampAcc=flCampAcc+1.5;if flCampAcc>=12 then flCampCd=os.clock()+10;flCampAcc=0 end-- v5.0.8: суммарно ~12с у флеймов, потом пауза 10с — чтобы не стоял на них постоянно
+flCampAcc=flCampAcc+1.5;if flCampAcc>=6 then flCampCd=os.clock()+8;flCampAcc=0 end-- v5.1.5: суммарно ~6с у флеймов, потом пауза 8с (12с стояния было слишком долго)
 return math.max(10,campRw)end
 if action=="go_smile_stand"then
 local bp=nil;local bd=math.huge
@@ -795,7 +880,7 @@ if action=="go_noduped_morph"then if not ndMorph or not ndMorph.Parent then retu
 if action=="go_duped_morph"then
 local n=os.clock()
 for p,t in pairs(aT)do
-if not t.col and p.Parent and t.dp and t.mo and(t.l-(n-t.s))<4.0 then
+if not t.col and p.Parent and t.dp and t.mo and(t.l-(n-t.s))<6.0 then
 tL="Morph(D)";INT=false
 if goTo(p.Position,3,3)and p.Parent then
 local t0=os.clock()
@@ -824,34 +909,36 @@ end;return-2
 end
 if action=="go_shower"then
 -- v4.9: лут шоверов из v4.0 — цепочка TP по всем свежим шоверам, затем ценный токен и кросхейр
+-- v5.2.6: восстановлен СТАРЫЙ лут шовера — velocity во время стояния на шовере больше НЕ прибивается к 0 каждый кадр (скорость считается нормально, лут не «залипает»). Оставлено одно мгновенное гашение velocity сразу после CFrame-ТП, чтобы телепорт-скачок не реплицировался как рывок. Настоящий фикс кика — кламп кросхейр-репульсии до 75 (см. HEATMAP)
 for i=1,#activeShowers do
 local sh=activeShowers[i]
 if not sh.collected and sh.part.Parent and(os.clock()-sh.spawnTime)<1.2 then
 tL="Shower";INT=false
-r.CFrame=CFrame.new(sh.part.Position.X,sh.part.Position.Y+3,sh.part.Position.Z)
+r.CFrame=CFrame.new(sh.part.Position.X,sh.part.Position.Y+3,sh.part.Position.Z);r.AssemblyLinearVelocity=ZERO
 local t0=os.clock()
 while os.clock()-t0<2.0 do
 task.wait(0.05);pcall(hitBloom);pcall(hitFlames)
 if not sh.part.Parent then break end
 end
-sh.collected=true;showerCnt=showerCnt+1
+sh.collected=true;showerCnt=showerCnt+1;showerCycle=showerCycle+1
 local nf=true
 while nf and not INT do nf=false
+if cfg.shower_lim>0 and showerCycle>=cfg.shower_lim then break end-- v5.2.6: лимит за цикл ворнинг-дисков — цепочка не добирает сверх Farm Showers
 for j=1,#activeShowers do
 local ns=activeShowers[j]
 if not ns.collected and ns.part.Parent and ns~=sh and(os.clock()-ns.spawnTime)<3.5 then
-tL="Shower TP";r.CFrame=CFrame.new(ns.part.Position.X,ns.part.Position.Y+3,ns.part.Position.Z)
+tL="Shower TP";r.CFrame=CFrame.new(ns.part.Position.X,ns.part.Position.Y+3,ns.part.Position.Z);r.AssemblyLinearVelocity=ZERO
 local t1=os.clock()
 while os.clock()-t1<2.0 do task.wait(0.05);pcall(hitBloom);pcall(hitFlames);if not ns.part.Parent then break end end
-ns.collected=true;showerCnt=showerCnt+1;nf=true;break
+ns.collected=true;showerCnt=showerCnt+1;showerCycle=showerCycle+1;nf=true;break
 end
 end
 end
-local after=nil;local ad=math.huge
+acHold=0;local after=nil;local ad=math.huge-- v5.1.8: цепочка шоверов закончена — возвращаем управление CFrame-двигателю для добора токена/кросхейра
 for p,t in pairs(aT)do
 if not t.col and p.Parent then
 local ok2=false
-if t.id==SMI or t.id==2000457501 or t.mo or t.id==8173559749 or t.p>=90 then ok2=true end
+if t.id==SMI or t.id==2000457501 or(t.mo and not moHold(t))or t.id==8173559749 or t.p>=90 then ok2=true end -- v5.1.6: дюпед морф после шовера не трогаем, пока он «на удержании»
 if ok2 and(t.l-(os.clock()-t.s))>0.3 then local d=d3(r.Position,p.Position);if d<ad then ad=d;after=p end end
 end
 end
@@ -885,7 +972,7 @@ edgePos=Vector3.new(edgePos.X,r.Position.Y,edgePos.Z)
 if goTo(edgePos,1.8,2.5)then
 if hh then hh.WalkSpeed=origSp end
 if coco.part.Parent then
-coco.collected=true;cocoCnt=cocoCnt+1 end
+coco.collected=true;cocoCnt=cocoCnt+1;cocoCycle=cocoCycle+1 end
 return 30 end
 if hh then hh.WalkSpeed=origSp end end;return-2 end
 if action=="go_crosshair_all"then
@@ -904,7 +991,7 @@ return rw>0 and rw or-2 end
 if action=="go_crosshair"then
 local all=gCH(false,false,true);if #all==0 then return-1 end -- v4.9: фиолетовые всегда первыми
 local t=all[1];local rw=0;INT=false
-if t.part.Parent and not t.col and not smT then
+if t.part.Parent and not t.col then -- v5.1.6: смайл больше не блокирует уже начатый лут кросхейра
 local sk=false
 if xfE then
 local cc=gFC()
@@ -947,7 +1034,7 @@ end
 if action=="go_tokenlink"then
 local tl={};local n_=os.clock()
 for p,t in pairs(aT)do
-if not t.col and p.Parent and t.p>=90 and not tokenBL[p]then
+if not t.col and p.Parent and t.p>=90 and not tokenBL[p]and not btBlocked(p,t)then
 local rem=t.l-(n_-t.s)
 if rem>0.3 then table.insert(tl,{p=p,t=t,rem=rem})else tokenBL[p]=n_+10 end
 end
@@ -965,9 +1052,10 @@ if goTo(bT.p.Position,2.5,0.7)then okL=true;break end
 if INT or not ENABLED then return-3 end
 end
 if okL and bT.p.Parent then
-bT.t.col=true;lastTLT=os.clock()
--- v5.0.2: цепочка — ждём второй TL в радиусе 40 студов (из v4.0)
-local t1c=os.clock();while os.clock()-t1c<2.5 do task.wait(0.2);local r5=h();if r5 then for p2c,t2c in pairs(aT)do if not t2c.col and p2c.Parent and t2c.id==1629547638 and d3(r5.Position,p2c.Position)<40 and(t2c.l-(os.clock()-t2c.s))>0.3 then if goTo(p2c.Position,4,3)and p2c.Parent then t2c.col=true;lastTLT=os.clock();return 80 end end end end end
+bT.t.col=true;lastTLT=os.clock();tokenBL[bT.p]=os.clock()+3
+-- v5.1: ФИКС НАСОВСЕМ «стоит после лута линка»: стоячий цикл ожидания второго TL (2.5с, task.wait в холостую — бот стоял на месте) убран. Второй TL берём ТОЛЬКО если он уже жив на поле прямо сейчас, иначе мгновенно отдаём управление следующему действию
+local r5=h()
+if r5 then for p2c,t2c in pairs(aT)do if not t2c.col and p2c.Parent and t2c.id==1629547638 and d3(r5.Position,p2c.Position)<40 and(t2c.l-(os.clock()-t2c.s))>0.3 and not btBlocked(p2c,t2c)then if goTo(p2c.Position,4,3)and p2c.Parent then t2c.col=true;lastTLT=os.clock();return 80 end end end end
 return 50
 end;tokenBL[bT.p]=os.clock()+8;return-5
 end
@@ -976,8 +1064,10 @@ local n=os.clock();local cand={}
 for p,t in pairs(aT)do
 if not t.col and p.Parent and not tokenBL[p]then
 local rem=t.l-(n-t.s)
-if rem>0.5 then
-table.insert(cand,{p=p,score=t.p*(rem/t.l)*(t.dp and 1.3 or 1)})
+if rem>0.5 and not btBlocked(p,t)and not moHold(t)then
+-- v5.1.2: единая метрика: приоритет x остаток жизни x дистанция (clamp 40/d: ближние до x1.5, дальние до x0.3) — бот не бежит через всё поле за дешёвым токеном
+local dTk=d3(r.Position,p.Position)
+table.insert(cand,{p=p,score=t.p*(rem/t.l)*(t.dp and 1.3 or 1)*math.clamp(40/math.max(dTk,1),0.3,1.5)})
 end
 end
 end
@@ -1014,7 +1104,7 @@ local ok=goTo(Vector3.new(smTarget.X,r.Position.Y,smTarget.Z),4,toVal)
 goSm=false;if hh then hh.WalkSpeed=origSp end
 if ok and sm.Parent then
 if not td.dp then
-td.col=true;smT=nil;st.sm=st.sm+1;isCS=false;dupCnt=0;return 45
+td.col=true;smT=nil;st.sm=st.sm+1;isCS=false;dupCnt=0;smCd=os.clock()+12;return 45
 end
 local st_=os.clock()
 while os.clock()-st_<TSD do
@@ -1023,7 +1113,7 @@ if not sm.Parent then break end
 local h__=hm()
 if h__ then h__:MoveTo(Vector3.new(smTarget.X,smTarget.Y,smTarget.Z))end
 end
-td.col=true;smT=nil;st.sm=st.sm+1;isCS=false;dupCnt=0;return 45
+td.col=true;smT=nil;st.sm=st.sm+1;isCS=false;dupCnt=0;smCd=os.clock()+12;return 45
 end
 isCS=false;smT=nil;goSm=false
 if hh then hh.WalkSpeed=origSp end;return-10
@@ -1049,6 +1139,7 @@ if hh then hh.WalkSpeed=origSp end;return-2
 end
 if action=="go_petal"then
 if #fP==0 then return-1 end
+-- v5.1.3: жёсткий возрастной фильтр УБРАН (он порождал спам go_petal>go_petal n=2051 avg=-0.9): лутаем в любой момент с появления — goTo идёт под точку падения и сам дожидается посадки (таймаут 2.5с); мягкий приоритет севшим даёт сортировка в sPt
 local ca=false;local tr=0;local i=1
 while i<=#fP do
 local pt=fP[i]
@@ -1070,7 +1161,7 @@ for p,td in pairs(aT)do
 if not td.col and p.Parent and not tokenBL[p]then
 local d=d3(r.Position,p.Position)
 local rem=td.l-(n_-td.s)
-if rem>0.5 and td.p>=1 then
+if rem>0.5 and td.p>=1 and not btBlocked(p,td)and not moHold(td)then -- v5.1.6: патруль не лутает дюпед морф вне окна
 local sc2=td.p*(1+(td.dp and 0.5 or 0))/(d+1)
 if sc2>bs2 then bs2=sc2;bt=p end
 end
@@ -1086,7 +1177,7 @@ goTo(Vector3.new(aR.Position.X+math.cos(ang)*aRR*0.5*math.random(),r.Position.Y,
 end
 tL="R->AR";INT=false;task.wait(0.03);return 0
 end
-if action=="go_xflame_center"then local c=gFC();if c==ZERO then return-1 end;tL="XF c";INT=false;goTo(c,3,3);return 0 end
+if action=="go_xflame_center"then local c=gFC();if c==ZERO then return-1 end;tL="XF c";INT=false;xfcCd=os.clock()+1.5;goTo(c,3,3);return 0 end
 if action=="patrol_scorch_flames"then
 local sc=gSC();tL="SS Patrol";INT=false
 if sc~=ZERO then
@@ -1149,7 +1240,7 @@ if goTo(Vector3.new(best2.pPos.X,r2.Position.Y,best2.pPos.Z),3,5)then if best2.p
 -- v5.0.2: go_token_near executor
 if action=="go_token_near"then
 local r4=h();if not r4 then return-1 end;local bt4,bd4=nil,math.huge;local n4=os.clock()
-for p,t in pairs(aT)do if not t.col and p.Parent and not tokenBL[p]and t.p>=7 and(t.l-(n4-t.s))>0.3 then local d=d3(r4.Position,p.Position);if d<bd4 then bd4=d;bt4=p end end end
+for p,t in pairs(aT)do if not t.col and p.Parent and not tokenBL[p]and t.p>=7 and(t.l-(n4-t.s))>0.3 and not btBlocked(p,t)and not moHold(t)then local d=d3(r4.Position,p.Position);if d<bd4 then bd4=d;bt4=p end end end
 if not bt4 then return-1 end;tL=aT[bt4].n;INT=false
 if goTo(bt4.Position,4,4)and bt4.Parent then aT[bt4].col=true;tokenBL[bt4]=os.clock()+1.2;return 3+aT[bt4].p*0.2 end;tokenBL[bt4]=os.clock()+3;return-2 end
 -- v5.0.2: go_duped_pri executor — цепочка DPRI при 9+ дюпед
@@ -1167,14 +1258,15 @@ tL="SmArea";INT=false;isCS=true
 local toSm=sm2.Position-aR.Position;toSm=Vector3.new(toSm.X,0,toSm.Z)
 local edgePos=aR.Position+toSm.Unit*(aRR*0.9)
 goTo(edgePos,3,2)
-local ok3=goTo(Vector3.new(sm2.Position.X,r.Position.Y,sm2.Position.Z),4,3)
+local ok3=goTo(Vector3.new(sm2.Position.X,r.Position.Y,sm2.Position.Z),4,5)
 isCS=false
-if ok3 and sm2.Parent then if aT[sm2]then aT[sm2].col=true end;smT=nil;st.sm=st.sm+1;dupCnt=0;return 50 end
-smT=nil;return-8 end
+if ok3 and sm2.Parent then if aT[sm2]then aT[sm2].col=true end;smT=nil;st.sm=st.sm+1;dupCnt=0;smCd=os.clock()+12;return 50 end
+if not sm2.Parent then smT=nil end -- v5.1.5: смайл теряем только если он реально исчез; после неудачи ретрай (раньше smT=nil и -8 — смайл в ареаринге бросался с первой неудачи)
+return-2 end
 -- v5.0.2: go_scorch_token executor — свежий TL/TP в скорче
 if action=="go_scorch_token"then
 local n3=os.clock();local bp5,bd5=nil,math.huge
-for p,t in pairs(aT)do if not t.col and p.Parent and not t.dp and(t.id==TPI or t.id==1629547638)and(n3-t.s)<2.5 then local d=d3(r.Position,p.Position);if d<bd5 then bd5=d;bp5=p end end end
+for p,t in pairs(aT)do if not t.col and p.Parent and not t.dp and(t.id==TPI or t.id==1629547638)and(n3-t.s)<2.5 and not btBlocked(p,t)then local d=d3(r.Position,p.Position);if d<bd5 then bd5=d;bp5=p end end end
 if not bp5 then return-1 end;tL="ScTok";INT=false
 if goTo(bp5.Position,4,3)and bp5.Parent then if aT[bp5]then aT[bp5].col=true end;st.tk=st.tk+1;return 20 end;return-2 end
 -- v5.0.2: go_scorch_tp_cycle executor
@@ -1186,12 +1278,15 @@ if action=="go_center_ch"then
 -- v5.0.7: раньше действие было мёртвым: при xfE Heartbeat каждый кадр ставит INT=true и goTo сразу падал, а cP клампил цель на кольцо XCR. Теперь прямой MoveTo (как у кемпа) и СТОИМ на кросхейре до срабатывания (до 4с)
 local ch=gCH_nc();if not ch then return-1 end
 tL="C-CH";local hmC=hm();if not hmC then return-1 end
-local t0c=os.clock()
+local t0c=os.clock();local xfE0=xfE
 while os.clock()-t0c<4 and ch.part.Parent and not ch.col do
 task.wait(0.05);pcall(hitBloom);pcall(hitFlames)
 if not ENABLED then return-2 end
+-- v5.1.2: кросхейр сработал ВО ВРЕМЯ стояния (X-Flame заспавнился) — немедленно отменяем стояние, не достаиваем 4с
+if xfE and not xfE0 then break end
 hmC:MoveTo(ch.part.Position)
 end
+if xfE and not xfE0 then ch.col=true;st.ch=st.ch+1;return 15 end
 -- v5.0.8: фиолетовый у центра идёт в счёт 3 фиолетовых скорча (иначе при xfE-кемпе окно AllCH никогда бы не открылось)
 if not ch.part.Parent then ch.col=true;if ch.isP then st.pr=st.pr+1;if aB.SS.st>0 then scorchPurpleCount=scorchPurpleCount+1;scorchPurpleTotal=scorchPurpleTotal+1;scorchPurpleTime=os.clock()end else st.ch=st.ch+1 end;return 15 end
 local rC=h()
@@ -1209,6 +1304,7 @@ if not ENABLED then return end
 local r=h();if not r then return end
 local refV=ZERO
 if cATFrame==hbF then
+local nearD=math.huge-- v5.2.6: НЕ суммируем отталкивание по кластеру (раньше 140×N кросхейров) — берём только БЛИЖАЙШИЙ
 for _,cc in pairs(cATCache)do
 local th=cc and cc.th
 if type(th)=="table"then
@@ -1216,14 +1312,18 @@ for _,t in ipairs(th)do
 if t.pos then
 local toCh=r.Position-t.pos
 local dist=toCh.Magnitude
-if dist<(t.sz*0.5+8)and dist>0.1 then refV=refV+(toCh.Unit*140)end -- v5.0.5: аварийное выталкивание тоже 8 студов и сильнее
+if dist<(t.sz*0.5+8)and dist>0.1 and dist<nearD then nearD=dist;refV=toCh.Unit*75 end
 end
 end
 end
 end
 end
 if refV.Magnitude>0.1 then
-r.AssemblyLinearVelocity=r.AssemblyLinearVelocity+Vector3.new(refV.X,0,refV.Z)
+-- v5.2.6: АНТИ-КИК (корень кика при луте кросхейров): раньше сюда вливалась сырая velocity 140×N поверх текущей — velocity-чек ловил спайк 140-560. Теперь итоговая горизонтальная скорость клампится до легитных 75 студ/с
+local v=r.AssemblyLinearVelocity
+local nv=Vector3.new(v.X+refV.X,0,v.Z+refV.Z)
+if nv.Magnitude>75 then nv=nv.Unit*75 end
+r.AssemblyLinearVelocity=Vector3.new(nv.X,v.Y,nv.Z)
 end
 end)
 
@@ -1269,6 +1369,26 @@ end
 local lt=W:FindFirstChild("Lighting")
 if lt then lt.GlobalShadows=false;lt.Brightness=2 end
 end)end
+
+-- v5.2.0: АНТИ-ЛАГ FFlag-пак (Volt performance pack). ВНИМАНИЕ: большинство рендер-флагов Roblox читает при СТАРТЕ клиента — надёжнее держать их в fastflags-конфиге исполнителя (volt-headless файл). Здесь применяем в рантайме, если исполнитель поддерживает setfflag. v5.2.1: сетевые DFIntDataSenderRate/PhysicsReplicationSenderRate УБРАНЫ — учащали репликацию позиции и повышали риск кика при AC Test. Добавлен FPS-блок (TargetFps/текстуры/свет).
+task.spawn(function()if not setfflag then return end
+local FF={
+{"FFlagTaskSchedulerBlocking","false"},{"FFlagTaskSchedulerLimitTargetFpsTo2402","false"},{"FFlagHandleAltEnterFullscreenManually","false"},{"DFFlagThrottleRenderUntilGameLoaded","false"},
+{"FFlagDebugGraphicsPreferD3D11","true"},{"FFlagDebugGraphicsDisableD3D10","true"},{"FFlagDebugGraphicsDisableOpenGL","true"},{"FFlagDebugGraphicsDisableVulkan","true"},{"FFlagDebugGraphicsDisableMetal","true"},{"FFlagDebugGraphicsDisableDirect3D11","false"},
+{"DFIntDebugFRMQualityLevelOverride","1"},{"FFlagCommitToGraphicsQualityFix","true"},{"FFlagFixGraphicsQuality","true"},{"DFIntTextureQualityOverride","1"},{"DFIntTextureCompositorActiveJobs","0"},
+{"FFlagDisablePostFx","true"},{"FIntRenderShadowIntensity","0"},{"DFFlagDebugPauseVoxelizer","true"},{"DFFlagDebugRenderForceTechnologyVoxel","true"},{"FFlagDebugSkyGray","true"},{"FFlagFastGPULightCulling3","true"},{"FIntDebugForceMSAASamples","0"},{"FIntAntiAliasingMaxQuality","0"},{"FFlagAntiAliasingEnabled","false"},
+{"FIntTerrainArraySliceSize","4"},{"FIntFRMMinGrassDistance","0"},{"FIntFRMMaxGrassDistance","0"},{"DFIntCSGLevelOfDetailSwitchingDistance","0"},{"DFIntCSGLevelOfDetailSwitchingDistanceL12","0"},{"DFIntCSGLevelOfDetailSwitchingDistanceL23","0"},{"DFIntCSGLevelOfDetailSwitchingDistanceL34","0"},
+{"DFIntParticleCloneLimit","0"},{"FIntSmoothClusterMaxParticleEffectsPerFrame","10"},{"DFIntRenderingThrottleDelayInMS","100"},
+{"FStringPartTexturePackTable2022",""},{"FStringPartTexturePackTablePre2022",""},{"FStringTerrainMaterialTablePre2022",""},{"FStringTerrainMaterialTable2022",""},
+{"DFIntCharacterAnimationLodFullDistance","0"},{"DFIntAnimationDistanceFactor","0"},
+{"DFIntReplicationDataCacheNumWaitingPacketsLimit","1024"},{"DFIntInterpolationAddSyncOffset","0"},{"FIntRakNetResendRtt","10"},{"DFFlagDebugBypassRakNetClient","false"},
+{"FFlagHttpClientJsonV2","true"},
+{"DFIntMaxAvailablePhysicalMemoryMB","8192"},{"DFIntMemStorageQueueSize","10000"},
+{"DFIntSecondsBetweenDynamicVariableReloading","99999"},{"FFlagAdServiceEnabled","false"},{"FFlagDebugDisplayFPS","true"},{"FFlagDebugForceFutureIsBrightPhase3","false"},{"FIntTerrainOTAUpdatesPerFrame","0"},{"FFlagDebugSimDefaultPrimalSolver","true"},
+{"DFIntTaskSchedulerTargetFps","360"},{"DFFlagTextureQualityOverrideEnabled","true"},{"FIntRenderLocalLightUpdatesMax","0"},{"FIntRenderLocalLightUpdatesMin","0"},{"FFlagDebugForceFutureIsBrightPhase2","false"}
+}
+local ok_=0;for _,f in ipairs(FF)do if pcall(setfflag,f[1],f[2])then ok_=ok_+1 end end;if lo then pcall(lo,"AntiLag FFlags: "..ok_.."/"..#FF)end
+end)
 
 -- PRECISE BEE
 -- v5.0: прецайсов много (Workspace.Bees.Precise), у каждого FaceTexture — если прецайс ВЫШЕ игрока, смотрим куда повёрнут FaceTexture и детектим диагональ
@@ -1330,11 +1450,12 @@ end end)
 
 -- INIT
 local mLS=false
-local function sML()if mLS then return end;mLS=true;task.wait(2);scriptStartH=getHoney()or 0;scriptStartT=os.clock();lQ();lSS();lPat();fAR();fF();lo("Marmot Z v4.7 ready! "..fmtH(scriptStartH));print("Marmot Z v4.7 — Complete");tL="init";lMT=os.clock()end
+local function sML()if mLS then return end;mLS=true;task.wait(2);scriptStartH=getHoney()or 0;scriptStartT=os.clock();lQ();lSS();lPat();fAR();fF();lo("Marmot Z v5.2.6 ready! "..fmtH(scriptStartH));print("Marmot Z v5.2.6 — Complete");tL="init";lMT=os.clock()end
 task.spawn(function()while true do task.wait(30);pcall(function()local lt=W:FindFirstChild("Lighting");if lt then lt.GlobalShadows=false;lt.Brightness=2 end end)end end)
-task.spawn(function()while true do task.wait(0.5);if mLS then pcall(pAB)end end end)
+task.spawn(function()while true do task.wait(scorchActive and 1.0 or 1.5);if mLS then pcall(pAB)end end end)-- v5.2.5: кап pAB в скорче 0.5->1.0с (скорч-спайк ~96->~48/мин, финальный добив E3); онсет скорча всё равно ловится вне скорча на 1.5с. v5.2.4: адаптивный троттлинг pAB — 0.5с в скорче, 1.5с вне скорча: режет RetrievePlayerStats:InvokeServer со 120/мин до ~40/мин вне скорча (комбо xf/sc идут через PAE.OnClientEvent, событийно, поэтому детект скорча не страдает; онсет скорча ловится с задержкой <=1.5с — на 2-3 мин скорча это ~1%)
 -- v5.0: спидхак работает ВСЕГДА, даже после кнопки STOP
 task.spawn(function()while true do task.wait(0.25)pcall(function()local h_=hm();if h_ then local ts=gAS();if math.abs(h_.WalkSpeed-ts)>0.5 then h_.WalkSpeed=ts end end end)end end)
+-- v5.2.6: AC Test (CFrame-движок) удалён — режим больше не нужен; кик лечится клампом кросхейр-репульсии (см. HEATMAP)
 
 -- HEARTBEAT (FIX v4.7.1: getgenv() вместо G — G это PlayerGui, на нём нельзя хранить коннект)
 local genv=(getgenv and getgenv())or _G
@@ -1358,7 +1479,11 @@ if not ok then
 le(a_.." crash: "..tostring(rw));rw=-1 end
 local ns=eS()
 -- v5.0.6: запись ВСЕХ действий как в v4.0: actLog -> marmot_z_pat.json; в скорче дополнительно scorchActions -> marmot_z_scorch.json (раньше в scorchActions НИЧЕГО не писалось — не было ни одного table.insert)
-table.insert(actLog,{a=a_,rw=rw,t=math.floor((os.clock()-(scriptStartT or 0))*10)/10,ctx=s_})
+-- v5.1.3: подряд идущие одинаковые действия с наградой <=0 схлопываются в одну запись (счётчик n2) — лог не вымывается спамом; lastActA/lastActRw кормят анти-повтор в cAB
+lastActA=a_;lastActRw=rw
+local le9=actLog[#actLog]
+if le9 and le9.a==a_ and rw<=0 and(tonumber(le9.rw)or 0)<=0 then le9.n2=(le9.n2 or 1)+1;le9.t=math.floor((os.clock()-(scriptStartT or 0))*10)/10
+else table.insert(actLog,{a=a_,rw=rw,t=math.floor((os.clock()-(scriptStartT or 0))*10)/10,ctx=s_})end
 while #actLog>PAT_WINDOW do table.remove(actLog,1)end
 if scorchRecording then table.insert(scorchActions,{a=a_,rw=rw,t=math.floor((os.clock()-scorchStartT)*10)/10})end
 pcall(dUQ,s_,a_,rw,ns)end
@@ -1413,7 +1538,7 @@ local sgV4=Instance.new("ScreenGui",G);sgV4.Name="MarmotZ_V4"
 local frV4=Instance.new("Frame",sgV4);frV4.Size=UDim2.new(0,440,0,310);frV4.Position=UDim2.new(0,10,0,10)
 frV4.BackgroundColor3=Color3.fromRGB(20,20,30);frV4.BorderSizePixel=0;frV4.Active=true;frV4.Draggable=true;Instance.new("UICorner",frV4).CornerRadius=UDim.new(0,8)
 local titleV4=Instance.new("TextLabel",frV4);titleV4.Size=UDim2.new(1,0,0,28);titleV4.BackgroundTransparency=1;titleV4.Position=UDim2.new(0,0,0,2)
-titleV4.Text="  Marmot Z v5.0";titleV4.TextColor3=Color3.fromRGB(150,200,255);titleV4.Font=Enum.Font.GothamBold;titleV4.TextSize=15;titleV4.TextXAlignment=Enum.TextXAlignment.Left
+titleV4.Text="  Marmot Z v5.2.5";titleV4.TextColor3=Color3.fromRGB(150,200,255);titleV4.Font=Enum.Font.GothamBold;titleV4.TextSize=15;titleV4.TextXAlignment=Enum.TextXAlignment.Left
 local sideBar=Instance.new("Frame",frV4);sideBar.Size=UDim2.new(0,110,1,-34);sideBar.Position=UDim2.new(0,0,0,32);sideBar.BackgroundColor3=Color3.fromRGB(15,15,22);sideBar.BorderSizePixel=0;Instance.new("UICorner",sideBar).CornerRadius=UDim.new(0,6)
 local tMain=Instance.new("Frame",frV4);tMain.Size=UDim2.new(1,-120,1,-40);tMain.Position=UDim2.new(0,115,0,35);tMain.BackgroundTransparency=1;tMain.Visible=true
 local tBoost=Instance.new("Frame",frV4);tBoost.Size=UDim2.new(1,-120,1,-40);tBoost.Position=UDim2.new(0,115,0,35);tBoost.BackgroundTransparency=1;tBoost.Visible=false
@@ -1440,9 +1565,18 @@ local tmp={};for i=1,#scorchSessions do table.insert(tmp,scorchSessions[i])end
 table.sort(tmp,function(a,b)return a.honeyGained>b.honeyGained end)
 local cnt=math.min(24,#tmp)
 for i=1,cnt do local s=tmp[i]
-local row=Instance.new("TextLabel",scScroll);row.Size=UDim2.new(1,-8,0,16);row.BackgroundTransparency=1;row.Font=Enum.Font.Code;row.TextSize=11;row.TextXAlignment=Enum.TextXAlignment.Left;row.LayoutOrder=i;row.ZIndex=6
+local row=Instance.new("TextLabel",scScroll);row.Size=UDim2.new(1,-8,0,16);row.BackgroundTransparency=1;row.Font=Enum.Font.Code;row.TextSize=10;row.TextXAlignment=Enum.TextXAlignment.Left;row.LayoutOrder=i;row.ZIndex=6;row.TextTruncate=Enum.TextTruncate.AtEnd
 row.TextColor3=(i<=3)and Color3.fromRGB(255,215,80)or Color3.fromRGB(200,200,200)
-row.Text=string.format("#%d  +%s  %.1fm  SSx%d",i,s.honeyGainedFmt or fmtH(s.honeyGained),s.durationMin or 0,s.ssCombo or 0)
+-- v5.1.4: как в Patterns — по каждому скорчу видно, ЧТО бот делал (топ-3 действия из s.actions) и сколько мёда сделано
+local acts=""
+if type(s.actions)=="table"and #s.actions>0 then
+local cA={};for j=1,#s.actions do local a3=tostring(s.actions[j].a or"?");cA[a3]=(cA[a3]or 0)+1 end
+local ar={};for a3,n3 in pairs(cA)do table.insert(ar,{a=a3,n=n3})end
+table.sort(ar,function(x,y)return x.n>y.n end)
+local pieces={};for j=1,math.min(3,#ar)do table.insert(pieces,(ar[j].a:gsub("^go_","")).." x"..ar[j].n)end
+acts=" | "..table.concat(pieces,", ")
+end
+row.Text=string.format("#%d +%s %.1fm SSx%d%s",i,s.honeyGainedFmt or fmtH(s.honeyGained),s.durationMin or 0,s.ssCombo or 0,acts)
 end
 if cnt==0 then local row=Instance.new("TextLabel",scScroll);row.Size=UDim2.new(1,-8,0,16);row.BackgroundTransparency=1;row.Font=Enum.Font.Code;row.TextSize=11;row.TextXAlignment=Enum.TextXAlignment.Left;row.TextColor3=Color3.fromRGB(150,150,150);row.Text="No scorch sessions yet";row.LayoutOrder=1;row.ZIndex=6 end
 scScroll.CanvasSize=UDim2.new(0,0,0,math.max(cnt,1)*18+30)
@@ -1469,6 +1603,15 @@ local function mkSpd(y,name,key)local l=Instance.new("TextLabel",tSet);l.Size=UD
 local bx=Instance.new("TextBox",tSet);bx.Size=UDim2.new(0,55,0,22);bx.Position=UDim2.new(0,108,0,y);bx.BackgroundColor3=Color3.fromRGB(35,35,45);bx.TextColor3=Color3.new(1,1,1);bx.Text=tostring(cfg[key]);bx.Font=Enum.Font.Code;bx.TextSize=12;Instance.new("UICorner",bx).CornerRadius=UDim.new(0,4)
 bx.FocusLost:Connect(function()local n=tonumber(bx.Text);if n then cfg[key]=n;SB.X10=cfg.sp_x10;SB.NABOR=cfg.sp_nab;SB.REFRESH=cfg.sp_ref else bx.Text=tostring(cfg[key])end;saveCfg()end)end
 mkSpd(30,"Speed X10","sp_x10");mkSpd(58,"Speed NABOR","sp_nab");mkSpd(86,"Speed REFRESH","sp_ref")
+-- v5.1.4: способ перемещения для плантеров/фарм-паттерна: Teleport (мгновенно) или Tween (полёт), + настраиваемая скорость твина (студов/с)
+mvTitle=Instance.new("TextLabel",tSet);mvTitle.Size=UDim2.new(1,0,0,22);mvTitle.Position=UDim2.new(0,4,0,118);mvTitle.BackgroundTransparency=1;mvTitle.Text="Movement (planters / farm pattern)";mvTitle.TextColor3=Color3.new(1,1,1);mvTitle.Font=Enum.Font.GothamBold;mvTitle.TextSize=13;mvTitle.TextXAlignment=Enum.TextXAlignment.Left
+mvBtn=Instance.new("TextButton",tSet);mvBtn.Size=UDim2.new(0,159,0,26);mvBtn.Position=UDim2.new(0,4,0,144);mvBtn.BackgroundColor3=Color3.fromRGB(35,35,50);mvBtn.Font=Enum.Font.Gotham;mvBtn.TextSize=12;mvBtn.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",mvBtn).CornerRadius=UDim.new(0,4)
+function updMvBtn()mvBtn.Text=(cfg.mv_mode=="tween")and"  Mode: Tween (fly)"or"  Mode: Teleport";mvBtn.TextColor3=(cfg.mv_mode=="tween")and Color3.fromRGB(120,200,255)or Color3.fromRGB(100,255,100)end
+mvBtn.MouseButton1Click:Connect(function()cfg.mv_mode=(cfg.mv_mode=="tween")and"tp"or"tween";updMvBtn();saveCfg()end);updMvBtn()
+twLbl=Instance.new("TextLabel",tSet);twLbl.Size=UDim2.new(0,100,0,22);twLbl.Position=UDim2.new(0,4,0,176);twLbl.BackgroundTransparency=1;twLbl.Text="Tween speed";twLbl.TextColor3=Color3.new(1,1,1);twLbl.Font=Enum.Font.Gotham;twLbl.TextSize=11;twLbl.TextXAlignment=Enum.TextXAlignment.Left
+twBx=Instance.new("TextBox",tSet);twBx.Size=UDim2.new(0,55,0,22);twBx.Position=UDim2.new(0,108,0,176);twBx.BackgroundColor3=Color3.fromRGB(35,35,45);twBx.TextColor3=Color3.new(1,1,1);twBx.Text=tostring(cfg.tw_speed);twBx.Font=Enum.Font.Code;twBx.TextSize=12;Instance.new("UICorner",twBx).CornerRadius=UDim.new(0,4)
+twBx.FocusLost:Connect(function()local n=tonumber(twBx.Text);if n and n>=10 and n<=1000 then cfg.tw_speed=math.floor(n)end;twBx.Text=tostring(cfg.tw_speed);saveCfg()end)
+-- v5.2.6: кнопка AC Test убрана из настроек (режим удалён, больше не нужен)
 
 -- ===== FARM PATTERN TAB (v5.0) =====
 hchTitle=Instance.new("TextLabel",tFarm);hchTitle.Size=UDim2.new(1,0,0,22);hchTitle.Position=UDim2.new(0,4,0,2);hchTitle.BackgroundTransparency=1;hchTitle.Text="Farm pattern";hchTitle.TextColor3=Color3.new(1,1,1);hchTitle.Font=Enum.Font.GothamBold;hchTitle.TextSize=13;hchTitle.TextXAlignment=Enum.TextXAlignment.Left
@@ -1476,14 +1619,17 @@ hchBtn=Instance.new("TextButton",tFarm);hchBtn.Size=UDim2.new(1,-8,0,30);hchBtn.
 function updHch()hchBtn.Text=(cfg.hachapuri and"[X] "or"[ ] ").."Hachapuri method";hchBtn.TextColor3=cfg.hachapuri and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200)end
 hchBtn.MouseButton1Click:Connect(function()cfg.hachapuri=not cfg.hachapuri;updHch();saveCfg()end);updHch()
 hchStat=Instance.new("TextLabel",tFarm);hchStat.Size=UDim2.new(1,-8,0,150);hchStat.Position=UDim2.new(0,4,0,64);hchStat.BackgroundTransparency=1;hchStat.Font=Enum.Font.Code;hchStat.TextSize=10;hchStat.TextXAlignment=Enum.TextXAlignment.Left;hchStat.TextYAlignment=Enum.TextYAlignment.Top;hchStat.TextColor3=Color3.fromRGB(200,200,200);hchStat.TextWrapped=true
-hchStat.Text=":43 planters (auto plant)\n:50 pollen dump (canvas)\n:58 Tickets + TP FP14-11-21, x10, purple CH\n:00 Mondo Chick dodge 6 studs\nthen: collect token, sprinkler FP18-10-13, smoothie x2"
+hchStat.Text=":43 planters (auto plant)\n:50 pollen dump (canvas)\n:58 Tickets + TP FP14-11-21, x10, purple CH\n:00 Mondo Chick dodge 11 studs\nthen: collect token, sprinkler FP18-10-13, smoothie x2"
 
 -- ===== PLANTERS TAB (v5.0) =====
 NCOL={inv=Color3.fromRGB(255,80,80),ref=Color3.fromRGB(90,255,110),sat=Color3.fromRGB(255,255,255),mot=Color3.fromRGB(190,110,255),comf=Color3.fromRGB(90,150,255)}
 NNAME={inv="farm inv. nectar",ref="farm ref. nectar",sat="farm sat. nectar",mot="farm mot. nectar",comf="farm comf. nectar"}
 NORD={"inv","ref","sat","mot","comf"}
-plBtn=Instance.new("TextButton",tPlant);plBtn.Size=UDim2.new(1,-8,0,26);plBtn.Position=UDim2.new(0,4,0,2);plBtn.BackgroundColor3=Color3.fromRGB(35,35,50);plBtn.Font=Enum.Font.Gotham;plBtn.TextSize=12;plBtn.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",plBtn).CornerRadius=UDim.new(0,4)
-function updPlBtn()plBtn.Text=(cfg.pl_auto and"[X] "or"[ ] ").."auto plant planters (:43)";plBtn.TextColor3=cfg.pl_auto and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200)end
+plBtn=Instance.new("TextButton",tPlant);plBtn.Size=UDim2.new(1,-52,0,26);plBtn.Position=UDim2.new(0,4,0,2);plBtn.BackgroundColor3=Color3.fromRGB(35,35,50);plBtn.Font=Enum.Font.Gotham;plBtn.TextSize=12;plBtn.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",plBtn).CornerRadius=UDim.new(0,4)
+-- v5.1: минута цикла плантеров настраивается (поле справа от тумблера, 0-59)
+plMinBx=Instance.new("TextBox",tPlant);plMinBx.Size=UDim2.new(0,40,0,26);plMinBx.Position=UDim2.new(1,-46,0,2);plMinBx.BackgroundColor3=Color3.fromRGB(35,35,45);plMinBx.TextColor3=Color3.new(1,1,1);plMinBx.Text=tostring(cfg.pl_min or 43);plMinBx.Font=Enum.Font.Code;plMinBx.TextSize=12;Instance.new("UICorner",plMinBx).CornerRadius=UDim.new(0,4)
+function updPlBtn()plBtn.Text=(cfg.pl_auto and"[X] "or"[ ] ")..string.format("auto plant planters (:%02d)",tonumber(cfg.pl_min)or 43);plBtn.TextColor3=cfg.pl_auto and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200)end
+plMinBx.FocusLost:Connect(function()local n2=tonumber(plMinBx.Text);if n2 and n2>=0 and n2<=59 then cfg.pl_min=math.floor(n2)end;plMinBx.Text=tostring(cfg.pl_min or 43);updPlBtn();saveCfg()end)
 plBtn.MouseButton1Click:Connect(function()cfg.pl_auto=not cfg.pl_auto;updPlBtn();saveCfg()end);updPlBtn()
 plRows={}
 for i,k in ipairs(NORD)do
@@ -1507,30 +1653,86 @@ patScroll=Instance.new("ScrollingFrame",tPat);patScroll.Size=UDim2.new(1,-8,1,-3
 patLbl=Instance.new("TextLabel",patScroll);patLbl.Size=UDim2.new(1,-8,0,840);patLbl.Position=UDim2.new(0,4,0,2);patLbl.BackgroundTransparency=1;patLbl.Font=Enum.Font.Code;patLbl.TextSize=10;patLbl.TextXAlignment=Enum.TextXAlignment.Left;patLbl.TextYAlignment=Enum.TextYAlignment.Top;patLbl.TextColor3=Color3.fromRGB(200,220,255);patLbl.TextWrapped=true;patLbl.Text="Нажми Refresh — отчёт по actLog появится тут"
 patRefBtn.MouseButton1Click:Connect(function()local okA,resA=pcall(analyzePat);patLbl.Text=okA and resA or("Ошибка анализа: "..tostring(resA))end)
 patCpyBtn.MouseButton1Click:Connect(function()pcall(setclipboard,patLbl.Text)end)
+-- v5.1.1: кнопка Reset — полный сброс паттерн-лога: чистит actLog и lastPatAct, перезаписывает marmot_z_pat.json пустым через sPat()
+patRstBtn=Instance.new("TextButton",tPat);patRstBtn.Size=UDim2.new(0,90,0,26);patRstBtn.Position=UDim2.new(0,196,0,2);patRstBtn.BackgroundColor3=Color3.fromRGB(50,30,30);patRstBtn.Text="Reset";patRstBtn.TextColor3=Color3.fromRGB(255,120,120);patRstBtn.Font=Enum.Font.Gotham;patRstBtn.TextSize=11;Instance.new("UICorner",patRstBtn).CornerRadius=UDim.new(0,4)
+patRstBtn.MouseButton1Click:Connect(function()actLog={};lastPatAct="";epT0=totalSteps;pcall(sPat);patLbl.Text="Лог паттернов сброшен (actLog=0, marmot_z_pat.json перезаписан). Нажми Refresh после пары минут фарма";print("MarmotZ: pattern log reset")end)
 
--- ===== PLANTER ENGINE (v5.0): поля по типу нектара (вики BSS), ротация, автосбор =====
-NFIELDS={inv={"FP10-21-3","FP5-12-14","FP14-20-23"},ref={"FP4-37-8","FP7-18-21","FP17-3-4"},sat={"FP1-10-28","FP9-27-19","FP11-4-7"},mot={"FP6-15-16","FP13-9-2","FP16-13-16","FP3-18-15"},comf={"FP2-5-9","FP8-33-15","FP12-20-26"}}
-NPREF={inv={"Hydroponic Planter","The Planter Of Plenty","Head-Treated Planter"},ref={"Hydroponic Planter","The Planter Of Plenty","Petal Planter"},sat={"Petal Planter","The Planter Of Plenty","Head-Treated Planter"},mot={"Head-Treated Planter","The Planter Of Plenty","Petal Planter"},comf={"Petal Planter","The Planter Of Plenty","Hydroponic Planter"}}
-plHist={idx={}}
-if readfile then local ok,raw=pcall(readfile,"marmot_z_planters.json");if ok and raw then local ok2,d=pcall(H.JSONDecode,H,raw);if ok2 and type(d)=="table"then plHist=d;plHist.idx=plHist.idx or{}end end end
-function savePlHist()if writefile then pcall(function()writefile("marmot_z_planters.json",H:JSONEncode(plHist))end)end end
-function tpTo(pos)local r=h();if not r then return false end;r.CFrame=CFrame.new(pos+Vector3.new(0,3,0));r.AssemblyLinearVelocity=ZERO;task.wait(0.3);return true end
+-- ===== PLANTER ENGINE (v5.1): карта нектар->поля ПЕРЕПРОВЕРЕНА по вики BSS =====
+-- inv = Clover/Cactus/Mountain Top/Pepper Patch; mot = Mushroom/Spider/Stump/Rose; ref = Blue Flower/Strawberry/Coconut; comf = Dandelion/Bamboo/Pine Tree; sat = Sunflower/Pineapple/Pumpkin
+-- Heat-Treated (+40% inv+mot, +50% рост на красных полях): inv -> Cactus/Clover/Mountain Top, mot -> Rose Field (красные цветки, растёт быстрее). v5.1.2: Pepper Patch ЗАПРЕЩЁН для плантеров — там фармим; ЦЕНТР (Flowers.FP18-10-14) остаётся точкой ТП после расстановки
+-- Hydroponic (+40% comf+ref, +50% рост на синих полях): ref -> Coconut/Blue Flower, comf -> Bamboo/Pine Tree. На кактус ему нельзя — кактус это inv-поле, для inv там Planter Of Plenty/Heat-Treated
+-- The Planter Of Plenty (+50% ВСЕ нектары, +50% рост в Pepper/Stump/Coconut/Mountain Top): inv -> Mountain Top, mot -> Stump, ref -> Coconut
+-- ФИКС: планер назывался "Head-Treated Planter" — такого предмета нет, FireServer уходил в пустоту; правильно "Heat-Treated Planter"
+NFIELDS={inv={"Mountain Top Field","Cactus Field","Clover Field"},ref={"Coconut Field","Blue Flower Field","Strawberry Field"},sat={"Pumpkin Patch","Pineapple Patch","Sunflower Field"},mot={"Rose Field","Stump Field","Mushroom Field","Spider Field"},comf={"Pine Tree Forest","Bamboo Field","Dandelion Field"}}
+NPREF={inv={"Heat-Treated Planter","The Planter Of Plenty","Hydroponic Planter"},ref={"Hydroponic Planter","The Planter Of Plenty","Petal Planter"},sat={"Petal Planter","The Planter Of Plenty","Heat-Treated Planter"},mot={"Heat-Treated Planter","The Planter Of Plenty","Petal Planter"},comf={"Petal Planter","Hydroponic Planter","The Planter Of Plenty"}}
+POP_FIELD={inv="Mountain Top Field",mot="Stump Field",ref="Coconut Field"}
+PEPPER_FP="FP18-10-14"
+function getFieldPos(nm)
+if nm=="Pepper Patch"then local fls=W:FindFirstChild("Flowers");local fp=fls and fls:FindFirstChild(PEPPER_FP);if fp then return fp.Position end end
+local fz=W:FindFirstChild("FlowerZones");if fz then local z=fz:FindFirstChild(nm);if z and z:IsA("BasePart")then return z.Position end end
+return nil end
+plHist={idx={},used={},last={}}
+-- v5.1.4: история плантеров живёт в marmot_z_data.json вместе с конфигом (загружена в loadCfg как PLHIST_LOADED); старый marmot_z_planters.json — фолбэк для миграции
+if PLHIST_LOADED then plHist=PLHIST_LOADED;plHist.idx=plHist.idx or{};plHist.used=plHist.used or{};plHist.last=plHist.last or{}
+elseif readfile then local ok,raw=pcall(readfile,"marmot_z_planters.json");if ok and raw then local ok2,d=pcall(H.JSONDecode,H,raw);if ok2 and type(d)=="table"then plHist=d;plHist.idx=plHist.idx or{};plHist.used=plHist.used or{};plHist.last=plHist.last or{}end end end
+function savePlHist()saveCfg()end
+-- v5.1.6: ДИАГНОСТИКА КИКА АНТИЧИТА: кольцевой лог (ТП, скорость, действие) пишется в marmot_z_kick.json; при дисконнекте GuiService.ErrorMessageChanged дописывает текст кика — последние строки файла покажут, что бот делал прямо перед киком
+kickLog={};kickSnp={};kickFrozen=false;lastKPos=nil
+local function flushK()if not writefile then return end;pcall(function()local m={};for _,v in ipairs(kickLog)do m[#m+1]=v end;for _,v in ipairs(kickSnp)do m[#m+1]=v end;table.sort(m);writefile("marmot_z_kick.json",H:JSONEncode(m))end)end
+function klog(ev)if kickFrozen then return end;table.insert(kickLog,string.format("[%s] %s",os.date("%H:%M:%S"),tostring(ev)));while #kickLog>150 do table.remove(kickLog,1)end;flushK()end
+function ksnap(ev)if kickFrozen then return end;table.insert(kickSnp,string.format("[%s] %s",os.date("%H:%M:%S"),tostring(ev)));while #kickSnp>40 do table.remove(kickSnp,1)end;flushK()end
+-- v5.1.9: события (TP/KICK/AC) и 5с-снапшоты теперь в РАЗНЫХ буферах (kickLog<=150 событий + kickSnp<=40 снапшотов), объединяются при записи — снапшоты БОЛЬШЕ НЕ вытесняют TP-строки (виден последний телепорт перед киком)
+-- v5.1.7: после DISCONNECT/KICK лог ЗАМОРАЖИВАЕТСЯ (kickFrozen) — снапшоты после кика больше не затирают кольцевой буфер, и картина ДО кика сохраняется целиком
+pcall(function()game:GetService("GuiService").ErrorMessageChanged:Connect(function(msg)if msg and msg~=""then klog("DISCONNECT/KICK: "..tostring(msg));kickFrozen=true end end)end)-- v5.2.4: АВТО-РЕДЖОЙН УБРАН по просьбе — хук ТОЛЬКО пишет причину дисконнекта в кик-лог и замораживает буфер (нужно для ручного сбора логов при тесте); телепорт/перезапуск и REJOIN_URL/cfg.rejoin_on больше не используются
+task.spawn(function()while true do task.wait(15)pcall(function()local rK=h();local hmK=hm()
+local dpos=0;if rK and lastKPos then dpos=(rK.Position-lastKPos).Magnitude end;if rK then lastKPos=rK.Position end
+local _tcd=tcFires-(_tcPrev or 0);local _pabd=pabCalls-(_pabPrev or 0);_tcPrev=tcFires;_pabPrev=pabCalls-- v5.2.4: дельта ремоутов за 15с окно -> tc/сек и pab/мин
+local _hnow=getHoney();local _hd=_hnow-(_hPrev or _hnow);_hPrev=_hnow;local _tkd=st.tk-(_tkPrev or 0);_tkPrev=st.tk-- v5.2.5: дельта мёда и собранных токенов за окно (лейн "токены/прецайсы": проверяем корреляцию кика с гейн-рейтом/сбором/Precision)
+ksnap(string.format("snap tL=%s mode=%s ac=%s ws=%.0f vel=%.0f dpos=%.0f(%.0f/s) xf=%d sc=%d tc=%.1f/s pab=%d/min hd=%s/min col=%d dup=%d pv=%.0f ps=%d",tostring(tL),tostring(cfg.mv_mode),cfg.ac_test and"1"or"0",hmK and hmK.WalkSpeed or 0,rK and rK.AssemblyLinearVelocity.Magnitude or 0,dpos,dpos/15,xfP or 0,scP or 0,_tcd/15,_pabd*4,fmtH(_hd*4),_tkd,dupCnt,prec.val or 0,prec.st or 0))end)end end)
+TWS=game:GetService("TweenService")
+-- v5.1.4: два способа перемещения (вкладка Settings): Teleport — мгновенный CFrame; Tween — плавный полёт TweenService со скоростью cfg.tw_speed студов/с (долететь до цветка, поставить плантер и улететь без ТП)
+function tpTo(pos)local r=h();if not r then return false end
+if not pos or pos~=pos or pos.Magnitude>100000 then if klog then klog("TP ABORT bad/NaN pos")end;return false end-- v5.1.9: защита от NaN/мусорной цели — ТП на исчезнувший токен/шовер = NaN CFrame = краш физики клиента = "Server error. Please rejoin."
+if klog then klog(string.format("TP %.0f studs mode=%s",(r.Position-pos).Magnitude,tostring(cfg.mv_mode)))end -- v5.1.6: каждый телепорт фиксируется в кик-логе
+if cfg.mv_mode=="tween"then
+local target=CFrame.new(pos+Vector3.new(0,3,0))
+local dist=(r.Position-target.Position).Magnitude
+local spd=math.max(tonumber(cfg.tw_speed)or 150,10)
+local dur=math.max(0.1,dist/spd)
+acHold=os.clock()+dur+0.6-- v5.1.9: КЛЮЧЕВОЕ — на всё время твина ставим CFrame-двигатель AC на паузу, иначе ДВА писателя CFrame (твин + mover) дерутся каждый кадр -> флуд/битая матрица поворота -> дисконнект
+local tw=TWS:Create(r,TweenInfo.new(dur,Enum.EasingStyle.Linear),{CFrame=target})
+local done=false;tw.Completed:Connect(function()done=true end)
+tw:Play()
+local t0=os.clock()
+while not done and os.clock()-t0<dur+2 do task.wait(0.05);if not h()then pcall(function()tw:Cancel()end);return false end end
+r=h();if r then r.AssemblyLinearVelocity=ZERO;acHold=os.clock()+0.5;local _h=hm();if _h then _h:MoveTo(r.Position)end end
+task.wait(0.1);return true
+end
+r.CFrame=CFrame.new(pos+Vector3.new(0,3,0));acHold=os.clock()+0.5;local _h2=hm();if _h2 then _h2:MoveTo(r.Position)end;local _t=os.clock();while os.clock()-_t<0.35 do r.AssemblyLinearVelocity=ZERO;R.Heartbeat:Wait()end;return true end-- v5.2.1: АНТИ-КИК — после ТП velocity прибивается к 0 КАЖДЫЙ кадр 0.35с (в логах всплески vel=21-23 на Shower TP/DupTk/Link = единственный момент утечки скорости под velocity-чек)
+-- v5.1.6: сбор ВСЕХ стоящих плантеров: фильтр ActorID ослаблен (жёсткое условие Type/Pos/Growth отбрасывало ранее поставленные плантеры — собирался только 1) + второй проход через 2с добирает оставшееся
 function collectPlanters()
 if not rps then return end
+local ev=RS:FindFirstChild("Events");local pmc=ev and ev:FindFirstChild("PlanterModelCollect");if not pmc then return end
+local total=0
+for pass=1,2 do
 local ok,res=pcall(function()return rps:InvokeServer()end)
-if not ok or type(res)~="table"then return end
+if ok and type(res)=="table"then
 local ids={}
-local function scanP(t,depth)if depth>6 or type(t)~="table"then return end
+local function scanP(t,depth)if depth>8 or type(t)~="table"then return end
 for k2,v in pairs(t)do
 if type(v)=="table"then
-local aid=rawget(v,"ActorID")or rawget(v,"ActorId")or rawget(v,"ID")
-if aid and(rawget(v,"Type")or rawget(v,"Pos")or rawget(v,"GrowthPercent")or tostring(k2):lower():find("planter"))then ids[tonumber(aid)or aid]=true end
+local aid=rawget(v,"ActorID")or rawget(v,"ActorId")
+if not aid and tostring(k2):lower():find("planter")then aid=rawget(v,"ID")end
+if aid then ids[tonumber(aid)or aid]=true end
 scanP(v,depth+1)
 end
 end end
 scanP(res,0)
-local ev=RS:FindFirstChild("Events");local pmc=ev and ev:FindFirstChild("PlanterModelCollect");if not pmc then return end
-for aid in pairs(ids)do pcall(function()pmc:FireServer(aid)end);print("MarmotZ: collect planter ActorID="..tostring(aid));task.wait(0.6)end
+for aid in pairs(ids)do pcall(function()pmc:FireServer(aid)end);total=total+1;print("MarmotZ: collect planter ActorID="..tostring(aid).." (pass "..pass..")");task.wait(0.6)end
+end
+if pass==1 then task.wait(2)end
+end
+print("MarmotZ: planters collected, fired="..total)
 end
 function plantPlanters()
 pcall(pAB)
@@ -1539,28 +1741,46 @@ for _,k in ipairs(NORD)do if cfg["pl_"..k]then local target=(cfg["pl_"..k.."_h"]
 table.sort(defs,function(a,b)return a.d>b.d end)
 if #defs==0 then return end
 collectPlanters();task.wait(1)
+-- v5.1: помним, куда ставили (plHist.used/plHist.last в marmot_z_data.json): каждый цикл — сбор, потом расстановка на поля, куда ЕЩЁ не ставили; когда все поля нектара пройдены — цепочка начинается заново. PoP идёт на своё быстрое поле, если оно ещё не использовано
+plHist.used=plHist.used or{};plHist.last={}
 local usedPl={}
-local fls=W:FindFirstChild("Flowers");if not fls then return end
 local placed=0
 for _,e in ipairs(defs)do
 if placed>=3 then break end
 local pname=nil
 for _,cand in ipairs(NPREF[e.k])do if not usedPl[cand]then pname=cand;break end end
 if pname then
-usedPl[pname]=true
 local flist=NFIELDS[e.k]
-local idx=((plHist.idx[e.k]or 0)%#flist)+1
-plHist.idx[e.k]=idx
-local fp=fls:FindFirstChild(flist[idx])
-if fp then
-tpTo(fp.Position)
+plHist.used[e.k]=plHist.used[e.k]or{}
+local fname=nil
+if pname=="The Planter Of Plenty"and POP_FIELD[e.k]and not plHist.used[e.k][POP_FIELD[e.k]]then fname=POP_FIELD[e.k]end
+if not fname then for _,fn in ipairs(flist)do if not plHist.used[e.k][fn]then fname=fn;break end end end
+if not fname then plHist.used[e.k]={};fname=flist[1]end
+local pos=getFieldPos(fname)
+if pos then
+usedPl[pname]=true;plHist.used[e.k][fname]=true
+table.insert(plHist.last,{pl=pname,f=fname,k=e.k})
+tpTo(pos)
 pcall(function()RS.Events.PlayerActivesCommand:FireServer({["Name"]=pname})end)
-print("MarmotZ: planter "..pname.." -> "..flist[idx].." ("..e.k..")")
+print("MarmotZ: planter "..pname.." -> "..fname.." ("..e.k..")")
 placed=placed+1;task.wait(1)
 end
 end
 end
 savePlHist()
+-- v5.1: после расстановки ВСЕХ плантеров тепаемся на центр Pepper Patch — Workspace.Flowers.FP18-10-14
+local fpC=getFieldPos("Pepper Patch")
+if fpC then
+tpTo(fpC)
+-- v5.1.6: после ТП ~5с патрулируем MoveTo-шагами вокруг центра поля — гуманоид цепляется за землю и не сваливается с пеппера
+local t0p=os.clock()
+while os.clock()-t0p<5 do
+local rP=h();local hmP=hm();if not rP or not hmP then break end
+local ang=math.random()*2*math.pi
+hmP:MoveTo(Vector3.new(fpC.X+math.cos(ang)*5,rP.Position.Y,fpC.Z+math.sin(ang)*5))
+task.wait(0.5)
+end
+end
 end
 
 -- ===== HACHAPURI ENGINE (v5.0) =====
@@ -1588,12 +1808,12 @@ if chick:IsA("Model")then local ok,sz=pcall(function()return chick:GetExtentsSiz
 elseif chick:IsA("BasePart")then cpos=chick.Position;csize=math.max(chick.Size.X,chick.Size.Z)end
 local hm2=hm()
 if cpos and hm2 then
-local keep=csize/2+6 -- детект сайза петуха + 6 студов
+local keep=csize/2+13 -- v5.1.2: детект сайза петуха + 13 студов (было 11)
 local away=Vector3.new(r.Position.X-cpos.X,0,r.Position.Z-cpos.Z)
 local dist=away.Magnitude
 if dist<keep+2 then
 local dir=dist>0.1 and away.Unit or Vector3.new(1,0,0)
-hm2:MoveTo(cP(r.Position+dir*(keep+6-dist)))
+hm2:MoveTo(cP(r.Position+dir*(keep+8-dist)))
 else
 local ang=math.random()*2*math.pi
 hm2:MoveTo(cP(Vector3.new(cpos.X+math.cos(ang)*(keep+10),r.Position.Y,cpos.Z+math.sin(ang)*(keep+10))))
@@ -1651,7 +1871,7 @@ pcall(function()
 if not ENABLED then return end
 local mn=tonumber(os.date("%M"))or-1
 local hh2=os.date("%d%H")
-if cfg.pl_auto and mn==43 and lastPl~=hh2 then lastPl=hh2;task.spawn(function()hchBusy=true;pcall(plantPlanters);hchBusy=false end)end
+if cfg.pl_auto and mn==(tonumber(cfg.pl_min)or 43)and lastPl~=hh2 then lastPl=hh2;task.spawn(function()hchBusy=true;pcall(plantPlanters);hchBusy=false end)end
 if cfg.hachapuri then
 if mn==50 and last50~=hh2 then last50=hh2;task.spawn(function()hchBusy=true;pcall(hchDump);hchBusy=false end)end
 if mn==58 and last58~=hh2 then last58=hh2;pcall(hchTickets)end
@@ -1664,7 +1884,7 @@ end)
 
 -- GUI LOOP
 task.spawn(function()while true do task.wait(0.3)pcall(function()
-lb.Text="Action: "..(tL or"");tmLbl.Text="Time: "..os.date("%H:%M:%S");local curH=getHoney()or 0;local em=(os.clock()-(scriptStartT or 0))/60;local hp40m=em>0 and(curH-(scriptStartH or 0))/em*40 or 0
+lb.Text="Action: "..(tL or"");tmLbl.Text="Time: "..os.date("%H:%M:%S");local curH=getHoney()or 0;local em=(os.clock()-(scriptStartT or 0))/60;local hp40m=em>0 and(curH-(scriptStartH or 0))/em*40 or 0-- v5.2.1: возврат старой HP40M (средняя за сессию) по запросу
 hl.Text="HP40M: "..fmtH(hp40m).." | "..fmtH(curH)
 if scorchActive and(scorchStartT or 0)>0 then
 local scDur=os.clock()-scorchStartT
@@ -1693,8 +1913,8 @@ end)
 -- RESPAWN
 L.CharacterAdded:Connect(function()
 task.wait(2);aT={};cQ={};lP=nil;curF=nil;tL="start";smT=nil;isCS=false;INT=false;cyc={chC=0};fP={};dupCnt=0;pollMS=0;eligibility={};visitCount={};totalSteps=0;replayBuffer={};replayIndex=1
-scorchActive=false;scorchRecording=false;scorchActions={};scorchStartH=0;scorchStartT=0;lastTLT=0;xfP=0;scP=0;lastBH=0;xGCH=0;scorchDupedMorphDone=false;scorchPurpleCount=0;scorchPurpleTime=0;scorchAllCHMode=false;scorchPurpleTotal=0;ndMorph=nil;scorchTPIndex=0;scorchTPTable={};scorchTPCycle=false;xfStartTime=0;flameCampStart=0;scorchAllCHT0=0;flCampAcc=0;flCampCd=0;cocoCnt=0;showerCnt=0;purpleMarkCnt=0;rCC=0;rST=0;lastSOTime=0;hchDodge=false;hchBusy=false
+scorchActive=false;scorchRecording=false;scorchActions={};scorchStartH=0;scorchStartT=0;lastTLT=0;xfP=0;scP=0;lastBH=0;xGCH=0;scorchDupedMorphDone=false;scorchPurpleCount=0;scorchPurpleTime=0;scorchAllCHMode=false;scorchPurpleTotal=0;ndMorph=nil;scorchTPIndex=0;scorchTPTable={};scorchTPCycle=false;xfStartTime=0;flameCampStart=0;scorchAllCHT0=0;flCampAcc=0;flCampCd=0;cocoCnt=0;showerCnt=0;cocoCycle=0;showerCycle=0;purpleMarkCnt=0;rCC=0;rST=0;lastSOTime=0;hchDodge=false;hchBusy=false
 for _,v in pairs(activeTG)do if v.gui then pcall(function()v.gui:Destroy()end)end end;activeShowers={};activeBlooms={};activeCocos={};activeTG={};tokenVerify={};tokenBL=setmetatable({},{__mode="k"});greenCH_cache={}
 for fl in pairs(flameCD)do flameCD[fl]=nil end;for fl in pairs(scytheParts)do scytheParts[fl]=nil end
 end)
-print("Marmot Z v5.0 — Full script active.")
+print("Marmot Z v5.2.8 — Full script active.")
