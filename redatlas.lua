@@ -59,7 +59,7 @@ local function lootAnim(pos,dur)if not pos then return end;local r=h();if not r 
 local spark=Instance.new("Part");spark.Shape=0;spark.Size=Vector3.new(1.2,1.2,1.2);spark.Anchored=true;spark.CanCollide=false;spark.Position=Vector3.new(pos.X,pos.Y+2,pos.Z)
 spark.BrickColor=BrickColor.new("Bright yellow");spark.Material=Enum.Material.Neon;spark.Transparency=0.3;spark.Parent=W;D:AddItem(spark,dur+0.2)
 local bg=r:FindFirstChild("BG_Loot")or Instance.new("BodyGyro");bg.Name="BG_Loot";bg.MaxTorque=Vector3.new(0,40000,0);bg.P=8000;bg.D=300;bg.Parent=r
-local dir=pos-r.Position;dir=Vector3.new(dir.X,0,dir.Z);if dir.Magnitude>0.1 then bg.CFrame=CFrame.new(r.Position,r.Position+dir)end;D:AddItem(bg,dur*1.2)end
+local dir=pos-r.Position;dir=Vector3.new(dir.X,0,dir.Z);if dir.Magnitude>0.1 then bg.CFrame=cfLookAt(r.Position,r.Position+dir)end;D:AddItem(bg,dur*1.2)end
 
 -- CONSTANTS
 SB={NABOR=70,X10=90,REFRESH=75}
@@ -114,7 +114,9 @@ TKS[4889470194]={n="PH",base=4,p=4,pre="PH ",nc=Color3.new(.9,.9,.5),bg=Color3.n
 TKS[107187190]={n="HG",base=4,p=2,pre="HG ",nc=Color3.new(1,.8,.3),bg=Color3.new(0,0,0)}
 TKS[183390139]={n="CG",base=4,p=2,pre="CG ",nc=Color3.new(.6,.6,.6),bg=Color3.new(0,0,0)}
 AV={};for _,v in ipairs({1674871631,1471882621,1952740625,8055428094,2319943273,3030569073,3036899811,3080740120,3012679515,1838129169,2584584968,1471849394,1952682401,6087969886,2028574353,2028453802})do AV[v]=true end
-PC={Red=Color3.fromRGB(249,34,34),Pink=Color3.fromRGB(255,130,201)};PP={Red=1,Pink=2}
+-- Bee Swarm's collectible petal is pink.  Do not treat unrelated red
+-- PetalPart particles as loot targets: they can be permanent effects.
+PC={Pink=Color3.fromRGB(255,130,201)};PP={Pink=2}
 
 -- STATE
 aT,cQ,lP,curF,tL={},{},nil,nil,"start"
@@ -126,15 +128,15 @@ aB={SS={st=0},XF={st=0},PM={a=false},PoM={a=false,pos=nil,m=0},PollM={combo=0,ac
 stP=setmetatable({},{__mode="k"})
 QT={};lMT=os.clock();stW=false;xfE=false;lPT=0;rCC=0;rST=0
 qTables={};fldHash=nil;dupCnt=0;eligibility={};visitCount={};totalSteps=0
-lastActionTime=0;flHit=0;chStick=0;aborted=false
+lastActionTime=0;actionStarted=0;flHit=0;chStick=0;aborted=false
 cS=70;hbF=0;isA=false;scorchActive=false;scorchRecording=false;scorchActions={};scorchSessions={};top10={}
 bestSH=0;lastPS=0;scytheParts=setmetatable({},{__mode="k"});lastSHit=0
-activeCocos={};activeShowers={};activeTG={};activeBlooms={};flameCD=setmetatable({},{__mode="k"})
-scriptStartH=0;scriptStartT=0;scorchStartH=0;scorchStartT=0;pollMS=0
+activeCocos={};activeComboCocos={};activeShowers={};activeTG={};activeBlooms={};flameCD=setmetatable({},{__mode="k"})
+scriptStartH=0;scriptStartT=0;scorchStartH=0;scorchStartT=0;scorchTL=0;pollMS=0
 scorchPurpleCount=0;scorchPurpleTime=0;scorchAllCHMode=false;scorchPurpleTotal=0;lastSOTime=0;scorchDupedMorphDone=false
-xfP=0;scP=0;lastBH=0;redPT=0;stFlMin=0;xGCH=0;lastTLT=0;goSm=false
+xfP=0;scP=0;lastBH=0;redPT=0;stFlMin=0;xGCH=0;lastTLT=0;goSm=false;precisePredictCd=0;routeStats={};aiTestMode=false
 tokenVerify={};ndMorph=nil;scorchTPIndex=0;scorchTPTable={};scorchTPCycle=false;actLog={};scorchAllCHT0=0;flCampAcc=0;flCampCd=0;ptSeen={};tcFires=0;pabCalls=0;_tcPrev=0;_pabPrev=0;_tkPrev=0;smCd=0;cATLastSide=0;prPauseUntil=0;prPauseNext=os.clock()+900-- v5.2.8: пауза лута прецов: раз в 15 мин (900с) вне скорча — 30с без прецов. v5.2.5: _tkPrev(база собранных токенов для дельты col), smCd(кулдаун смайла), cATLastSide(сторона обхода для гистерезиса). v5.2.4: счётчики частоты ремоутов (tcFires=ToolCollect:FireServer, pabCalls=RetrievePlayerStats:InvokeServer) для замера в кик-снапшоте (гипотеза E3: 277 от спама синхронных ремоутов)
-local xfStartTime=0;local flameCampStart=0
+local xfStartTime=0;local flameCampStart=0;comboCycle=0
 local cocoCnt=0;local showerCnt=0;local purpleMarkCnt=0;cocoCycle=0;showerCycle=0-- v5.2.6: счётчики цикла по ворнинг-дискам (глобалы): сбрасываются, когда все диски кокоса/шовера исчезли
 local tokenBL=setmetatable({},{__mode="k"})
 local greenCH_cache={};local preciseLearn={}
@@ -144,7 +146,7 @@ nectarRem={inv=0,ref=0,sat=0,mot=0,comf=0}
 hchDodge=false;hchBusy=false;hchSmT0=0
 
 -- CONFIG
-local cfg={ss_on=false,sp_x10=90,sp_nab=70,sp_ref=75,coco_on=true,coco_lim=0,shower_on=true,shower_lim=0,purple_on=true,purple_lim=0,hachapuri=false,pl_auto=false,pl_inv=false,pl_ref=false,pl_sat=false,pl_mot=false,pl_comf=false,pl_inv_h=22,pl_ref_h=22,pl_sat_h=22,pl_mot_h=22,pl_comf_h=22,pl_min=43,mv_mode="tp",tw_speed=150,ac_test=false,rejoin_on=true}
+local cfg={ss_on=false,sp_x10=90,sp_nab=70,sp_ref=75,coco_on=true,coco_lim=0,combo_on=true,combo_lim=0,shower_on=true,shower_lim=0,purple_on=true,purple_lim=0,hachapuri=false,pepper_x4=false,boost_purple_potion=false,boost_glue=false,boost_oil=false,boost_enzymes=false,boost_red_extract=false,ai_on=false,ai_interval=600,ai_test=false,pl_auto=false,pl_inv=false,pl_ref=false,pl_sat=false,pl_mot=false,pl_comf=false,pl_inv_h=22,pl_ref_h=22,pl_sat_h=22,pl_mot_h=22,pl_comf_h=22,pl_min=43,mv_mode="tp",tw_speed=150,ac_test=false,rejoin_on=true,allow_pesticide=true,allow_tacky=true,allow_blue_clay=true,allow_red_clay=true,allow_petal=true,allow_hydroponic=true,allow_heat_treated=true,allow_planter_of_plenty=true}
 -- v5.1.4: конфиг и история плантеров в ОДНОМ файле marmot_z_data.json ({cfg=...,plHist=...}); старые marmot_z_config.json/marmot_z_planters.json читаются один раз как фолбэк для миграции
 local function saveCfg()if writefile then pcall(function()writefile("marmot_z_data.json",H:JSONEncode({cfg=cfg,plHist=plHist or PLHIST_LOADED}))end)end end
 local function loadCfg()if not readfile then return end
@@ -155,6 +157,45 @@ if not d then local ok3,raw3=pcall(readfile,"marmot_z_config.json");if ok3 and r
 if type(d)=="table"then for k,v in pairs(d)do if cfg[k]~=nil then cfg[k]=v end end;SB.X10=cfg.sp_x10;SB.NABOR=cfg.sp_nab;SB.REFRESH=cfg.sp_ref end
 end
 loadCfg()
+-- Local AI adviser: only compact telemetry goes to the proxy on this PC.
+-- The provider key stays in the proxy's .env and is never present in Lua.
+aiLast=0;aiSnapshotLast=0;aiAdvice="";aiBusy=false
+local function aiRequestFn()return(syn and syn.request)or http_request or request end
+local function aiReport(reason)
+local r=h();local cs=L:FindFirstChild("CoreStats");local pol=cs and cs:FindFirstChild("Pollen");local cap=cs and cs:FindFirstChild("Capacity")
+local elapsed=math.max(1,os.clock()-(scriptStartT or os.clock()));local honey=getHoney()or 0
+local urgent=0;local live=0;local now=os.clock()
+for p,t in pairs(aT)do if not t.col and p.Parent then live=live+1;if(t.l-(now-t.s))<1.5 then urgent=urgent+1 end end end
+local recent={};for i=math.max(1,#actLog-199),#actLog do local e=actLog[i];recent[#recent+1]={action=e.a,result=e.rw,time=e.t,repeats=e.n2}end
+local problems={};for i=math.max(1,#elog-4),#elog do problems[#problems+1]=elog[i]end
+return{reason=reason or"interval",session_seconds=math.floor(elapsed),field=(curF and curF.part and curF.part.Name)or"unknown",honey_per_min=(honey-(scriptStartH or honey))/elapsed*60,pollen=pol and pol.Value or 0,capacity=cap and cap.Value or 0,buffs={scorch_seconds_left=scorchTL or 0,x_flame=xfP or 0,precision_x10=prec.isX or false},nearby={tokens=live,urgent_tokens=urgent,coconuts=#activeCocos,combo_coconuts=#activeComboCocos,flames=(function()local n=0;for f in pairs(scytheParts)do if f and f.Parent then n=n+1 end end;return n end)()},recent_actions=recent,route_stats=routeStats,scorch_history=scorchSessions,test_mode={enabled=cfg.ai_test==true,policy="AI may recommend one controlled test for several Scorch sessions; it must not modify Lua priorities automatically."},problems=problems,position=r and{x=math.floor(r.Position.X),z=math.floor(r.Position.Z)}or nil}
+end
+function sendAIReport(reason,force)
+if aiBusy or(not cfg.ai_on and not force)then return false end
+local req=aiRequestFn();if type(req)~="function"then le("AI proxy: executor has no request function")return end
+aiBusy=true;aiLast=os.clock();local report=aiReport(reason)
+if writefile then pcall(function()writefile("marmot_z_ai_report.json",H:JSONEncode(report))end)end
+task.spawn(function()local ok,res=pcall(function()return req({Url="http://127.0.0.1:8787/analyze",Method="POST",Headers={["Content-Type"]="application/json"},Body=H:JSONEncode(report)})end)
+if ok and res and(res.Success==nil or res.Success)then local body=res.Body or"";local ok2,data=pcall(H.JSONDecode,H,body);if ok2 and type(data)=="table"then aiAdvice=tostring(data.advice or"");if writefile then pcall(function()writefile("marmot_z_ai_advice.json",H:JSONEncode(data))end)end;print("MarmotZ AI: "..aiAdvice:sub(1,250))end else le("AI proxy request failed: "..tostring(res))end
+aiBusy=false end)
+return true
+end
+function sendAIQuestion(question,onDone)
+if aiBusy or type(question)~="string"or question:match("^%s*$")then return false end
+local req=aiRequestFn();if type(req)~="function"then le("AI proxy: executor has no request function")return false end
+aiBusy=true;local report=aiReport("manual GUI question")
+task.spawn(function()local ok,res=pcall(function()return req({Url="http://127.0.0.1:8787/ask",Method="POST",Headers={["Content-Type"]="application/json"},Body=H:JSONEncode({question=question,telemetry=report})})end)
+if ok and res and(res.Success==nil or res.Success)then local ok2,data=pcall(H.JSONDecode,H,res.Body or"");if ok2 and type(data)=="table"then aiAdvice=tostring(data.advice or"");if writefile then pcall(function()writefile("marmot_z_ai_advice.json",H:JSONEncode(data))end)end;print("MarmotZ AI: "..aiAdvice:sub(1,250));if onDone then onDone(aiAdvice)end else if onDone then onDone("AI response error")end end
+else le("AI proxy request failed: "..tostring(res));if onDone then onDone("AI proxy unavailable")end end;aiBusy=false end)
+return true
+end
+-- Fresh local context for the manual Ask AI page. This never calls the API.
+local function saveAISnapshot()
+if not mLS or not writefile then return end
+local report=aiReport("local snapshot")
+report.generated_at=os.date("!%Y-%m-%dT%H:%M:%SZ")
+pcall(function()writefile("marmot_z_ai_report.json",H:JSONEncode(report))end)
+end
 -- v5.0.5: диагностика прав на файлы — если экзекутор не дал writefile, ни один JSON не сохранится — теперь об этом будет красное сообщение в GUI ошибок
 task.spawn(function()task.wait(3)
 if not writefile then le("writefile НЕДОСТУПЕН: JSON (data/scorch/q/pat) НЕ сохраняются! Включи доступ к файлам в настройках executor")
@@ -298,6 +339,26 @@ d.Material=Enum.Material.Neon;d.Color=isP2 and Color3.fromRGB(190,110,255)or Col
 d.Position=pos+Vector3.new(0,1.2,0);d.Name="MZ_Predict";d.Parent=W;D:AddItem(d,6);return d
 end
 local function aCH(o)if o.Name~="Crosshair"or not o:IsA("BasePart")then return end;for i=1,#cQ do if cQ[i].part==o then return end end;local pPos=nil;if o.Position.Y>20 then pPos=predictLandingPos(o)end;local e={part=o,sT=os.clock(),col=false,isP=iP(o),pPos=pPos};if pPos then e.dot=mkPredictDot(pPos,e.isP)end;table.insert(cQ,e)end
+local function comboDiskReady(disk)
+if not disk or not disk.Parent then return false end
+-- A Combo Coconut is collected from the WarningDisk which carries the combo
+-- counter GUI (the displayed number itself may be any value).
+local label=disk:FindFirstChildWhichIsA("TextLabel",true)
+return label~=nil
+end
+-- Combo Coconut is detected solely by its numbered GUI WarningDisk.  The
+-- coconut model is cosmetic and may arrive late or not replicate at all.
+local function addComboDisk(disk)
+if not comboDiskReady(disk)then return end
+for _,e in ipairs(activeComboCocos)do if e.disk==disk then return end end
+table.insert(activeComboCocos,{disk=disk,collected=false})
+end
+local function hasComboDiskReady()
+for _,combo in ipairs(activeComboCocos)do
+if not combo.collected and comboDiskReady(combo.disk)and cfg.combo_on and(cfg.combo_lim==0 or comboCycle<cfg.combo_lim)then return true end
+end
+return false
+end
 if Pt then
 Pt.DescendantAdded:Connect(function(o)
 aCH(o)
@@ -305,16 +366,28 @@ if o.Name=="WarningDisk"and o:IsA("BasePart")then
 local sx=o.Size.X
 if math.abs(sx-23.4)<2 then table.insert(activeCocos,{part=o,spawnTime=os.clock(),collected=false})
 elseif math.abs(sx-8.0)<1 then table.insert(activeShowers,{part=o,spawnTime=os.clock(),collected=false})end
+task.delay(0.15,function()if o.Parent then addComboDisk(o)end end)
 end
 end)
 Pt.DescendantRemoving:Connect(function(o)
 for i=#cQ,1,-1 do if cQ[i].part==o then if cQ[i].dot then pcall(function()cQ[i].dot:Destroy()end)end;table.remove(cQ,i);break end end
 for i=#activeCocos,1,-1 do if activeCocos[i].part==o then table.remove(activeCocos,i);break end end
 if #activeCocos==0 then cocoCycle=0 end-- v5.2.6: все ворнинг-диски кокоса исчезли — сброс счётчика цикла, следующая пачка снова лутается до лимита Farm Coconuts
+for i=#activeComboCocos,1,-1 do if activeComboCocos[i].disk==o then table.remove(activeComboCocos,i)end end
+if #activeComboCocos==0 then comboCycle=0 end
 for i=#activeShowers,1,-1 do if activeShowers[i].part==o then table.remove(activeShowers,i);break end end
 if #activeShowers==0 then showerCycle=0 end-- v5.2.6: все ворнинг-диски шовера исчезли — сброс счётчика цикла
 end)
-for _,o in ipairs(Pt:GetDescendants())do aCH(o)end
+ -- Catch particles which existed before this script connected.
+ for _,o in ipairs(Pt:GetDescendants())do
+ aCH(o)
+ if o.Name=="WarningDisk"and o:IsA("BasePart")then
+ local sx=o.Size.X
+ if math.abs(sx-23.4)<2 then table.insert(activeCocos,{part=o,spawnTime=os.clock(),collected=false})
+ elseif math.abs(sx-8.0)<1 then table.insert(activeShowers,{part=o,spawnTime=os.clock(),collected=false})end
+ end
+ end
+ for _,o in ipairs(Pt:GetDescendants())do if o.Name=="WarningDisk"and o:IsA("BasePart")then addComboDisk(o)end end
 end
 local function clnCH()for i=#cQ,1,-1 do local ch=cQ[i];if not ch.part or not ch.part.Parent or ch.col then table.remove(cQ,i)end end end
 local function gCH(op,oR,purpFirst)
@@ -324,7 +397,7 @@ local ch=cQ[i]
 local alive=false
 pcall(function()if ch.part and ch.part.Parent then alive=true end end)
 if not alive then table.remove(cQ,i)
-elseif not ch.col then
+elseif not ch.col and(not ch.badUntil or os.clock()>=ch.badUntil)then
 if(op or purpFirst)and not ch.isP and ch.part.Parent then ch.isP=iP(ch.part)end
 if(grnBad==nil or not grnBad(ch))and((op and ch.isP)or(oR and not ch.isP)or(not op and not oR))then -- v5.1.5: зелёные при x10 в списки лута не попадают
 if purpFirst and ch.isP then table.insert(pl,ch)else table.insert(lst,ch)end
@@ -342,9 +415,21 @@ end
 return lst
 end
 local function gPCH()return gCH(true,false,false)end
-local function gCH_n()local r=h();if not r then return nil end;local best,bestD=nil,math.huge;for i=1,#cQ do local ch=cQ[i];if not ch.col and ch.part.Parent and not(grnBad and grnBad(ch))then local d=d3(r.Position,ch.part.Position);if d<bestD then bestD=d;best=ch end end end;return best end -- v5.1.5: ближайший кросхейр — не зелёный при x10
+local function gDumpCH()
+if xfP<19 then return gPCH()end
+-- At 19+ X-Flame, dumping on the closest crosshair to the field centre
+-- prevents the character from creating a new X-Flame in a corner.
+local ch=gCH_nc()
+return ch and{ch}or{}
+end
+local function gCH_n()local r=h();if not r then return nil end;local best,bestD=nil,math.huge;for i=1,#cQ do local ch=cQ[i];if not ch.col and ch.part.Parent and(not ch.badUntil or os.clock()>=ch.badUntil)and not(grnBad and grnBad(ch))then local d=d3(r.Position,ch.part.Position);if d<bestD then bestD=d;best=ch end end end;return best end -- v5.1.5: ближайший кросхейр — не зелёный при x10
 local function hasNearPurpleCH()local r=h();if not r then return false end;for i=1,#cQ do if not cQ[i].col and cQ[i].part.Parent and cQ[i].isP and d2Sq(r.Position,cQ[i].part.Position)<900 then return true end end;return false end
-local function gCH_nc()local cc=gFC();if cc==ZERO then return nil end;local best,bestD=nil,math.huge;for i=1,#cQ do local ch=cQ[i];if not ch.col and ch.part.Parent then local d=d3(ch.part.Position,cc);if d<bestD then bestD=d;best=ch end end end;return best end
+function gCH_nc()local cc=gFC();if cc==ZERO then return nil end;local best,bestD=nil,math.huge;for i=1,#cQ do local ch=cQ[i];if not ch.col and ch.part.Parent and(not ch.badUntil or os.clock()>=ch.badUntil)then local d=d3(ch.part.Position,cc);if d<bestD then bestD=d;best=ch end end end;return best end
+local function variedCHRoute(lst,startPos)
+local left={};for _,ch in ipairs(lst)do left[#left+1]=ch end;local out={};local pos=startPos
+while #left>0 do table.sort(left,function(a,b)return d3(pos,a.part.Position)<d3(pos,b.part.Position)end);local pick=math.random(1,math.min(3,#left));local ch=table.remove(left,pick);out[#out+1]=ch;pos=ch.part.Position end
+return out
+end
 function gFCPath(rPos)
 local clusters=gFCB();if #clusters==0 then return nil end
 local rPosFlat=Vector3.new(rPos.X,0,rPos.Z)
@@ -375,8 +460,8 @@ if not ch.col and ch.part.Parent and not ch.isP and d2Sq(df,ch.part.Position)>(t
 local cf=Vector3.new(ch.part.Position.X,0,ch.part.Position.Z)
 local dSq=d2Sq(mf,cf)
 local sz=math.max(ch.part.Size.X,ch.part.Size.Z,4)
-local effR=sz*0.5+8 -- v5.0.4: держим ~8 студов от края кросхейра (было 6 — бот наступал на них)
-if isScActive then effR=sz*0.5+6 end -- v5.1.5: в скорче было +3 — главная причина GREEN CH -80; теперь +6
+local effR=sz*0.5+20 -- start detouring well before the crosshair hit area
+if isScActive then effR=sz*0.5+18 end
 if isGrnCH and isGrnCH(ch)then effR=effR+4 end -- v5.1.5: зелёным — доп. запас +4
 if dSq<((effR+14)*(effR+14))and dSq>0.04 then -- v5.1.6: детект угрозы за +14 студов — обход начинается заранее и идёт широкой дугой
 local toCh=cf-mf
@@ -393,7 +478,7 @@ end
 local function cAT(mP,dP,targetIsPurple)local th=gRCT(mP,dP,targetIsPurple);if #th==0 then return nil end
 local mf=Vector3.new(mP.X,0,mP.Z);local df=Vector3.new(dP.X,0,dP.Z);local tD=(df-mf).Unit
 table.sort(th,function(a,b)return a.dist<b.dist end);local t=th[1];local uCh=(t.pos-mf).Unit
-local pD=math.max(math.min(t.sz*0.5+(targetIsPurple and 22 or 14),(df-mf).Magnitude*0.95),targetIsPurple and 12 or 6)-- v5.2.5: к ФИОЛЕТОВОМУ боковой шаг шире (22 студа, мин 12) — заходим на фиолетовый в плотном кластере сбоку, а не толкаемся в соседние. v5.1.6: базовый ~14 студов
+local pD=math.max(math.min(t.sz*0.5+(targetIsPurple and 44 or 32),(df-mf).Magnitude*0.95),targetIsPurple and 28 or 20)
 local tA=Vector3.new(-uCh.Z,0,uCh.X);local tB=Vector3.new(uCh.Z,0,-uCh.X)
 local function sideScore(tang)
 local wp=Vector3.new(t.pos.X+tang.X*pD,0,t.pos.Z+tang.Z*pD)
@@ -403,7 +488,7 @@ if not ch.col and ch.part.Parent and not ch.isP and(not t.ch or ch.part~=t.ch.pa
 local cf=Vector3.new(ch.part.Position.X,0,ch.part.Position.Z)
 local sz=math.max(ch.part.Size.X,ch.part.Size.Z,4)
 local dd=d3(wp,cf)
-if dd<sz*0.5+8 then sc=sc-(sz*0.5+8-dd)end
+if dd<sz*0.5+16 then sc=sc-(sz*0.5+16-dd)end
 end
 end
 return sc
@@ -416,17 +501,17 @@ cATLastSide=(tang==tA)and 1 or 2
 st.chA=st.chA+1
 -- v5.0.8: объездная точка отодвигается, пока не очистит ВСЕ соседние кросхейры — раньше могла лечь прямо на соседний, и бот наступал на него по пути к фиолетовому
 local wpX,wpZ=t.pos.X+tang.X*pD,t.pos.Z+tang.Z*pD
-for _=1,8 do-- v5.2.5: было 4 итерации — в углу с 6 кросхейрами точка не очищалась; 8 x (+4) = до +32 студов
+for _=1,12 do
 local bad=false
 for i=1,#cQ do local ch2=cQ[i]
 if not ch2.col and ch2.part.Parent and not ch2.isP then
 local sz2=math.max(ch2.part.Size.X,ch2.part.Size.Z,4)
 local dxw,dzw=wpX-ch2.part.Position.X,wpZ-ch2.part.Position.Z
-if dxw*dxw+dzw*dzw<(sz2*0.5+8)*(sz2*0.5+8)then bad=true;break end -- v5.1.5: объездная точка держит +8 от соседних кросхейров (было +6)
+if dxw*dxw+dzw*dzw<(sz2*0.5+22)*(sz2*0.5+22)then bad=true;break end
 end
 end
 if not bad then break end
-pD=pD+4;wpX,wpZ=t.pos.X+tang.X*pD,t.pos.Z+tang.Z*pD
+pD=pD+6;wpX,wpZ=t.pos.X+tang.X*pD,t.pos.Z+tang.Z*pD
 end
 return cP(Vector3.new(wpX,mP.Y,wpZ))
 end
@@ -458,7 +543,7 @@ if tce then tcFires=tcFires+1;pcall(function()tce:FireServer()end)end
 D:AddItem(bg,0.15)
 end
 function gFCB()local clusters={};local visited={};for fl,data in pairs(scytheParts)do if fl and fl.Parent and not visited[fl]then local nm=fl.Name or"";local bn=sBC(fl);local isD=(nm:find("Dark")or bn=="Really black");if not isD then local cluster={fl};visited[fl]=true;local changed=true;while changed do changed=false;for fl2 in pairs(scytheParts)do if fl2 and fl2.Parent and not visited[fl2]then local nm2=fl2.Name or"";local bn2=sBC(fl2);local isD2=(nm2:find("Dark")or bn2=="Really black");if not isD2 then for _,cf in ipairs(cluster)do if d3(cf.Position,fl2.Position)<=FLAME_CLUSTER_RADIUS then table.insert(cluster,fl2);visited[fl2]=true;changed=true;break end end end end end end;if #cluster>=FLAME_CLUSTER_MIN then local cx,cz=0,0;for _,cf in ipairs(cluster)do cx=cx+cf.Position.X;cz=cz+cf.Position.Z end;table.insert(clusters,{center=Vector3.new(cx/#cluster,0,cz/#cluster),size=#cluster,flames=cluster})end end end end;table.sort(clusters,function(a,b)return a.size>b.size end);return clusters end
-local function hitFlames()local r=h();if not r then return end;local n=os.clock();if n-lastSHit<SCYTHE_CD then return end;local allFlames=(scorchActive and scorchStartT>0 and(n-scorchStartT)>=35)
+local function hitFlames()local r=h();if not r then return end;local n=os.clock();if n-lastSHit<SCYTHE_CD then return end;local allFlames=(scorchActive and((scorchTL>0 and scorchTL<=10)or(scorchStartT>0 and(n-scorchStartT)>=35)))
 for fl,data in pairs(scytheParts)do if fl and fl.Parent then local nm=fl.Name or"";local bn=sBC(fl);local isD=(nm:find("Dark")or bn=="Really black");local cd=flameCD[fl];local canHit=allFlames or(not isD)
 if canHit and(not cd or n>=cd)and d2Sq(r.Position,fl.Position)<=784 and data and(n-data.sT)>=6.0 then lastSHit=n;flameCD[fl]=n+(allFlames and 2.0 or 5.0);flHit=flHit+1
 local bg=r:FindFirstChild("BG_S")or Instance.new("BodyGyro");bg.Name="BG_S";bg.MaxTorque=Vector3.new(0,40000,0);bg.P=10000;bg.D=500;bg.Parent=r
@@ -467,6 +552,70 @@ local ev=RS:FindFirstChild("Events");local tce=ev and ev:FindFirstChild("ToolCol
 else scytheParts[fl]=nil;flameCD[fl]=nil end end end
 
 -- GOTO with Momentum Strafing
+local function collectPassingLoot(r)
+-- These objects are naturally collected by entering their hit area.  Record
+-- them while travelling to any target, instead of making the path stop on
+-- their exact centre.
+if cfg.coco_on then for _,coco in ipairs(activeCocos)do if not coco.collected and coco.part and coco.part.Parent then
+local rad=math.max(coco.part.Size.X,coco.part.Size.Z)/2
+if d2Sq(r.Position,coco.part.Position)<=(rad+1.5)*(rad+1.5)then coco.collected=true;cocoCnt=cocoCnt+1;cocoCycle=cocoCycle+1 end
+end end end
+for _,petal in ipairs(fP)do if petal.part and petal.part.Parent and not stP[petal.part]and d2Sq(r.Position,petal.part.Position)<=49 then
+stP[petal.part]=os.clock()+5;st.pt=st.pt+1
+end end
+-- v5.2.8-fix: мини-лут токенов по пути (кросхейр/бег к цели собирает мелкие токены)
+for p,t in pairs(aT)do
+if not t.col and p.Parent and not tokenBL[p]and not moHold(t)and not btBlocked(p,t)and d2Sq(r.Position,p.Position)<=25 then
+if t.p>=5 or t.dp or t.id==SMI or t.id==TPI then t.col=true;tokenBL[p]=os.clock()+1.2 end
+end
+end
+end
+
+-- v5.2.8-fix: магнит бокового стрейфа — пока бежим к основной цели, слегка
+-- заворачиваем в сторону близких токенов/петалов/кокосов, чтобы залутать их по пути.
+local function pathMagnet(r,targetPos)
+local tl=tL or ""
+-- v5.2.8-fix2: к целевому кросхейру/фиолетовой метке не тянемся боком — иначе
+-- обход кросхейров (cAT) и магнит конфликтуют и персонаж начинает кружиться.
+if tl:find("go_crosshair")or tl:find("go_purple")or tl:find("P ")or tl=="C-CH"or tl=="RefAll"then return ZERO end
+local rPos=r.Position
+local forward=targetPos-rPos;forward=Vector3.new(forward.X,0,forward.Z)
+local fMag=forward.Magnitude
+if fMag<2 then return ZERO end
+local fUnit=forward.Unit
+local bestOff,bestScore=nil,0
+local function check(pos,score)
+local toP=pos-rPos;toP=Vector3.new(toP.X,0,toP.Z)
+local proj=toP:Dot(fUnit)
+if proj>0 and proj<18 then
+local side=toP-fUnit*proj
+local sideMag=side.Magnitude
+if sideMag<10 and score>bestScore then bestScore=score;bestOff=side end
+end
+end
+for p,t in pairs(aT)do
+if not t.col and p.Parent and not tokenBL[p]and not moHold(t)and not btBlocked(p,t)then
+local sc=t.p*(t.dp and 1.5 or 1)
+check(p.Position,sc)
+end
+end
+for _,pt in ipairs(fP)do
+if pt.part and pt.part.Parent and not stP[pt.part]then
+local sc=14-pt.pr
+if sc>0 then check(pt.part.Position,sc)end
+end
+end
+if cfg.coco_on then
+for _,coco in ipairs(activeCocos)do
+if not coco.collected and coco.part and coco.part.Parent then check(coco.part.Position,20)end
+end
+end
+if bestOff then
+local off=bestOff.Unit*math.min(6,bestOff.Magnitude*0.6)
+return Vector3.new(off.X,0,off.Z)
+end
+return ZERO
+end
 local function goTo(tP,rad,to,sk)
 rad=math.min(rad or 1.5,2.5);to=to or MT
 if to>12 then to=12 end;if tP==ZERO then return false end
@@ -480,17 +629,24 @@ committedSide=(av.X-r.Position.X>0 and"right"or"left")
 end
 local function moveFast()
 -- v4.9: строже стрейф — меньше перелёт, вблизи идём точно в цель
+-- v5.2.8-fix: добавлен магнит бокового стрейфа к ближайшим токенам/петалам/кокосам
 local dv=cM-r.Position
 local dist=dv.Magnitude
-if dist<6 then hm_:MoveTo(cM)return end
+local tl=tL or ""
+-- v5.2.8-fix2: к целевому кросхейру/фиолетовой метке идём прямым MoveTo —
+-- иначе импульсный стрейф и обход кросхейров заставляют персонажа кружиться.
+local isCHTarget=sk or tl:find("go_crosshair")or tl:find("go_purple")or tl:find("P ")or tl=="C-CH"or tl=="RefAll"
+if isCHTarget then hm_:MoveTo(cM)return end
+local magnet=pathMagnet(r,oT)
+if dist<6 then hm_:MoveTo(cM+magnet)return end
 local dir=dv.Unit
 local vel=r.AssemblyLinearVelocity
 local flatVel=Vector3.new(vel.X,0,vel.Z)
 if flatVel.Magnitude>10 and dir:Dot(flatVel.Unit)>0.7 then
 local strafeDir=(dir+flatVel.Unit*0.25).Unit
-hm_:MoveTo(cM+Vector3.new(strafeDir.X*1.5,0,strafeDir.Z*1.5))
+hm_:MoveTo(cM+Vector3.new(strafeDir.X*1.5+magnet.X,0,strafeDir.Z*1.5+magnet.Z))
 else
-hm_:MoveTo(cM+Vector3.new(dir.X*1,0,dir.Z*1))
+hm_:MoveTo(cM+Vector3.new(dir.X*1+magnet.X,0,dir.Z*1+magnet.Z))
 end
 end
 moveFast()
@@ -499,8 +655,12 @@ while os.clock()-t0<to do
 if hbF-hb0>to*60 then return false end
 task.wait(0.03)
 if not ENABLED or INT then return false end
+-- A Combo Coconut is short-lived.  Abort any normal movement immediately so
+-- the next decision moves onto its GUI WarningDisk.
+if tL~="Combo Coco"and hasComboDiskReady()then return false end
 r=h();if not r then return false end
 pcall(hitBloom);pcall(hitFlames)
+collectPassingLoot(r)
 if d2Sq(r.Position,oT)<=(rad*rad)then for p,_ in pairs(aT)do if p and p.Position and d2Sq(r.Position,p.Position)<=4 then tokenBL[p]=os.clock()+1.2 end end;return true end
 if os.clock()-lA>=0.05 then lA=os.clock();local na=cAT(r.Position,oT,sk);cM=na and Vector3.new(na.X,r.Position.Y,na.Z)or oT;moveFast()end
 end
@@ -509,9 +669,11 @@ end
 
 -- STAND ON PURPLE
 local function standOnPurple(ch,timeout)local r=h();local hm_=hm();if not r or not hm_ or not ch.part.Parent then return false end;tL="P Stand";INT=false
-goTo(ch.part.Position,3,math.min(timeout,8),true)-- v4.8: подход к пурпурной метке через goTo с обходом кросхейров, а не напролом
+-- Keep approach plus hold below the 12-second action watchdog timeout.
+local approachTime=math.min(3.5,math.max(2,timeout*0.4));local holdTime=math.min(6,math.max(2,timeout-approachTime))
+goTo(ch.part.Position,3,approachTime,true)
 r=h();if not r or not ch.part.Parent then return false end;local t0=os.clock();local bestD=math.huge;local stuckT=os.clock()
-while os.clock()-t0<timeout do task.wait(0.03);r=h();if not r or not ch.part.Parent then break end;if INT or not ENABLED then return false end;pcall(hitBloom);pcall(hitFlames)
+while os.clock()-t0<holdTime do task.wait(0.03);r=h();if not r or not ch.part.Parent then break end;if INT or not ENABLED then return false end;pcall(hitBloom);pcall(hitFlames)
 local dNow=d2Sq(r.Position,ch.part.Position)
 if dNow<=9 then hm_:MoveTo(ch.part.Position)
 else
@@ -522,7 +684,7 @@ end
 if not ch.part.Parent then ch.col=true;st.pr=st.pr+1;lP=ch.part;st.chP=st.chP+1;return true end;return false end
 
 -- TOKEN REG
--- v4.9: таймеры над токенами в стиле v4.0 — префикс, фон, цвет по типу токена, отдельный цвет для дюпед
+-- v4.9: таймеры над токенами в стиле v4.0 — префикс, цвета, dc для дюпед; bt=true — батл-токен
 local function cT(part,id,tl,dp,df)if activeTG[part]then return end;local gui=Instance.new("BillboardGui");gui.Adornee=part;gui.Size=dp and UDim2.new(0,100,0,30)or UDim2.new(0,80,0,24);gui.StudsOffset=Vector3.new(0,2,0);gui.AlwaysOnTop=true;gui.Parent=part;local lb=Instance.new("TextLabel",gui);lb.Size=UDim2.new(1,0,1,0);lb.BackgroundTransparency=0.2;lb.BackgroundColor3=df.bg or Color3.new(0,0,0);lb.TextColor3=dp and(df.dc or df.nc or Color3.new(1,1,1))or(df.nc or Color3.new(1,1,1));lb.TextScaled=true;lb.Font=Enum.Font.SourceSansBold;lb.TextStrokeTransparency=0;lb.TextStrokeColor3=Color3.new(0,0,0);lb.Text=(df.pre or"")..string.format("%.1f",tl);activeTG[part]={gui=gui,label=lb,startTime=os.clock(),totalLifetime=tl,prefix=df.pre or""}end
 -- v5.1: таймеры ТОЛЬКО над токенами из TKS (полный сет v4.0, как ты и просил), GEN_DF выпилен — неизвестные токены не трекаем; в aT добавлен bt (батл-токен)
 local function rT(o)if o.Name~="C"or not o:IsA("BasePart")or aT[o]or tokenBL[o]then return end;local fr=o:FindFirstChild("FrontDecal");if not fr or not fr:IsA("Decal")then return end;local id=ti(fr.Texture);if not id or AV[id]then return end;local df=TKS[id];if not df then return end;local r=h();local dp=false;if r then dp=(o.Position.Y-r.Position.Y)>5 end;local lf=df.base*AM;if dp then lf=lf*(2+0.05*(DGL-1));dupCnt=dupCnt+1 end;aT[o]={id=id,n=df.n,p=df.p,mo=df.mo or false,bt=df.bt or false,s=os.clock(),l=lf,dp=dp,col=false};tokenVerify[o]=(os.clock()+0.5);pcall(cT,o,id,lf,dp,df)end
@@ -531,7 +693,15 @@ local tokParents={}
 local function remTokParent(par)if par then tokParents[par]=true end end
 W.DescendantAdded:Connect(function(o)if o.Name=="C"then task.spawn(function()pcall(rT,o);if not aT[o]then task.wait(0.2);pcall(rT,o);if not aT[o]then task.wait(0.5);pcall(rT,o)end end;if aT[o]then remTokParent(o.Parent)end end)end end)
 do for _,o in ipairs(W:GetDescendants())do pcall(rT,o);if aT[o]then remTokParent(o.Parent)end end end
-task.spawn(function()while true do task.wait(2)pcall(function()for par in pairs(tokParents)do if par.Parent then for _,o in ipairs(par:GetChildren())do if o.Name=="C"and not aT[o]then pcall(rT,o)end end else tokParents[par]=nil end end end)end end)
+-- Do not delete keys from tokParents while pairs() is iterating it: Luau can
+-- raise "invalid key to 'next'" when a descendant event mutates this table.
+task.spawn(function()while true do task.wait(2)pcall(function()
+local parents={};for par in pairs(tokParents)do parents[#parents+1]=par end
+for _,par in ipairs(parents)do
+if par.Parent then for _,o in ipairs(par:GetChildren())do if o.Name=="C"and not aT[o]then pcall(rT,o)end end
+else tokParents[par]=nil end
+end
+end)end end)
 -- v5.0.4: safety-net полный рескан раз в 6с — восстанавливает 100% покрытие таймеров токенов (как в v4.0), даже если DescendantAdded проиграл из-за медленной загрузки FrontDecal
 task.spawn(function()while true do task.wait(6)pcall(function()for _,o in ipairs(W:GetDescendants())do if o.Name=="C"and not aT[o]then pcall(rT,o);if aT[o]then remTokParent(o.Parent)end end end end)end end)
 game.DescendantRemoving:Connect(function(o)if aT[o]then if aT[o].col then st.tk=st.tk+1 end;if aT[o].dp then dupCnt=math.max(0,dupCnt-1)end;aT[o]=nil end;if scytheParts[o]then scytheParts[o]=nil;flameCD[o]=nil end;tokenVerify[o]=nil;tokenBL[o]=nil;if activeTG[o]then pcall(function()activeTG[o].gui:Destroy()end);activeTG[o]=nil end end)
@@ -553,7 +723,9 @@ local prevSS=aB.SS.st
 local ss=fd["Scorching Star Aura"]
 if ss and rawget(ss,"Removed")~=true then
 aB.SS.st=tonumber(rawget(ss,"Combo")or 0)or 0
-else aB.SS.st=0;if scP>0 then scP=0 end
+local ssDur=tonumber(rawget(ss,"Dur")or 0)or 0;local ssStart=tonumber(rawget(ss,"Start")or 0)or 0
+if ssStart>1000000000 then scorchTL=math.max(0,ssStart+ssDur-os.time())elseif scorchStartT>0 then scorchTL=math.max(0,ssDur-(os.clock()-scorchStartT))end
+else aB.SS.st=0;scorchTL=0;if scP>0 then scP=0 end
 end
 local xf=fd["X-Flame Aura"]
 if xf and rawget(xf,"Removed")~=true then
@@ -622,6 +794,7 @@ table.insert(scorchSessions,{honeyGained=gained,honeyGainedFmt=fmtH(gained),dura
 if gained>bestSH then bestSH=gained end
 end
 pcall(sSS);pcall(sPat)-- v5.0.6: автосохранение скорча (теперь С действиями) и паттерн-лога после каждой сессии
+if cfg.ai_on then task.defer(function()sendAIReport("scorch ended",true)end)end
 scorchRecording=false;scorchActions={}
 end
 end
@@ -659,7 +832,14 @@ for i=1,#fP do if not used[i]then local cl={fP[i]};used[i]=true;local changed=tr
 -- v5.1: батл-токены (bt=true). При 22+ XF НЕ лутаем батл-токены в углу (дальше XCR*2 от центра). Калькулятор линка: если XF-пассивка + ВСЕ живые батл-токены на поле >= 24, угловой линк можно лутать — XF в углу уже не заспавнится (пример: 20 XF + линк + 3 БТ = 24 -> лутаем)
 function cntBT()local n=os.clock();local c=0;for p,t in pairs(aT)do if not t.col and p.Parent and t.bt and(t.l-(n-t.s))>0.3 then c=c+1 end end;return c end
 function btBlocked(p,t)if not t or not t.bt then return false end;if xfP<22 then return false end;local cc=gFC();if cc==ZERO then return false end;if d3(p.Position,cc)<=XCR*2 then return false end;if xfP+cntBT()>=24 then return false end;return true end
-local function hTL()local n=os.clock();for p,t in pairs(aT)do if not t.col and p.Parent and t.p>=90 and not tokenBL[p]and(t.l-(n-t.s))>0.3 and not btBlocked(p,t)then return true end end;return false end
+local function hTL(dupedOnly)local n=os.clock();for p,t in pairs(aT)do if not t.col and p.Parent and t.p>=90 and(not dupedOnly or t.dp)and not tokenBL[p]and(t.l-(n-t.s))>0.3 and not btBlocked(p,t)then return true end end;return false end
+local function urgentToken()
+local n=os.clock();local best,bestRem=nil,1.5
+for p,t in pairs(aT)do if not t.col and p.Parent and t.p<90 and not tokenBL[p]and not moHold(t)and not btBlocked(p,t)then local rem=t.l-(n-t.s);if rem>0.15 and rem<bestRem then best,bestRem=p,rem end end end
+return best
+end
+local function activeTokenCount()local n=os.clock();local c=0;for p,t in pairs(aT)do if not t.col and p.Parent and(t.l-(n-t.s))>0.3 then c=c+1 end end;return c end
+local function isDupMark(t)local nm=string.lower(tostring(t and t.n or""));return nm:find("mark surge",1,true)or nm:find("pollen mark",1,true)or nm:find("honey mark",1,true)end
 local function eS()local r=h();if not r then return"dead"end;return string.format("PH:%s|CH:%d|PR:%d|XF:%d|SS:%d",ph(),#cQ,st.pr,xfP,scP)end
 local function gSC()local cx,cz,ct=0,0,0;local dw=5;for fl,_ in pairs(scytheParts)do if fl and fl.Parent then local nm=fl.Name or"";local bn=sBC(fl);local isD=(nm:find("Dark")or bn=="Really black");local w=isD and dw or 1;cx=cx+fl.Position.X*w;cz=cz+fl.Position.Z*w;ct=ct+w end end;if ct>0 then return Vector3.new(cx/ct,0,cz/ct),true,0 end;if curF and curF.part then return curF.part.Position,false,0 end;local r2=h();if r2 then return r2.Position,false,0 end;return ZERO,false,0 end
 -- ACTION BUILDER
@@ -668,22 +848,61 @@ if not isSc and n>=prPauseNext then prPauseUntil=n+30;prPauseNext=n+900;pcall(kl
 if scorchAllCHMode and(os.clock()-scorchAllCHT0)>45 then scorchAllCHMode=false;scorchPurpleCount=0 end -- v5.0.8: окно AllCH ровно 45с, потом снова копим 3 фиолетовых
 local hdm=false;for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.mo then hdm=true;break end end;local isSO=(not isSc)and prec.isX and hdm
 ndMorph=nil;for p,t in pairs(aT)do if not t.col and p.Parent and t.mo and not t.dp then ndMorph=p;break end end
-local cs=L:FindFirstChild("CoreStats");if cs then local cap=cs:FindFirstChild("Capacity");local pol=cs:FindFirstChild("Pollen");if cap and pol and cap.Value>0 and(pol.Value/cap.Value)>=0.9 then local pp=gPCH();if #pp>0 then return{"go_backpack_dump_purple"}end;local all=gCH(false,false,false);if #all>0 then return{"go_backpack_dump"}end end end
+-- Maintaining x10 Precision is the primary farm objective.  Before normal
+-- loot routing, collect a purple/regular crosshair or Precise Shot that can
+-- rebuild it. Combo disks can still interrupt an already-running movement.
+if not prec.isX then
+-- v5.2.8-fix: лутать кросхейры сразу при появлении, а не сперва фиолетовые.
+-- go_crosshair забирает любой Crosshair из Particles; go_purple (стояние) идёт
+-- только если нет обычных кросхейров И включён Farm Precise Marks.
+local anyMarks=gCH(false,false,false);if #anyMarks>0 then return{"go_crosshair"}end
+if cfg.purple_on and(cfg.purple_lim==0 or purpleMarkCnt<cfg.purple_lim)then
+local pMarks=gCH(true,false,false);if #pMarks>0 and n>=prPauseUntil then return{"go_purple"}end
+end
+if n>=(precisePredictCd or 0)and scanPreciseBee()then return{"go_precise_predict"}end
+end
+-- Highest loot priority: step on the WarningDisk with the visible combo GUI.
+for _,combo in ipairs(activeComboCocos)do if not combo.collected and comboDiskReady(combo.disk)and cfg.combo_on and(cfg.combo_lim==0 or comboCycle<cfg.combo_lim)then return{"go_combo_coconut"}end end
+-- In the final ten seconds, hitFlames switches to every nearby flame while
+-- the normal movement loop keeps collecting tokens across the field.
+-- At 15s of Scorch, the held duplicated morph outranks every ordinary target.
+if isSc and scorchStartT>0 and(n-scorchStartT)>=15 and not scorchDupedMorphDone then for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.mo then return{"go_duped_morph_scorch"}end end end
+for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.mo and(t.l-(n-t.s))>0 and(t.l-(n-t.s))<5 then return{"go_duped_morph"}end end
+-- At 6+ duplicated tokens, take the smile without waiting for its last seconds.
+if smT and smT.Parent and dupCnt>=6 and os.clock()>=(smCd or 0)then if aB.PoM.a and aR and aR.Parent then return{"go_smile_area"}end;return{"go_smile"}end
+-- P Stand is legal only after X10 Precision is refreshed and while X-Flame
+-- is below 19.  While Precision is absent/expiring, let normal crosshair
+-- collection rebuild it instead of standing on a purple mark.
+if isSc and prec.isX and not prec.nR and xfP<19 and scorchPurpleCount<3 then local ppX=gPCH();if #ppX>0 then return{"go_purple_scorch"}end end
+-- Emergency token order: shower, nearest crosshair (works like Token Link),
+-- then Token Link / urgent tokens.
+for _,sh in ipairs(activeShowers)do if not sh.collected and sh.part.Parent and(n-sh.spawnTime)<1.2 and cfg.shower_on and(cfg.shower_lim==0 or showerCycle<cfg.shower_lim)then return{"go_shower"}end end
+local nearCH=gCH_n()
+if nearCH and not smT and not xfE and not isSS and not isSO then
+if nearCH.isP and n<prPauseUntil then nearCH=nil end-- v5.2.8: пауза прецов: фиолетовый не лутаем
+if nearCH then return{"go_crosshair"}end
+end
+if hTL()then return{"go_tokenlink"}end
+if urgentToken()then return{"go_urgent_token"}end
+local cs=L:FindFirstChild("CoreStats");if cs then local cap=cs:FindFirstChild("Capacity");local pol=cs:FindFirstChild("Pollen");if cap and pol and cap.Value>0 and(pol.Value/cap.Value)>=0.9 then local pp=gDumpCH();if #pp>0 then return{"go_backpack_dump_purple"}end;local all=gCH(false,false,false);if #all>0 then return{"go_backpack_dump"}end end end
 local r=h();if not r then return{"patrol_ring"}end
 -- SHOWER (with limit)
 if cfg.shower_on and(cfg.shower_lim==0 or showerCycle<cfg.shower_lim)and not(prec.isX and prec.tL>0 and prec.tL<16)then-- v5.0.8: шовер НЕ лутаем, если x10-прецизиону осталось <16с
 for i=1,#activeShowers do local sh=activeShowers[i];if not sh.collected and sh.part.Parent and(n-sh.spawnTime)<1.2 then if d3(r.Position,sh.part.Position)<80 then return{"go_shower"}end end end
 for i=1,#activeShowers do local sh=activeShowers[i];if not sh.collected and sh.part.Parent and(n-sh.spawnTime)<0.8 and d3(r.Position,sh.part.Position)<60 then if not(prec.isX and prec.tL>0 and prec.tL<15)then return{"go_shower"}end end end end
+if hTL()then return{"go_tokenlink"}end
+if urgentToken()then return{"go_urgent_token"}end
+local earlyPetals=gPetCluster();if earlyPetals then return{"go_petal_cluster"}elseif #fP>0 then return{"go_petal"}end
 -- v5.1.5: умирающий дюпед морф (<6с) — ФОРСИРОВАННО поверх всего: раньше ветка стояла ниже кемпа/петалов/флеймов и её перебивали — морф протухал
 for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.mo then local remM=t.l-(n-t.s);if remM<6 and remM>0 then return{"go_duped_morph"}end end end
 -- v5.1.6: смайл при 6+ дюпед — сразу после форс-морфа: раньше его перебивали ветки скорча/19+ XF/ndMorph и смайл в ареаринге протухал
 if smT and smT.Parent and dupCnt>=6 and not isSS and smTR<10 and(smTR<4 or os.clock()>=(smCd or 0))then if aB.PoM.a and aR and aR.Parent then return{"go_smile_area"}end;return{"go_smile"}end-- v5.2.5: топ-приоритет смайла ТОЛЬКО для срочного (<10с) и с кулдауном 12с (жалоба: при 6+ дюпед смайл собирался слишком часто и перебивал скорч/кросхейры); совсем срочный <4с игнорит кулдаун
 -- v5.0.6: 24+ пассивок скорча: <10 X-Flame — лутаем ВСЕ кросхейры (копим X-Flame); 10+ — ВСТАЁМ на фиолетовые (счёт в scorchPurpleCount); после 3 фиолетовых — все кросхейры до конца скорча
-if scP>=24 and xfP<10 and not scorchAllCHMode then local allW=gCH(false,false,true);if #allW>0 then return{"go_crosshair_all"}end end
+if scP>=24 and xfP<10 and not scorchAllCHMode then local allW=gCH(false,false,prec.isX);if #allW>0 then return{"go_crosshair_all"}end end
 if scP>=24 and xfP>=10 then
 if scorchPurpleCount>=3 and not scorchAllCHMode then scorchAllCHMode=true;scorchAllCHT0=os.clock()end
 if scorchAllCHMode then local allW2=gCH(false,false,true);if #allW2>0 then return{"go_crosshair_all"}end
-else local ppW=gCH(true,false,false);if #ppW>0 then return{"go_purple_scorch"}end end
+elseif prec.isX and not prec.nR and xfP<19 and scorchPurpleCount<3 then local ppW=gCH(true,false,false);if #ppW>0 then return{"go_purple_scorch"}end end
 end
 -- XF Camping
 -- v5.0.7: кемп больше не глушит кросхейры: если есть кросхейр в радиусе XCR*2 от центра — сначала ВСТАЁМ на ближайший к центру (go_center_ch), потом назад в кемп
@@ -703,11 +922,12 @@ if scorchAllCHMode then for p,t in pairs(aT)do if not t.col and p.Parent and t.d
 if not scorchAllCHMode then
 if scorchPurpleCount>=3 then scorchAllCHMode=true;scorchAllCHT0=os.clock();scorchPurpleTime=os.clock();local all=gCH(false,false,true);if #all>0 then return{"go_crosshair_all"}end;local path=gFCPath(r.Position);if path then return{"go_flame_path"}end;return{"patrol_scorch_flames"}end
 -- v5.0.6: убран фолбэк "AllCH через 1с после ПЕРВОГО фиолетового" — из-за него режим всех кросхейров включался после 1 фиолетового, а не после 3; теперь СТРОГО scorchPurpleCount>=3
-local pp=gCH(true,false,false);if #pp>0 then return{"go_purple_scorch"}end end
+if prec.isX and not prec.nR and xfP<19 then local pp=gCH(true,false,false);if #pp>0 then return{"go_purple_scorch"}end end end
 -- v5.0.8: вне окна AllCH массовый лут запрещён: акцент на огни (кемп кластера ~12с/пауза 10с), одиночный ближайший кросхейр — можно
 local nc2=gCH_n();if nc2 then return{"go_crosshair"}end -- v5.1.5: кросхейр ПЕРЕД кемпом кластера
 if os.clock()>flCampCd then local clF=gFCB();if #clF>0 and clF[1].size>=4 then return{"go_flame_cluster_center"}end end
 local path2=gFCPath(r.Position);if path2 then return{"go_flame_path"}end;return{"patrol_scorch_flames"}end
+if isSc then for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.id==4519549299 then return{"go_duped_inferno_scorch"}end end end
 if isSc and scorchStartT>0 and(n-scorchStartT)>=15 and not scorchDupedMorphDone then if smT and smT.Parent then return{"go_smile"}end;for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.mo then return{"go_duped_morph_scorch"}end end end
 -- Scorch petal+flame focus
 if isSc and not isSS then local ptCl=gPetCluster();if ptCl and #ptCl>0 then return{"go_petal_cluster"}end;if #fP>=2 then return{"go_petal"}end-- v5.0.8: в скорче петалы уже от 2 шт 
@@ -718,7 +938,7 @@ if os.clock()>flCampCd then local clust=gFCB();if #clust>0 then local bestC,best
 if isSO then
 if n-lastSOTime>=10 then return{"go_super_outside"}end;local nearCH=gCH_n();if nearCH and not smT and not xfE then return{"go_crosshair"}end
 if hTL()then return{"go_tokenlink"}end
-for i,coco in ipairs(activeCocos)do if not coco.collected and coco.part.Parent and(3.0-(n-coco.spawnTime))<=1.0 and cfg.coco_on and(cfg.coco_lim==0 or cocoCycle<cfg.coco_lim)then return{"go_coconut"}end end
+for _,combo in ipairs(activeComboCocos)do if not combo.collected and comboDiskReady(combo.disk)and cfg.combo_on and(cfg.combo_lim==0 or comboCycle<cfg.combo_lim)then return{"go_combo_coconut"}end end
 if p_=="REFRESH"then local all=gCH(false,false,true);if #all>0 then return{"go_crosshair_refresh_all"}end;return{"patrol_ring"}end
 if p_=="X10"then return{"patrol_ring"}end;table.insert(ba,"patrol_ring");return ba end
 -- v5.0.8: при 19+ XF ближайший к центру кросхейр в ЛЮБОЙ фазе (был кейс: 22 XF, фаза REFRESH — бот ушёл на фиолетовый в углу); дальше XCR*2 от центра — игнор, ждём у центра
@@ -735,6 +955,8 @@ else if #gCH(false,false,true)==0 then for p,t in pairs(aT)do if not t.col and p
 if t.id==2000457501 and rem<2.0 and rem>0 then return{"go_duped_inspire_normal"}elseif t.id==1472256444 and rem<5.0 and rem>0 then return{"go_duped_babylove"}elseif(t.id==8173559749 or t.id==1442859163 or t.id==1442863423 or t.id==3877732821)and age>3 and rem>0 then return{"go_duped_boost"}end end end end end-- v5.0.8: дюпед бусты лутаем ТОЛЬКО когда на поле нет кросхейров — кросхейры приоритетнее
 if #gCH(false,false,true)==0 then for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.id==1472256444 then local rem=t.l-(n-t.s);if rem<5.0 and rem>0 then return{"go_duped_babylove"}end end end end
 -- v5.0.2: go_duped_pri — при 9+ дюпед собрать цепочку приоритетных DPRI (из v4.0 go_duped_pri)
+if dupCnt>=9 then local hasMark=false;for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and isDupMark(t)then hasMark=true;break end end;if hasMark then return{"go_duped_marks"}end end
+if activeTokenCount()>=6 and hTL(true)then return{"go_duped_tokenlink"}end
 if dupCnt>=9 then local hasDpri=false;for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and DPRI[t.id]then hasDpri=true;break end end;if hasDpri then return{"go_duped_pri"}end end
 -- v5.1.6: ветки смайла (go_smile_area/go_smile при 6+ дюпед) перенесены в самый верх gAWB — сразу после форс-морфа
 -- v5.1.5: в фазе REFRESH таргет-практика приоритетнее петалов/линка/предикта (раньше ветка REFRESH стояла в самом низу)
@@ -743,17 +965,13 @@ if p_=="X10"and not isSO and xfP<19 then local pp=gCH(true,false,false);if #pp>0
 local ptCl=gPetCluster();if ptCl and #ptCl>0 then return{"go_petal_cluster"}end
 if #fP>=2 and not isSS then return{"go_petal"}end-- v5.0.8: больше акцент на петалы — лутаем уже от 2 шт и вне скорча (раньше go_petal вне скорча вообще не возвращался)
 -- v5.0.2: go_diagonal_loot — при 6+ кросхейров лут вдоль длинной оси (из v4.0)
-local allForDiag=gCH(false,false,true);if #allForDiag>=6 and not isSc and not isSS and not isSO then return{"go_diagonal_loot"}end
+local allForDiag=gCH(false,false,true);if #allForDiag>=6 and p_~="X10"and xfP<19 and not isSc and not isSS and not isSO then return{"go_diagonal_loot"}end
 -- v5.0.2: go_predictive_ch — бот бежит к точке предсказанного приземления высокого кросхейра
 for _i2=1,#cQ do local _ch2=cQ[_i2];if not _ch2.col and _ch2.pPos and _ch2.part.Position.Y>20 then return{"go_predictive_ch"}end end
-local nearCH=gCH_n()
--- v4.9: если на поле есть хоть один фиолетовый — сперва он, а не ближайший обычный
-if nearCH and nearCH.isP and n<prPauseUntil then nearCH=nil end-- v5.2.8: пауза прецов: ближайший фиолетовый не лутаем
-if nearCH and not smT and not xfE and not isSS and not isSO then if not nearCH.isP and xfP<19 and n>=prPauseUntil then local pp=gCH(true,false,false);if #pp>0 then return{"go_purple"}end end;return{"go_crosshair"}end -- v5.1.5: при 19+ XF не переключаемся с ближнего кросхейра на фиолетовый
 if hTL()then return{"go_tokenlink"}end
-for i,coco in ipairs(activeCocos)do if not coco.collected and coco.part.Parent and(3.0-(n-coco.spawnTime))<=1.0 and cfg.coco_on and(cfg.coco_lim==0 or cocoCycle<cfg.coco_lim)then return{"go_coconut"}end end
+for _,combo in ipairs(activeComboCocos)do if not combo.collected and comboDiskReady(combo.disk)and cfg.combo_on and(cfg.combo_lim==0 or comboCycle<cfg.combo_lim)then return{"go_combo_coconut"}end end
 if smT and dupCnt>=6 and not isSO and os.clock()>=(smCd or 0)then return{"go_smile"}end-- v5.2.5: кулдаун смайла 12с и на нижнем приоритете
-if not isSc and n>=prPauseUntil then local predPos=scanPreciseBee();if predPos then return{"go_precise_predict"}end end -- v5.0.1: PreBee теперь здесь, после кросхейров/смайла/кокосов
+if not isSc and n>=prPauseUntil and n>=(precisePredictCd or 0)then local predPos=scanPreciseBee();if predPos then return{"go_precise_predict"}end end -- PreBee после кросхеиров/смайла/кокосов
 if p_=="REFRESH"then local all=gCH(false,false,true);if #all>0 then return{"go_crosshair_refresh_all"}end;return{"patrol_ring"}end
 if p_=="X10"then return{"patrol_ring"}end
 if p_=="NABOR"then
@@ -796,17 +1014,17 @@ st.tR=st.tR+tR;st.dc=st.dc+1;totalSteps=totalSteps+1;EP=math.max(0.02,EP*ED);flH
 local function stToken(p)if not p or not p.Parent then return end;local t0=os.clock();while os.clock()-t0<1.1 do task.wait(0.05);if not p.Parent then break end;local h__=hm();if h__ then h__:MoveTo(Vector3.new(p.Position.X,p.Position.Y,p.Position.Z))end end end
 local function eA(action)
 local r=h();if not r then return-1 end
-tL=action;pcall(hitBloom);pcall(hitFlames)
+actionStarted=os.clock();tL=action;pcall(hitBloom);pcall(hitFlames)
 chBusy=(action=="go_crosshair"or action=="go_crosshair_all"or action=="go_crosshair_refresh_all"or action=="go_diagonal_loot"or action=="go_backpack_dump"or action=="go_backpack_dump_purple")-- v5.1.6: серия кросхейров дожимается до конца: пока идёт лут кросхейров, смайл-скан не дёргает INT
 if action=="go_xflame_center_camp"then
 local cc=gFC();if cc==ZERO then return-1 end
-tL="XF Camp";INT=true
+tL="XF Camp";INT=false
 local hh=hm()
 if hh then
 local dir=(cc-Vector3.new(r.Position.X,0,r.Position.Z)).Unit
 if dir.Magnitude>0 then hh:MoveTo(cc+Vector3.new(dir.X*1,0,dir.Z*1))else hh:MoveTo(cc)end end
 task.wait(0.05);return 2 end
-if action=="go_precise_predict"then local pp=scanPreciseBee();if not pp then return-1 end;tL="PreBee";INT=false;if goTo(Vector3.new(pp.X,r.Position.Y,pp.Z),2.5,4)then return 8 end;return-2 end
+if action=="go_precise_predict"then local pp=scanPreciseBee();if not pp then precisePredictCd=os.clock()+0.8;return-1 end;tL="PreBee";INT=false;if goTo(Vector3.new(pp.X,r.Position.Y,pp.Z),2.5,4)then precisePredictCd=os.clock()+0.35;return 8 end;precisePredictCd=os.clock()+1.5;return-2 end
 if action=="go_flame_path"then
 local path=gFCPath(r.Position)
 if not path then return-1 end
@@ -856,7 +1074,7 @@ if d2Sq(r.Position,p.Position)<4 then
 t.col=true;tokenBL[p]=os.clock()+1.2;st.tk=st.tk+1;campRw=campRw+15
 else
 local hm_=hm()
-if hm_ then hm_:MoveTo(Vector3.new(p.Position.X,r.Position.Y,p.Position.Z))end
+if hm_ then hm_:MoveTo(Vector3.new(p.Position.X,p.Position.Y,p.Position.Z))end
 end;break
 end
 end
@@ -876,22 +1094,24 @@ if goTo(bp.Position,4,4)and bp.Parent then
 stToken(bp)
 if aT[bp]then aT[bp].col=true;st.sm=st.sm+1 end
 return 20 end end;return-2 end
-if action=="go_noduped_morph"then if not ndMorph or not ndMorph.Parent then return-1 end;local t=aT[ndMorph];if not t then return-1 end;tL="MO(gnd)";INT=false;if goTo(ndMorph.Position,4,4)and ndMorph.Parent then stToken(ndMorph);t.col=true;return 20 end;return-2 end
+if action=="go_noduped_morph"then if not ndMorph or not ndMorph.Parent then return-1 end;local t=aT[ndMorph];if not t then return-1 end;tL="MO(gnd)";INT=false;local v=ndMorph.Position-r.Position;v=Vector3.new(v.X,0,v.Z);local pass=ndMorph.Position+(v.Magnitude>0.1 and v.Unit*2.5 or Vector3.new(2.5,0,0));if goTo(pass,4,4)and ndMorph.Parent then stToken(ndMorph);t.col=true;return 20 end;return-2 end
 if action=="go_duped_morph"then
 local n=os.clock()
 for p,t in pairs(aT)do
 if not t.col and p.Parent and t.dp and t.mo and(t.l-(n-t.s))<6.0 then
 tL="Morph(D)";INT=false
-if goTo(p.Position,3,3)and p.Parent then
+local v=p.Position-r.Position;v=Vector3.new(v.X,0,v.Z);local pass=p.Position+(v.Magnitude>0.1 and v.Unit*2.5 or Vector3.new(2.5,0,0))
+if goTo(pass,3,3)and p.Parent then
 local t0=os.clock()
 while os.clock()-t0<1.2 do
-task.wait(0.05)
-if not p.Parent then break end
-local h__=hm()
-if h__ then h__:MoveTo(Vector3.new(p.Position.X,p.Position.Y,p.Position.Z))end end
+ task.wait(0.05)
+ if not p.Parent then break end
+ local h__=hm()
+ if h__ then h__:MoveTo(Vector3.new(p.Position.X,p.Position.Y,p.Position.Z))end end
 t.col=true;return 25 end end end;return-2 end
-if action=="go_duped_morph_scorch"then local bp=nil;for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.mo then bp=p;break end end;if bp then tL="MO(Sc)";INT=false;if goTo(bp.Position,4,3)and bp.Parent then stToken(bp);if aT[bp]then aT[bp].col=true;scorchDupedMorphDone=true end;return 30 end end;return-2 end
+if action=="go_duped_morph_scorch"then local bp=nil;for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.mo then bp=p;break end end;if bp then tL="MO(Sc)";INT=false;local v=bp.Position-r.Position;v=Vector3.new(v.X,0,v.Z);local pass=bp.Position+(v.Magnitude>0.1 and v.Unit*2.5 or Vector3.new(2.5,0,0));if goTo(pass,4,3)and bp.Parent then stToken(bp);if aT[bp]then aT[bp].col=true;scorchDupedMorphDone=true end;return 30 end end;return-2 end
 if action=="go_purple_scorch"then
+if not(prec.isX and not prec.nR and xfP<19)then return-1 end
 local pp=gCH(true,false,false);if #pp==0 then return-1 end
 local ch=pp[1]
 if ch.part.Parent and not ch.col then
@@ -917,8 +1137,8 @@ tL="Shower";INT=false
 r.CFrame=CFrame.new(sh.part.Position.X,sh.part.Position.Y+3,sh.part.Position.Z);r.AssemblyLinearVelocity=ZERO
 local t0=os.clock()
 while os.clock()-t0<2.0 do
-task.wait(0.05);pcall(hitBloom);pcall(hitFlames)
-if not sh.part.Parent then break end
+ task.wait(0.05);pcall(hitBloom);pcall(hitFlames)
+ if not sh.part.Parent then break end
 end
 sh.collected=true;showerCnt=showerCnt+1;showerCycle=showerCycle+1
 local nf=true
@@ -950,12 +1170,32 @@ return 10+math.min(40,#activeShowers*10)
 end
 end;return-1
 end
+-- Combo Coconut: move onto the associated outer WarningDisk while the model exists.
+if action=="go_combo_coconut"then
+local best,bestD=nil,math.huge
+for _,combo in ipairs(activeComboCocos)do if not combo.collected and comboDiskReady(combo.disk)then local dd=d3(r.Position,combo.disk.Position);if dd<bestD then best,bestD=combo,dd end end end
+if best then
+tL="Combo Coco";INT=false
+local pos=Vector3.new(best.disk.Position.X,r.Position.Y,best.disk.Position.Z)
+if goTo(pos,2.5,4)then
+local holdT=os.clock();local hh=hm()
+while best.disk.Parent and os.clock()-holdT<20 do
+ task.wait(0.05);local rr=h();if not rr or not ENABLED then return-2 end
+ if hh then hh:MoveTo(Vector3.new(best.disk.Position.X,rr.Position.Y,best.disk.Position.Z))end
+ pcall(hitBloom);pcall(hitFlames)
+end
+if not best.disk.Parent then best.collected=true;comboCycle=comboCycle+1;return 50 end
+return-2
+end
+end
+return-2
+end
 -- Coconut (with limit counter)
 if action=="go_coconut"then
 local n=os.clock()
 -- v5.0: лутаем БЛИЖАЙШИЙ кокос, а не первый по времени появления
 local bestCo,bestCoD=nil,math.huge
-for i,c2 in ipairs(activeCocos)do if not c2.collected and c2.part.Parent and(3.0-(n-c2.spawnTime))<=1.0 then local dd=d3(r.Position,c2.part.Position);if dd<bestCoD then bestCoD=dd;bestCo=c2 end end end
+for i,c2 in ipairs(activeCocos)do if not c2.collected and c2.part.Parent and(n-c2.spawnTime)>=0.1 then local dd=d3(r.Position,c2.part.Position);if dd<bestCoD then bestCoD=dd;bestCo=c2 end end end
 local coco=bestCo
 if coco then
 tL="Coco";INT=false
@@ -976,7 +1216,7 @@ coco.collected=true;cocoCnt=cocoCnt+1;cocoCycle=cocoCycle+1 end
 return 30 end
 if hh then hh.WalkSpeed=origSp end end;return-2 end
 if action=="go_crosshair_all"then
-local all=gCH(false,false,true);if #all==0 then return-1 end
+local all=gCH(false,false,true);if #all==0 then return-1 end;all=variedCHRoute(all,r.Position)
 local rw=0;INT=false
 for i=1,#all do
 local ch=all[i]
@@ -984,12 +1224,12 @@ if ch.part.Parent and not ch.col then
 if goTo(ch.part.Position,4,3,true)and ch.part.Parent then
 ch.col=true
 if ch.isP then st.pr=st.pr+1;rw=rw+20
-else st.ch=st.ch+1;rw=rw+10 end end end end
+else st.ch=st.ch+1;rw=rw+10 end else ch.badUntil=os.clock()+2 end end end
 -- v5.0.8: после лута кросхейров в СКОРЧЕ возвращаемся на кластер флеймов
 if rw>0 and aB.SS.st>0 then local clA=gFCB();if #clA>0 then local rA=h();if rA then goTo(Vector3.new(clA[1].center.X,rA.Position.Y,clA[1].center.Z),4,3)end end end
 return rw>0 and rw or-2 end
 if action=="go_crosshair"then
-local all=gCH(false,false,true);if #all==0 then return-1 end -- v4.9: фиолетовые всегда первыми
+local all=gCH(false,false,false);if #all==0 then return-1 end;all=variedCHRoute(all,r.Position)
 local t=all[1];local rw=0;INT=false
 if t.part.Parent and not t.col then -- v5.1.6: смайл больше не блокирует уже начатый лут кросхейра
 local sk=false
@@ -999,7 +1239,7 @@ if cc~=ZERO and d3(t.part.Position,cc)>XCR*1.5 then sk=true end
 end
 if not sk and hasNearPurpleCH()and not t.isP then sk=true end
 if not sk then
-if goTo(t.part.Position,4,5)and t.part.Parent then
+if goTo(t.part.Position,4,3)and t.part.Parent then
 t.col=true
 if t.isP then
 st.pr=st.pr+1;lP=t.part
@@ -1008,18 +1248,19 @@ else
 st.ch=st.ch+1;cyc.chC=cyc.chC+1
 if cyc.chC>=3 then cyc.chC=0 end;rw=rw+8
 end
-end
+else t.badUntil=os.clock()+2 end
 end
 end;return rw>0 and rw or-2
 end
 if action=="go_purple"then
 local pp=gCH(true,false,false);if #pp==0 then return-1 end
+if xfP>=19 then return-1 end -- At 19+ X-Flame, ignore every purple CH outside the centre camp.
 if xfP>=19 then local ccP=gFC();if ccP~=ZERO then table.sort(pp,function(a,b)return d3(a.part.Position,ccP)<d3(b.part.Position,ccP)end)end end-- v5.0.8: при 19+ XF фиолетовые в порядке близости к центру, а не по времени спавна (фикс похода в угол при 22 XF)
 local rw=0;INT=false
 for i=1,#pp do
 local ch=pp[i]
 if ch.part.Parent and not ch.col and not smT then
-if i==#pp then
+if i==#pp and prec.isX and not prec.nR and xfP<19 then
 if standOnPurple(ch,12)then rw=rw+25;tL="P stand"end
 else
 if goTo(ch.part.Position,3,3,true)and ch.part.Parent then
@@ -1031,10 +1272,19 @@ if rw>0 then purpleMarkCnt=purpleMarkCnt+1 end
 end
 end;return rw>0 and rw or-2
 end
-if action=="go_tokenlink"then
+if action=="go_purple_run"then
+local pp=gPCH();if #pp==0 then return-1 end
+tL="P run X10";INT=false;local rw=0
+for _,ch in ipairs(pp)do
+if hasComboDiskReady()then return rw>0 and rw or-3 end
+if ch.part.Parent and not ch.col and goTo(ch.part.Position,3,2.5,true)and ch.part.Parent then ch.col=true;st.pr=st.pr+1;rw=rw+15 end
+end
+return rw>0 and rw or-2
+end
+if action=="go_tokenlink"or action=="go_duped_tokenlink"then
 local tl={};local n_=os.clock()
 for p,t in pairs(aT)do
-if not t.col and p.Parent and t.p>=90 and not tokenBL[p]and not btBlocked(p,t)then
+if not t.col and p.Parent and t.p>=90 and(action~="go_duped_tokenlink"or t.dp)and not tokenBL[p]and not btBlocked(p,t)then
 local rem=t.l-(n_-t.s)
 if rem>0.3 then table.insert(tl,{p=p,t=t,rem=rem})else tokenBL[p]=n_+10 end
 end
@@ -1094,9 +1344,9 @@ end
 goTo(aR.Position,5,2)
 local wt=os.clock()
 while os.clock()-wt<0.3 do
-task.wait(0.05)
-local h__=hm()
-if h__ then h__:MoveTo(Vector3.new(aR.Position.X,aR.Position.Y,aR.Position.Z))end
+ task.wait(0.05)
+ local h__=hm()
+ if h__ then h__:MoveTo(Vector3.new(aR.Position.X,aR.Position.Y,aR.Position.Z))end
 end
 end
 local toVal=math.max(0.5,math.min(3,smTR-0.3))
@@ -1108,10 +1358,10 @@ td.col=true;smT=nil;st.sm=st.sm+1;isCS=false;dupCnt=0;smCd=os.clock()+12;return 
 end
 local st_=os.clock()
 while os.clock()-st_<TSD do
-task.wait(0.1)
-if not sm.Parent then break end
-local h__=hm()
-if h__ then h__:MoveTo(Vector3.new(smTarget.X,smTarget.Y,smTarget.Z))end
+ task.wait(0.1)
+ if not sm.Parent then break end
+ local h__=hm()
+ if h__ then h__:MoveTo(Vector3.new(smTarget.X,smTarget.Y,smTarget.Z))end
 end
 td.col=true;smT=nil;st.sm=st.sm+1;isCS=false;dupCnt=0;smCd=os.clock()+12;return 45
 end
@@ -1127,7 +1377,8 @@ if goTo(c.center,5,3)then
 local rw=0
 for _,m in ipairs(c.members)do
 if m.part.Parent then
-if goTo(Vector3.new(m.part.Position.X,0,m.part.Position.Z),PCD,1.2)then
+local rr=h()or r;local pv=m.part.Position-rr.Position;pv=Vector3.new(pv.X,0,pv.Z);local pass=m.part.Position+(pv.Magnitude>0.1 and pv.Unit*2 or Vector3.new(2,0,0))
+if goTo(Vector3.new(pass.X,0,pass.Z),PCD,1.2)then
 st.pt=st.pt+1;rw=rw+6+(14-m.pr)
 if m.cn=="Red"then redPT=os.clock()end
 end
@@ -1147,10 +1398,11 @@ if not pt.part.Parent then table.remove(fP,i)
 elseif stP[pt.part]and os.clock()<stP[pt.part]then table.remove(fP,i)
 else
 tL=pt.cn;INT=false
-if goTo(Vector3.new(pt.part.Position.X,0,pt.part.Position.Z),PCD,2.5)then
+local rr=h()or r;local pv=pt.part.Position-rr.Position;pv=Vector3.new(pv.X,0,pv.Z);local pass=pt.part.Position+(pv.Magnitude>0.1 and pv.Unit*2 or Vector3.new(2,0,0))
+if goTo(Vector3.new(pass.X,0,pass.Z),PCD,2.5)then
 st.pt=st.pt+1;tr=tr+8+(14-pt.pr);ca=true
 if pt.cn=="Red"then redPT=os.clock()end
-task.wait(0.05);i=i+1
+ task.wait(0.05);i=i+1
 else stP[pt.part]=os.clock()+5;table.remove(fP,i)end
 end
 end;return ca and tr or-1
@@ -1187,6 +1439,18 @@ goTo(tp,5,PT)
 end
 task.wait(0.03);return 0
 end
+if action=="go_final_flames"then
+tL="Scorch final flames";INT=false;local rw=0
+local clusters=gFCB()
+for i=1,math.min(3,#clusters)do
+if hasComboDiskReady()then return rw end
+local rr=h();if not rr then break end
+goTo(Vector3.new(clusters[i].center.X,rr.Position.Y,clusters[i].center.Z),5,1.5)
+local tHit=os.clock();while os.clock()-tHit<0.6 do task.wait(0.05);pcall(hitFlames);rw=rw+1 end
+end
+for fl in pairs(scytheParts)do if fl and fl.Parent then local rr=h();if not rr then break end;goTo(Vector3.new(fl.Position.X,rr.Position.Y,fl.Position.Z),6,0.8);pcall(hitFlames)end end
+return rw>0 and rw or 5
+end
 -- v4.8: недостающие исполнители действий (раньше они падали в return 0 и бот стоял AFK)
 if action=="go_duped_boost"or action=="go_duped_babylove"or action=="go_duped_inspire_scorch"or action=="go_duped_inspire_normal"or action=="go_duped_inferno_scorch"or action=="go_duped_tp_scorch"then
 local want
@@ -1202,7 +1466,7 @@ tL="DupTk";INT=false
 if goTo(bp.Position,3,3)and bp.Parent then stToken(bp);if aT[bp]then aT[bp].col=true end;return 25 end
 return-2 end
 if action=="go_backpack_dump"or action=="go_backpack_dump_purple"then
-local lst=(action=="go_backpack_dump_purple")and gPCH()or gCH(false,false,true)
+local lst=(action=="go_backpack_dump_purple")and gDumpCH()or gCH(false,false,true)
 if #lst==0 then return-1 end
 tL="Dump";INT=false;local rw=0
 -- v5.0.5: при дампе СТОИМ на кросхейре до его срабатывания (до 6с), а не пробегаем мимо
@@ -1222,6 +1486,7 @@ if goTo(bp.Position+dir*5,2.5,4)then return 10 end;return-2 end
 return-1 end
 -- v5.0.2: go_diagonal_loot executor
 if action=="go_diagonal_loot"then
+if ph()=="X10"or xfP>=19 then return-1 end
 local all=gCH(false,false,true);if #all<6 then return-1 end
 local sumX,sumZ,sumXX,sumZZ,ct2=0,0,0,0,0
 for _,ch in ipairs(all)do local p2=ch.part.Position;sumX=sumX+p2.X;sumZ=sumZ+p2.Z;sumXX=sumXX+p2.X*p2.X;sumZZ=sumZZ+p2.Z*p2.Z;ct2=ct2+1 end
@@ -1243,7 +1508,19 @@ local r4=h();if not r4 then return-1 end;local bt4,bd4=nil,math.huge;local n4=os
 for p,t in pairs(aT)do if not t.col and p.Parent and not tokenBL[p]and t.p>=7 and(t.l-(n4-t.s))>0.3 and not btBlocked(p,t)and not moHold(t)then local d=d3(r4.Position,p.Position);if d<bd4 then bd4=d;bt4=p end end end
 if not bt4 then return-1 end;tL=aT[bt4].n;INT=false
 if goTo(bt4.Position,4,4)and bt4.Parent then aT[bt4].col=true;tokenBL[bt4]=os.clock()+1.2;return 3+aT[bt4].p*0.2 end;tokenBL[bt4]=os.clock()+3;return-2 end
+if action=="go_urgent_token"then
+local p=urgentToken();if not p or not p.Parent then return-1 end
+tL="Urgent token";INT=false
+if goTo(p.Position,4,1.8)and p.Parent and aT[p]then aT[p].col=true;tokenBL[p]=os.clock()+1.2;return 30 end
+if aT[p]then tokenBL[p]=os.clock()+2 end;return-2
+end
 -- v5.0.2: go_duped_pri executor — цепочка DPRI при 9+ дюпед
+if action=="go_duped_marks"then
+local cand={};local n2=os.clock();for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and isDupMark(t)and(t.l-(n2-t.s))>0.3 then table.insert(cand,{p=p,t=t})end end
+if #cand==0 then return-1 end;table.sort(cand,function(a,b)return d3(r.Position,a.p.Position)<d3(r.Position,b.p.Position)end)
+tL="DupMarks";INT=false;local rw=0
+for i=1,math.min(3,#cand)do local e=cand[i];if e.p.Parent and goTo(e.p.Position,3,3)then stToken(e.p);e.t.col=true;rw=rw+20 end end
+return rw>0 and rw or-2 end
 if action=="go_duped_pri"then
 local n2=os.clock();local cand={};for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and DPRI[t.id]then table.insert(cand,{p=p,t=t,rem=t.l-(n2-t.s)})end end
 if #cand==0 then return-1 end;table.sort(cand,function(a,b)return a.t.p>b.t.p end)
@@ -1280,11 +1557,11 @@ local ch=gCH_nc();if not ch then return-1 end
 tL="C-CH";local hmC=hm();if not hmC then return-1 end
 local t0c=os.clock();local xfE0=xfE
 while os.clock()-t0c<4 and ch.part.Parent and not ch.col do
-task.wait(0.05);pcall(hitBloom);pcall(hitFlames)
-if not ENABLED then return-2 end
--- v5.1.2: кросхейр сработал ВО ВРЕМЯ стояния (X-Flame заспавнился) — немедленно отменяем стояние, не достаиваем 4с
-if xfE and not xfE0 then break end
-hmC:MoveTo(ch.part.Position)
+ task.wait(0.05);pcall(hitBloom);pcall(hitFlames)
+ if not ENABLED then return-2 end
+ -- v5.1.2: кросхейр сработал ВО ВРЕМЯ стояния (X-Flame заспавнился) — немедленно отменяем стояние, не достаиваем 4с
+ if xfE and not xfE0 then break end
+ hmC:MoveTo(ch.part.Position)
 end
 if xfE and not xfE0 then ch.col=true;st.ch=st.ch+1;return 15 end
 -- v5.0.8: фиолетовый у центра идёт в счёт 3 фиолетовых скорча (иначе при xfE-кемпе окно AllCH никогда бы не открылось)
@@ -1331,19 +1608,28 @@ end)
 STK_T=os.clock()
 task.spawn(function()while true do task.wait(0.5)
 pcall(function()
-if not ENABLED or hchBusy or hchDodge or goSm or isCS then STK_T=os.clock()return end
+if not ENABLED or hchBusy or hchDodge then STK_T=os.clock()return end
 local lbl=tostring(tL or"")
-if lbl=="P Stand"or lbl=="Dump"or lbl=="XF Camp"or lbl=="unstuck"or lbl:find("Shower")or lbl:find("Sm")or lbl:find("Hachapuri")then STK_T=os.clock()return end
+if lbl=="Combo Coco"or lbl=="XF Camp"or lbl=="unstuck"or lbl:find("Hachapuri")then STK_T=os.clock()return end
 local r9=h();if not r9 then STK_T=os.clock()return end
+if isA and actionStarted>0 and os.clock()-actionStarted>12 then
+le("WATCHDOG: action timeout '"..lbl.."' — hard cancel")
+pcall(sendAIReport,"action timeout: "..lbl)
+INT=true;isCS=false;goSm=false;chBusy=false;tL="unstuck";STK_T=os.clock()
+local h9=hm();if h9 then local ang=math.random()*2*math.pi;h9:MoveTo(r9.Position+Vector3.new(math.cos(ang)*8,0,math.sin(ang)*8))end
+task.delay(0.35,function()if tL=="unstuck"then INT=false end end);return
+end
 local v9=r9.AssemblyLinearVelocity
 if Vector3.new(v9.X,0,v9.Z).Magnitude>0.5 then STK_T=os.clock()return end
 if os.clock()-STK_T>6 then
 STK_T=os.clock()
 le("WATCHDOG: застрял на '"..lbl.."' — блэклист целей рядом и сброс")
+pcall(sendAIReport,"stuck: "..lbl)
 for p,t in pairs(aT)do if not t.col and p.Parent and d3(r9.Position,p.Position)<10 then tokenBL[p]=os.clock()+8 end end
 for i=1,#cQ do local ch=cQ[i];if not ch.col and ch.part.Parent and d3(r9.Position,ch.part.Position)<10 then ch.col=true end end
 INT=true;tL="unstuck"
-task.delay(1.2,function()if tL=="unstuck"then INT=false end end)
+local h9=hm();if h9 then local ang=math.random()*2*math.pi;h9:MoveTo(r9.Position+Vector3.new(math.cos(ang)*8,0,math.sin(ang)*8))end
+task.delay(0.35,function()if tL=="unstuck"then INT=false end end)
 end
 end)
 end end)
@@ -1481,14 +1767,15 @@ local ns=eS()
 -- v5.0.6: запись ВСЕХ действий как в v4.0: actLog -> marmot_z_pat.json; в скорче дополнительно scorchActions -> marmot_z_scorch.json (раньше в scorchActions НИЧЕГО не писалось — не было ни одного table.insert)
 -- v5.1.3: подряд идущие одинаковые действия с наградой <=0 схлопываются в одну запись (счётчик n2) — лог не вымывается спамом; lastActA/lastActRw кормят анти-повтор в cAB
 lastActA=a_;lastActRw=rw
+local rs=routeStats[a_]or{success=0,failure=0,last=0};if rw and rw>0 then rs.success=rs.success+1 else rs.failure=rs.failure+1 end;rs.last=math.floor(os.clock()-(scriptStartT or os.clock()));routeStats[a_]=rs
 local le9=actLog[#actLog]
 if le9 and le9.a==a_ and rw<=0 and(tonumber(le9.rw)or 0)<=0 then le9.n2=(le9.n2 or 1)+1;le9.t=math.floor((os.clock()-(scriptStartT or 0))*10)/10
 else table.insert(actLog,{a=a_,rw=rw,t=math.floor((os.clock()-(scriptStartT or 0))*10)/10,ctx=s_})end
 while #actLog>PAT_WINDOW do table.remove(actLog,1)end
 if scorchRecording then table.insert(scorchActions,{a=a_,rw=rw,t=math.floor((os.clock()-scorchStartT)*10)/10})end
 pcall(dUQ,s_,a_,rw,ns)end
-isA=false
-local prevXfE=xfE;xfE=(aB.XF.st>=19 and xfP>=10);if xfE and not prevXfE then xfStartTime=os.clock()end;if xfE then INT=true end
+isA=false;chBusy=false;isCS=false;goSm=false;actionStarted=0
+local prevXfE=xfE;xfE=(aB.XF.st>=19 and xfP>=10);if xfE and not prevXfE then xfStartTime=os.clock()end;if xfE then INT=false end
 local r=h();if r then local vel=r.AssemblyLinearVelocity;if(Vector3.new(vel.X,0,vel.Z)).Magnitude>0.2 then lMT=n;stW=false elseif n-lMT>5 and not stW then stW=true;lMT=n
 -- v5.0.4: бот реально застрял (>5с без движения) — блэклистим всё рядом (битые токены/кросхейры) и сбрасываем цель вместо вечного AFK (раньше INT=true сразу же сбрасывался и ни на что не влиял)
 le("STUCK on '"..(tL or"?").."' -> forced unstuck")
@@ -1534,8 +1821,23 @@ task.spawn(function()while true do task.wait(300)pcall(sQF);pcall(sSS);pcall(sav
 local function rQ()QT={};EP=0.1;st.tR=0;st.dc=0;scorchSessions={};bestSH=0;top10={};eligibility={};visitCount={};totalSteps=0 end
 -- GUI
 task.spawn(function()while true do task.wait(1);if cfg.ss_on then pcall(function()RS.Events.PlayerActivesCommand:FireServer({["Name"]="Super Smoothie"})end);task.wait(1200)end end end)
+-- Timed materials are independent from the farm state.  A disabled toggle
+-- leaves that material untouched; the first enabled use is immediate.
+boostLast={}
+task.spawn(function()while true do
+local now=os.clock()
+local timed={{key="boost_purple_potion",name="Purple Potion",cd=900},{key="boost_glue",name="Glue",cd=600},{key="boost_oil",name="Oil",cd=600},{key="boost_enzymes",name="Enzymes",cd=600},{key="boost_tropical_drink",name="Tropical Drink",cd=600},{key="boost_red_extract",name="Red Extract",cd=600}}
+for _,it in ipairs(timed)do if cfg[it.key]and(not boostLast[it.key]or now-boostLast[it.key]>=it.cd)then pcall(function()RS.Events.PlayerActivesCommand:FireServer({["Name"]=it.name})end);boostLast[it.key]=now end end
+task.wait(5)
+end end)
+task.spawn(function()while true do task.wait(5)
+if cfg.ai_on and ENABLED and mLS and not aiBusy and os.clock()-(aiLast or 0)>=math.max(300,tonumber(cfg.ai_interval)or 600)then sendAIReport("interval")end
+end end)
+task.spawn(function()while true do task.wait(10)
+if mLS and os.clock()-(aiSnapshotLast or 0)>=10 then aiSnapshotLast=os.clock();saveAISnapshot()end
+end end)
 local sgV4=Instance.new("ScreenGui",G);sgV4.Name="MarmotZ_V4"
-local frV4=Instance.new("Frame",sgV4);frV4.Size=UDim2.new(0,440,0,310);frV4.Position=UDim2.new(0,10,0,10)
+local frV4=Instance.new("Frame",sgV4);frV4.Size=UDim2.new(0,440,0,390);frV4.Position=UDim2.new(0,10,0,10)
 frV4.BackgroundColor3=Color3.fromRGB(20,20,30);frV4.BorderSizePixel=0;frV4.Active=true;frV4.Draggable=true;Instance.new("UICorner",frV4).CornerRadius=UDim.new(0,8)
 local titleV4=Instance.new("TextLabel",frV4);titleV4.Size=UDim2.new(1,0,0,28);titleV4.BackgroundTransparency=1;titleV4.Position=UDim2.new(0,0,0,2)
 titleV4.Text="  Marmot Z v5.2.5";titleV4.TextColor3=Color3.fromRGB(150,200,255);titleV4.Font=Enum.Font.GothamBold;titleV4.TextSize=15;titleV4.TextXAlignment=Enum.TextXAlignment.Left
@@ -1587,6 +1889,20 @@ local sb=Instance.new("TextButton",tMain);sb.Size=UDim2.new(1,-8,0,30);sb.Positi
 local bTitle=Instance.new("TextLabel",tBoost);bTitle.Size=UDim2.new(1,0,0,22);bTitle.Position=UDim2.new(0,4,0,2);bTitle.BackgroundTransparency=1;bTitle.Text="Auto Use Materials";bTitle.TextColor3=Color3.new(1,1,1);bTitle.Font=Enum.Font.GothamBold;bTitle.TextSize=13;bTitle.TextXAlignment=Enum.TextXAlignment.Left
 local function mkToggle(y,name,key)local b=Instance.new("TextButton",tBoost);b.Size=UDim2.new(1,-8,0,30);b.Position=UDim2.new(0,4,0,y);b.BackgroundColor3=Color3.fromRGB(35,35,50);b.TextColor3=Color3.fromRGB(200,200,200);b.Font=Enum.Font.Gotham;b.TextSize=12;b.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",b).CornerRadius=UDim.new(0,4);b.MouseButton1Click:Connect(function()cfg[key]=not cfg[key];b.Text=(cfg[key]and"[X] "or"[ ] ")..name;b.TextColor3=cfg[key]and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200);saveCfg()end);b.Text=(cfg[key]and"[X] "or"[ ] ")..name;b.TextColor3=cfg[key]and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200);return b end
 local ssBtn=mkToggle(28,"Super Smoothie (20m)","ss_on")
+local purplePotionBtn=mkToggle(62,"Purple Potion (15m)","boost_purple_potion")
+local glueBtn=mkToggle(96,"Glue (10m)","boost_glue")
+local oilBtn=mkToggle(130,"Oil (10m)","boost_oil")
+local enzymesBtn=mkToggle(164,"Enzymes (10m)","boost_enzymes")
+local tropicalBtn=mkToggle(198,"Tropical Drink (10m)","boost_tropical_drink")
+local redExtractBtn=mkToggle(232,"Red Extract (10m)","boost_red_extract")
+local pepperX4Btn=mkToggle(266,"Pepper Patch x4 (Hachapuri)","pepper_x4")
+local aiBtn=mkToggle(300,"AI adviser (10m)","ai_on")
+local aiNowBtn=Instance.new("TextButton",tBoost);aiNowBtn.Size=UDim2.new(1,-8,0,30);aiNowBtn.Position=UDim2.new(0,4,0,334);aiNowBtn.BackgroundColor3=Color3.fromRGB(70,105,175);aiNowBtn.Text="Ask AI now (send current report)";aiNowBtn.TextColor3=Color3.new(1,1,1);aiNowBtn.Font=Enum.Font.GothamBold;aiNowBtn.TextSize=12;Instance.new("UICorner",aiNowBtn).CornerRadius=UDim.new(0,4)
+aiNowBtn.MouseButton1Click:Connect(function()
+if aiBusy then aiNowBtn.Text="AI request is already running";task.delay(2,function()aiNowBtn.Text="Ask AI now (send current report)"end);return end
+aiNowBtn.Text="Sending current report...";local sent=sendAIReport("manual GUI request",true)
+if sent then task.delay(3,function()if aiBusy then aiNowBtn.Text="AI is analyzing..."else aiNowBtn.Text="Sent — see marmot_z_ai_advice.json"end;task.delay(3,function()aiNowBtn.Text="Ask AI now (send current report)"end)end)else aiNowBtn.Text="Request unavailable";task.delay(2,function()aiNowBtn.Text="Ask AI now (send current report)"end)end
+end)
 -- Autofarm
 local faTitle=Instance.new("TextLabel",tAuto);faTitle.Size=UDim2.new(1,0,0,22);faTitle.Position=UDim2.new(0,4,0,2);faTitle.BackgroundTransparency=1;faTitle.Text="Autofarm Limits (0=unlimited)";faTitle.TextColor3=Color3.new(1,1,1);faTitle.Font=Enum.Font.GothamBold;faTitle.TextSize=12;faTitle.TextXAlignment=Enum.TextXAlignment.Left
 local function mkLimit(y,name,onKey,limKey,maxVal)local row=Instance.new("Frame",tAuto);row.Size=UDim2.new(1,-4,0,30);row.Position=UDim2.new(0,4,0,y);row.BackgroundTransparency=1
@@ -1597,6 +1913,7 @@ bx.FocusLost:Connect(function()local n=tonumber(bx.Text);if n and n>=0 and n<=(m
 local cocoTg,cocoBx=mkLimit(28,"Farm Coconuts","coco_on","coco_lim",11)
 local shwTg,shwBx=mkLimit(68,"Farm Showers","shower_on","shower_lim",15)
 local prpTg,prpBx=mkLimit(108,"Farm Precise Marks","purple_on","purple_lim",10)
+local comboTg,comboBx=mkLimit(148,"Farm Combo Coconuts","combo_on","combo_lim",50)
 -- Settings
 local sTitle=Instance.new("TextLabel",tSet);sTitle.Size=UDim2.new(1,0,0,22);sTitle.Position=UDim2.new(0,4,0,2);sTitle.BackgroundTransparency=1;sTitle.Text="Speedhack";sTitle.TextColor3=Color3.new(1,1,1);sTitle.Font=Enum.Font.GothamBold;sTitle.TextSize=13;sTitle.TextXAlignment=Enum.TextXAlignment.Left
 local function mkSpd(y,name,key)local l=Instance.new("TextLabel",tSet);l.Size=UDim2.new(0,100,0,22);l.Position=UDim2.new(0,4,0,y);l.BackgroundTransparency=1;l.Text=name;l.TextColor3=Color3.new(1,1,1);l.Font=Enum.Font.Gotham;l.TextSize=11;l.TextXAlignment=Enum.TextXAlignment.Left
@@ -1646,6 +1963,18 @@ bx.FocusLost:Connect(function()local n2=tonumber(bx.Text);if n2 and n2>=1 and n2
 plRows[k]={remL=remL,bar=barFill,k=k}
 end
 
+ -- Allowed Planters: these controls apply only to the four planters which
+ -- are selected by the nectar priority lists below.  Disabled planters are
+ -- skipped before PlayerActivesCommand is fired.
+ local allowedTitle=Instance.new("TextLabel",tPlant);allowedTitle.Size=UDim2.new(1,-8,0,18);allowedTitle.Position=UDim2.new(0,4,0,238);allowedTitle.BackgroundTransparency=1;allowedTitle.Text="Allowed Planters";allowedTitle.TextColor3=Color3.fromRGB(150,200,255);allowedTitle.Font=Enum.Font.GothamBold;allowedTitle.TextSize=12;allowedTitle.TextXAlignment=Enum.TextXAlignment.Left
+local allowedDefs={{"Pesticide Planter","allow_pesticide"},{"Tacky Planter","allow_tacky"},{"Blue Clay Planter","allow_blue_clay"},{"Red Clay Planter","allow_red_clay"},{"Petal Planter","allow_petal"},{"Hydroponic Planter","allow_hydroponic"},{"Heat-Treated Planter","allow_heat_treated"},{"The Planter Of Plenty","allow_planter_of_plenty"}}
+ for i,def in ipairs(allowedDefs)do
+ local col=(i-1)%2;local row=math.floor((i-1)/2)
+ local b=Instance.new("TextButton",tPlant);b.Size=UDim2.new(0,145,0,20);b.Position=UDim2.new(0,4+col*150,0,258+row*24);b.BackgroundColor3=Color3.fromRGB(35,35,50);b.Font=Enum.Font.Gotham;b.TextSize=10;b.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",b).CornerRadius=UDim.new(0,4)
+ local function updAllowed()b.Text=(cfg[def[2]]and"[X] "or"[ ] ")..def[1];b.TextColor3=cfg[def[2]]and Color3.fromRGB(100,255,100)or Color3.fromRGB(180,180,180)end
+ b.MouseButton1Click:Connect(function()cfg[def[2]]=not cfg[def[2]];updAllowed();saveCfg()end);updAllowed()
+ end
+
 -- ===== PATTERNS TAB (v5.0.7): анализатор паттернов =====
 patRefBtn=Instance.new("TextButton",tPat);patRefBtn.Size=UDim2.new(0,90,0,26);patRefBtn.Position=UDim2.new(0,4,0,2);patRefBtn.BackgroundColor3=Color3.fromRGB(35,35,50);patRefBtn.Text="Refresh";patRefBtn.TextColor3=Color3.fromRGB(100,255,100);patRefBtn.Font=Enum.Font.Gotham;patRefBtn.TextSize=11;Instance.new("UICorner",patRefBtn).CornerRadius=UDim.new(0,4)
 patCpyBtn=Instance.new("TextButton",tPat);patCpyBtn.Size=UDim2.new(0,90,0,26);patCpyBtn.Position=UDim2.new(0,100,0,2);patCpyBtn.BackgroundColor3=Color3.fromRGB(35,35,50);patCpyBtn.Text="Copy";patCpyBtn.TextColor3=Color3.fromRGB(200,200,200);patCpyBtn.Font=Enum.Font.Gotham;patCpyBtn.TextSize=11;Instance.new("UICorner",patCpyBtn).CornerRadius=UDim.new(0,4)
@@ -1664,7 +1993,9 @@ patRstBtn.MouseButton1Click:Connect(function()actLog={};lastPatAct="";epT0=total
 -- The Planter Of Plenty (+50% ВСЕ нектары, +50% рост в Pepper/Stump/Coconut/Mountain Top): inv -> Mountain Top, mot -> Stump, ref -> Coconut
 -- ФИКС: планер назывался "Head-Treated Planter" — такого предмета нет, FireServer уходил в пустоту; правильно "Heat-Treated Planter"
 NFIELDS={inv={"Mountain Top Field","Cactus Field","Clover Field"},ref={"Coconut Field","Blue Flower Field","Strawberry Field"},sat={"Pumpkin Patch","Pineapple Patch","Sunflower Field"},mot={"Rose Field","Stump Field","Mushroom Field","Spider Field"},comf={"Pine Tree Forest","Bamboo Field","Dandelion Field"}}
-NPREF={inv={"Heat-Treated Planter","The Planter Of Plenty","Hydroponic Planter"},ref={"Hydroponic Planter","The Planter Of Plenty","Petal Planter"},sat={"Petal Planter","The Planter Of Plenty","Heat-Treated Planter"},mot={"Heat-Treated Planter","The Planter Of Plenty","Petal Planter"},comf={"Petal Planter","Hydroponic Planter","The Planter Of Plenty"}}
+NPREF={inv={"Red Clay Planter","Pesticide Planter","Tacky Planter","Heat-Treated Planter","The Planter Of Plenty","Hydroponic Planter"},ref={"Blue Clay Planter","Pesticide Planter","Tacky Planter","Hydroponic Planter","The Planter Of Plenty","Petal Planter"},sat={"Tacky Planter","Pesticide Planter","Petal Planter","The Planter Of Plenty","Heat-Treated Planter"},mot={"Red Clay Planter","Pesticide Planter","Tacky Planter","Heat-Treated Planter","The Planter Of Plenty","Petal Planter"},comf={"Blue Clay Planter","Pesticide Planter","Tacky Planter","Petal Planter","Hydroponic Planter","The Planter Of Plenty"}}
+local ALLOW_KEYS={["Pesticide Planter"]="allow_pesticide",["Tacky Planter"]="allow_tacky",["Blue Clay Planter"]="allow_blue_clay",["Red Clay Planter"]="allow_red_clay",["Petal Planter"]="allow_petal",["Hydroponic Planter"]="allow_hydroponic",["Heat-Treated Planter"]="allow_heat_treated",["The Planter Of Plenty"]="allow_planter_of_plenty"}
+local function planterAllowed(name)local key=ALLOW_KEYS[name];return not key or cfg[key]~=false end
 POP_FIELD={inv="Mountain Top Field",mot="Stump Field",ref="Coconut Field"}
 PEPPER_FP="FP18-10-14"
 function getFieldPos(nm)
@@ -1748,7 +2079,7 @@ local placed=0
 for _,e in ipairs(defs)do
 if placed>=3 then break end
 local pname=nil
-for _,cand in ipairs(NPREF[e.k])do if not usedPl[cand]then pname=cand;break end end
+for _,cand in ipairs(NPREF[e.k])do if not usedPl[cand]and planterAllowed(cand)then pname=cand;break end end
 if pname then
 local flist=NFIELDS[e.k]
 plHist.used[e.k]=plHist.used[e.k]or{}
@@ -1860,6 +2191,29 @@ hchDodge=false;INT=false
 -- Wind Shrine убран (v5.0.3)
 for p,t in pairs(aT)do if not t.col and p.Parent and t.id==3835712489 then local r=h();if r then r.CFrame=CFrame.new(p.Position+Vector3.new(0,2,0))end;task.wait(0.5);break end end
 runSprinkler()
+-- Pepper x4 always starts with Glitter, then waits for the field boost before
+-- Loaded Dice is allowed to roll the Pepper Patch bonus.
+if cfg.pepper_x4 then pcall(function()RS.Events.PlayerActivesCommand:FireServer({["Name"]="Glitter"})end);task.wait(20)end
+local function pepperBuff()
+if not rps then return nil end
+local ok,res=pcall(function()return rps:InvokeServer()end);if not ok or type(res)~="table"then return nil end
+local fd={};fb(res,fd);local b=fd[2610733084]
+if b and rawget(b,"Removed")~=true then return b end
+return nil
+end
+while cfg.pepper_x4 do
+local b=pepperBuff()
+if b and tonumber(rawget(b,"Value")or 0)==4 then break end
+pcall(function()RS.Events.PlayerActivesCommand:FireServer({["Name"]="Loaded Dice"})end);task.wait(2.5)
+end
+if cfg.pepper_x4 then task.spawn(function()
+task.wait(890);pcall(function()RS.Events.PlayerActivesCommand:FireServer({["Name"]="Glitter"})end)
+task.wait(780);local before=pepperBuff();local oldStart=before and rawget(before,"Start")or 0
+while true do
+local b=pepperBuff();if b and tonumber(rawget(b,"Value")or 0)==4 and rawget(b,"Start")~=oldStart then break end
+pcall(function()RS.Events.PlayerActivesCommand:FireServer({["Name"]="Field Dice"})end);task.wait(1)
+end
+end)end
 pcall(function()RS.Events.PlayerActivesCommand:FireServer({["Name"]="Super Smoothie"})end);hchSmT0=os.clock()
 print("MarmotZ: Hachapuri cycle done, smoothie #2 in 20 min")
 end
@@ -1903,6 +2257,9 @@ shwBx.Text=tostring(cfg.shower_lim)
 prpTg.Text=(cfg.purple_on and"[X] "or"[ ] ").."Farm Precise Marks"
 prpTg.TextColor3=cfg.purple_on and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200)
 prpBx.Text=tostring(cfg.purple_lim)
+comboTg.Text=(cfg.combo_on and"[X] "or"[ ] ").."Farm Combo Coconuts"
+comboTg.TextColor3=cfg.combo_on and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200)
+comboBx.Text=tostring(cfg.combo_lim)
 for k,row in pairs(plRows or{})do local s=nectarRem[k]or 0;if type(row)=="table"then local tgt=(cfg["pl_"..row.k.."_h"]or 22)*3600;local frac=tgt>0 and math.min(1,s/tgt)or 0;row.remL.Text=string.format("%dh %02dm",math.floor(s/3600),math.floor((s%3600)/60));row.bar.Size=UDim2.new(frac,0,1,0)else row.Text=string.format("%dh %02dm",math.floor(s/3600),math.floor((s%3600)/60))end end
 end)
 end
@@ -1913,8 +2270,18 @@ end)
 -- RESPAWN
 L.CharacterAdded:Connect(function()
 task.wait(2);aT={};cQ={};lP=nil;curF=nil;tL="start";smT=nil;isCS=false;INT=false;cyc={chC=0};fP={};dupCnt=0;pollMS=0;eligibility={};visitCount={};totalSteps=0;replayBuffer={};replayIndex=1
-scorchActive=false;scorchRecording=false;scorchActions={};scorchStartH=0;scorchStartT=0;lastTLT=0;xfP=0;scP=0;lastBH=0;xGCH=0;scorchDupedMorphDone=false;scorchPurpleCount=0;scorchPurpleTime=0;scorchAllCHMode=false;scorchPurpleTotal=0;ndMorph=nil;scorchTPIndex=0;scorchTPTable={};scorchTPCycle=false;xfStartTime=0;flameCampStart=0;scorchAllCHT0=0;flCampAcc=0;flCampCd=0;cocoCnt=0;showerCnt=0;cocoCycle=0;showerCycle=0;purpleMarkCnt=0;rCC=0;rST=0;lastSOTime=0;hchDodge=false;hchBusy=false
-for _,v in pairs(activeTG)do if v.gui then pcall(function()v.gui:Destroy()end)end end;activeShowers={};activeBlooms={};activeCocos={};activeTG={};tokenVerify={};tokenBL=setmetatable({},{__mode="k"});greenCH_cache={}
+scorchActive=false;scorchRecording=false;scorchActions={};scorchStartH=0;scorchStartT=0;scorchTL=0;lastTLT=0;xfP=0;scP=0;lastBH=0;xGCH=0;scorchDupedMorphDone=false;scorchPurpleCount=0;scorchPurpleTime=0;scorchAllCHMode=false;scorchPurpleTotal=0;ndMorph=nil;scorchTPIndex=0;scorchTPTable={};scorchTPCycle=false;xfStartTime=0;flameCampStart=0;scorchAllCHT0=0;flCampAcc=0;flCampCd=0;cocoCnt=0;showerCnt=0;cocoCycle=0;showerCycle=0;purpleMarkCnt=0;rCC=0;rST=0;lastSOTime=0;hchDodge=false;hchBusy=false
+for _,v in pairs(activeTG)do if v.gui then pcall(function()v.gui:Destroy()end)end end;activeShowers={};activeBlooms={};activeCocos={};activeComboCocos={};activeTG={};tokenVerify={};tokenBL=setmetatable({},{__mode="k"});greenCH_cache={}
 for fl in pairs(flameCD)do flameCD[fl]=nil end;for fl in pairs(scytheParts)do scytheParts[fl]=nil end
+end)
+task.delay(3,function()
+local old=G:FindFirstChild("MarmotZ_AI_Question");if old then old:Destroy()end
+local ui=Instance.new("ScreenGui",G);ui.Name="MarmotZ_AI_Question";ui.ResetOnSpawn=false
+local f=Instance.new("Frame",ui);f.Size=UDim2.new(0,330,0,128);f.Position=UDim2.new(0,460,0,10);f.BackgroundColor3=Color3.fromRGB(20,25,38);f.BorderSizePixel=0;Instance.new("UICorner",f).CornerRadius=UDim.new(0,7)
+local title=Instance.new("TextLabel",f);title.Size=UDim2.new(1,-12,0,22);title.Position=UDim2.new(0,6,0,3);title.BackgroundTransparency=1;title.Text="Farm AI — вопрос";title.TextColor3=Color3.fromRGB(150,200,255);title.Font=Enum.Font.GothamBold;title.TextSize=13;title.TextXAlignment=Enum.TextXAlignment.Left
+local box=Instance.new("TextBox",f);box.Size=UDim2.new(1,-12,0,48);box.Position=UDim2.new(0,6,0,27);box.BackgroundColor3=Color3.fromRGB(35,42,58);box.TextColor3=Color3.new(1,1,1);box.PlaceholderText="Почему фарм сейчас слабый?";box.PlaceholderColor3=Color3.fromRGB(160,160,170);box.ClearTextOnFocus=false;box.MultiLine=true;box.TextWrapped=true;box.TextXAlignment=Enum.TextXAlignment.Left;box.TextYAlignment=Enum.TextYAlignment.Top;box.Font=Enum.Font.Gotham;box.TextSize=12;Instance.new("UICorner",box).CornerRadius=UDim.new(0,4)
+local btn=Instance.new("TextButton",f);btn.Size=UDim2.new(0,116,0,28);btn.Position=UDim2.new(0,6,0,82);btn.BackgroundColor3=Color3.fromRGB(70,105,175);btn.Text="Ask AI";btn.TextColor3=Color3.new(1,1,1);btn.Font=Enum.Font.GothamBold;btn.TextSize=12;Instance.new("UICorner",btn).CornerRadius=UDim.new(0,4)
+local status=Instance.new("TextLabel",f);status.Size=UDim2.new(1,-134,0,28);status.Position=UDim2.new(0,128,0,82);status.BackgroundTransparency=1;status.Text="Ответ будет в marmot_z_ai_advice.json";status.TextColor3=Color3.fromRGB(185,185,195);status.Font=Enum.Font.Gotham;status.TextSize=10;status.TextWrapped=true;status.TextXAlignment=Enum.TextXAlignment.Left
+btn.MouseButton1Click:Connect(function()local q=box.Text;if q:match("^%s*$")then status.Text="Введите вопрос";return end;btn.Text="Sending...";btn.Active=false;local ok=sendAIQuestion(q,function(a)status.Text=(a or"Ответ получен"):sub(1,120);btn.Text="Ask AI";btn.Active=true end);if not ok then status.Text="Запрос уже выполняется или proxy недоступен";btn.Text="Ask AI";btn.Active=true end end)
 end)
 print("Marmot Z v5.2.8 — Full script active.")
