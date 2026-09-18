@@ -1,5 +1,6 @@
--- Petal TP v10.3 (Configurable Toggle Key)
+-- Petal TP v10.4 (Toggle Key + Bee Zone Lock + Named Fields)
 -- Нажми TOGGLE_KEY для вкл/выкл
+-- НЕ телепортируется пока все пчёлы не в заданной зоне
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12,9 +13,9 @@ local Camera = Workspace.CurrentCamera
 local Events = ReplicatedStorage:FindFirstChild("Events")
 
 -- ===============================
--- НАСТРОЙКИ (МЕНЯЙ ЗДЕСЬ)
+-- НАСТРОЙКИ
 -- ===============================
-local TOGGLE_KEY        = Enum.KeyCode.G       -- Кнопка вкл/выкл (G, R, F, X и т.д.)
+local TOGGLE_KEY        = Enum.KeyCode.G
 local TP_INTERVAL       = 3.5
 local SCAN_INTERVAL     = 0.01
 local PETAL_WAIT        = 0.11
@@ -24,11 +25,21 @@ local BUFF_CAP          = 4
 local LOGS              = false
 local DEBUG_LOGS        = false
 
+-- ЗОНА ПЧЁЛ (XZ прямоугольник, Y игнорируется)
+local BEE_ZONE = {
+    minX = -537.67,
+    maxX = -444.33,
+    minZ = 476.75,
+    maxZ = 590.94,
+}
+
+-- ПОЛЯ С ИМЕНАМИ
 local HEIGHT_ZONES = {
-    {min = 20, max = 30, tpMin = 27, minX = -254.52, maxX = -166.23, minZ = 105.47, maxZ = 244.76},
-    {min = 36, max = 47, tpMin = 43, minX = -403, maxX = -258, minZ = 83, maxZ = 175},
-    {min = 87, max = 100, tpMin = 94},
-    {min = 115, max = 150, interval = 1.5},
+    {min = 20, max = 30, tpMin = 27, minX = -254.52, maxX = -166.23, minZ = 105.47, maxZ = 244.76, name = "Sunflower"},
+    {min = 36, max = 47, tpMin = 43, minX = -403, maxX = -258, minZ = 83, maxZ = 175, name = "Rose"},
+    {min = 44, max = 44, tpMin = 44, minX = -222.51, maxX = -136.08, minZ = -62.96, maxZ = 40.55, name = "Strawberry"},
+    {min = 87, max = 100, tpMin = 94, name = "Coconut"},
+    {min = 115, max = 150, interval = 1.5, name = "Pepper"},
 }
 
 local PETAL_COLORS = {
@@ -71,20 +82,13 @@ local VIP_PETALS = {
     ["Violet Petal"]     = true,
 }
 
-local FESTIVE_PETALS = {
-    ["Red Petal"]        = true,
-    ["Pink Petal"]       = true,
-    ["Periwinkle Petal"] = true,
-    ["Violet Petal"]     = true,
-    ["Scarlet Petal"]    = true,
-}
-
 local enabled = false
 local busy = false
 local cachedPetals = {}
 local hasFestiveBlessing = false
 local lastTPTime = 0
 local lastZoneInterval = TP_INTERVAL
+local beesInZone = false
 
 -- ===============================
 -- BUFF TRACKING
@@ -157,7 +161,44 @@ task.spawn(function()
 end)
 
 -- ===============================
+-- BEE ZONE CHECK
+-- ===============================
+local function areAllBeesInZone()
+    local beesFolder = Workspace:FindFirstChild("Bees")
+    if not beesFolder then return false end
+    local beeModels = beesFolder:GetChildren()
+    if #beeModels == 0 then return false end
+    for _, bee in ipairs(beeModels) do
+        local pos = nil
+        if bee:IsA("Model") then
+            local pp = bee.PrimaryPart
+            if pp then pos = pp.Position
+            else
+                local bp = bee:FindFirstChildWhichIsA("BasePart")
+                if bp then pos = bp.Position end
+            end
+        elseif bee:IsA("BasePart") then
+            pos = bee.Position
+        end
+        if not pos then return false end
+        if pos.X < BEE_ZONE.minX or pos.X > BEE_ZONE.maxX
+            or pos.Z < BEE_ZONE.minZ or pos.Z > BEE_ZONE.maxZ then
+            return false
+        end
+    end
+    return true
+end
 
+task.spawn(function()
+    while true do
+        beesInZone = areAllBeesInZone()
+        task.wait(0.2)
+    end
+end)
+
+-- ===============================
+-- CORE FUNCTIONS
+-- ===============================
 local function getHRP()
     local c = LP.Character
     if not c then return nil, nil end
@@ -197,13 +238,18 @@ local function getColorName(color)
     return nil
 end
 
+-- ===============================
+-- PETAL SCANNER
+-- ===============================
 task.spawn(function()
     while true do
         local particles = Workspace:FindFirstChild("Particles")
         local found = {}
         if particles then
             for _, obj in ipairs(particles:GetChildren()) do
-                if obj.Name == "PetalPart" and obj:IsA("BasePart") and isInZone(obj.Position) then found[#found + 1] = obj end
+                if obj.Name == "PetalPart" and obj:IsA("BasePart") and isInZone(obj.Position) then
+                    found[#found + 1] = obj
+                end
             end
         end
         cachedPetals = found
@@ -211,6 +257,9 @@ task.spawn(function()
     end
 end)
 
+-- ===============================
+-- TP COLLECT
+-- ===============================
 local function tpCollect(petal, colorName)
     if busy then return end
     if not petal or not petal.Parent then return end
@@ -270,13 +319,15 @@ local function tpCollect(petal, colorName)
     if LOGS then
         local fb = hasFestiveBlessing and " [FB]" or ""
         local zi = lastZoneInterval ~= TP_INTERVAL and (" [zone=" .. lastZoneInterval .. "s]") or ""
-        print("[Petal] " .. colorName .. fb .. zi .. " Y=" .. string.format("%.0f", tpY) .. " buffs=" .. countActiveBuffs() .. "/" .. BUFF_CAP)
+        local zn = getZoneForPos(petal.Position)
+        local fieldName = zn and zn.name and (" [" .. zn.name .. "]") or ""
+        print("[Petal] " .. colorName .. fieldName .. fb .. zi .. " Y=" .. string.format("%.0f", tpY) .. " buffs=" .. countActiveBuffs() .. "/" .. BUFF_CAP)
     end
     busy = false
 end
 
 -- ===============================
--- ВЫБОР ЦЕЛИ v10.2
+-- SELECT TARGET
 -- ===============================
 local function selectTarget()
     local hrp = getHRP()
@@ -302,7 +353,7 @@ local function selectTarget()
         end
     end
 
-    -- RED URGENT (абсолютный приоритет)
+    -- RED URGENT
     local redRem = getBuffRemaining("Red Petal")
     if redRem > 0 and redRem < RED_URGENT and byColor["Red Petal"] then
         if DEBUG_LOGS then print("[D] !!! RED URGENT rem=" .. string.format("%.1f", redRem) .. "s !!!") end
@@ -338,7 +389,6 @@ local function selectTarget()
     -- UNDER CAP → новые > продление
     local newCandidates = {}
     local refreshCandidates = {}
-
     for colorName, data in pairs(byColor) do
         local rem = getBuffRemaining(colorName)
         if rem == 0 then
@@ -348,13 +398,7 @@ local function selectTarget()
         end
     end
 
-    local candidates
-    if #newCandidates > 0 then
-        candidates = newCandidates
-    else
-        candidates = refreshCandidates
-    end
-
+    local candidates = #newCandidates > 0 and newCandidates or refreshCandidates
     if #candidates == 0 then return nil end
 
     table.sort(candidates, function(a, b)
@@ -367,21 +411,31 @@ local function selectTarget()
     return candidates[1].part, candidates[1].name
 end
 
--- ОСНОВНОЙ ЦИКЛ
+-- ===============================
+-- MAIN LOOP (с проверкой пчёл)
+-- ===============================
 task.spawn(function()
     while true do
         if enabled and not busy then
-            local elapsed = tick() - lastTPTime
-            if elapsed >= lastZoneInterval then
-                local petal, colorName = selectTarget()
-                if petal then tpCollect(petal, colorName) end
+            if not beesInZone then
+                if DEBUG_LOGS and tick() % 2 < 0.2 then
+                    print("[D] Waiting for bees to enter zone...")
+                end
+            else
+                local elapsed = tick() - lastTPTime
+                if elapsed >= lastZoneInterval then
+                    local petal, colorName = selectTarget()
+                    if petal then tpCollect(petal, colorName) end
+                end
             end
         end
         task.wait(0.2)
     end
 end)
 
--- УПРАВЛЕНИЕ (использует TOGGLE_KEY)
+-- ===============================
+-- TOGGLE
+-- ===============================
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.KeyCode == TOGGLE_KEY then
@@ -395,11 +449,23 @@ LP.CharacterAdded:Connect(function()
     busy = false; lastTPTime = 0; liveBuffs = {}; lastZoneInterval = TP_INTERVAL
 end)
 
+-- ===============================
+-- STATUS & API
+-- ===============================
 local function printStatus()
-    print("=== Petal v10.3 ===")
+    print("=== Petal v10.4 ===")
     print("  Toggle: " .. tostring(TOGGLE_KEY))
     print("  Cap: " .. BUFF_CAP .. " | Red urgent: <" .. RED_URGENT .. "s")
     print("  Active: " .. countActiveBuffs() .. "/" .. BUFF_CAP)
+    print("  Bee Zone: X[" .. BEE_ZONE.minX .. ".." .. BEE_ZONE.maxX .. "] Z[" .. BEE_ZONE.minZ .. ".." .. BEE_ZONE.maxZ .. "]")
+    print("  Bees in zone: " .. tostring(beesInZone))
+    print("  Fields:")
+    for i, z in ipairs(HEIGHT_ZONES) do
+        local xz = z.minX and string.format(" X[%.0f..%.0f] Z[%.0f..%.0f]", z.minX, z.maxX, z.minZ, z.maxZ) or ""
+        local intv = z.interval and (" int=" .. z.interval) or ""
+        local tp = z.tpMin and (" tp=" .. z.tpMin) or ""
+        print(string.format("    [%d] %-12s Y[%d..%d]%s%s%s", i, z.name or "?", z.min, z.max, tp, xz, intv))
+    end
     local sorted = {}
     for name, prio in pairs(COLOR_PRIORITY) do sorted[#sorted + 1] = {name, prio} end
     table.sort(sorted, function(a, b) return a[2] < b[2] end)
@@ -415,7 +481,8 @@ end
 getgenv().PT = {
     Add = function(min, max) HEIGHT_ZONES[#HEIGHT_ZONES + 1] = {min = min, max = max} printStatus() end,
     Set = function(...) HEIGHT_ZONES = {} local a = {...} for i = 1, #a, 2 do HEIGHT_ZONES[#HEIGHT_ZONES + 1] = {min = a[i], max = a[i+1]} end printStatus() end,
-    List = printStatus, Speed = function(t) TP_INTERVAL = t printStatus() end,
+    List = printStatus,
+    Speed = function(t) TP_INTERVAL = t printStatus() end,
     Wait = function(t) PETAL_WAIT = t printStatus() end,
     Urgent = function(t) RED_URGENT = t printStatus() end,
     Refresh = function(t) REFRESH_THRESHOLD = t printStatus() end,
@@ -425,7 +492,36 @@ getgenv().PT = {
     Log = function(on) LOGS = on == nil and not LOGS or on end,
     Debug = function(on) DEBUG_LOGS = on == nil and not DEBUG_LOGS or on print("Debug: " .. tostring(DEBUG_LOGS)) end,
     Buffs = printStatus,
+    BeeZone = function(x1, z1, x2, z2)
+        BEE_ZONE.minX = math.min(x1, x2)
+        BEE_ZONE.maxX = math.max(x1, x2)
+        BEE_ZONE.minZ = math.min(z1, z2)
+        BEE_ZONE.maxZ = math.max(z1, z2)
+        printStatus()
+    end,
+    BeeCheck = function()
+        print("Bees in zone: " .. tostring(areAllBeesInZone()))
+        local beesFolder = Workspace:FindFirstChild("Bees")
+        if beesFolder then
+            for _, bee in ipairs(beesFolder:GetChildren()) do
+                local pos = nil
+                if bee:IsA("Model") then
+                    local pp = bee.PrimaryPart or bee:FindFirstChildWhichIsA("BasePart")
+                    if pp then pos = pp.Position end
+                elseif bee:IsA("BasePart") then
+                    pos = bee.Position
+                end
+                if pos then
+                    local inZ = pos.X >= BEE_ZONE.minX and pos.X <= BEE_ZONE.maxX
+                        and pos.Z >= BEE_ZONE.minZ and pos.Z <= BEE_ZONE.maxZ
+                    print("  " .. bee:GetFullName() .. " X=" .. string.format("%.1f", pos.X) .. " Z=" .. string.format("%.1f", pos.Z) .. (inZ and " ✓" or " ✗ OUTSIDE"))
+                end
+            end
+        else
+            print("  No Bees folder found in Workspace")
+        end
+    end,
 }
 
 printStatus()
-print(tostring(TOGGLE_KEY):match("%w+$") .. " = toggle | PT.Key(\"R\") | PT.Debug() | PT.Buffs()")
+print(tostring(TOGGLE_KEY):match("%w+$") .. " = toggle | PT.Key(\"R\") | PT.Debug() | PT.Buffs() | PT.BeeCheck()")
