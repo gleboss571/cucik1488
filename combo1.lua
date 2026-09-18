@@ -1,11 +1,6 @@
 --[[
    ALT Combo Coconut Thrower (Firebase v7 - Compact GUI)
    Delta-совместим, Lua 5.1.
-   + CLOUDFLARE WORKER PROXY INTEGRATION v1.1
-   
-   Worker: https://combo.sosunock1488.workers.dev
-   Все Firebase запросы маршрутизируются через CF Worker
-   для обхода гео-блоков и CORS.
 --]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,7 +9,6 @@ local Workspace         = game:GetService("Workspace")
 
 -- ====================== НАСТРОЙКИ ======================
 local FIREBASE_URL        = "https://combo-6dd8a-default-rtdb.europe-west1.firebasedatabase.app"
-local WORKER_BASE         = "https://combo.sosunock1488.workers.dev"
 local ACCOUNT_ID          = 1
 local TOTAL_ACCOUNTS      = 2
 local START_DELAY         = 10
@@ -94,31 +88,16 @@ local function serverNow()
     return os.time() + serverTimeDelta
 end
 
--- ====================== CF WORKER PROXY ======================
--- Конвертирует Firebase URL → Worker URL
--- Input:  https://combo-6dd8a...firebasedatabase.app/comboQueue.json
--- Output: https://combo.sosunock1488.workers.dev/comboQueue.json
-local function toWorkerUrl(firebaseUrl)
-    local path = firebaseUrl:match("firebasedatabase%.app(.+)$")
-    if path then
-        return WORKER_BASE .. path
-    end
-    -- Fallback: если URL не匹配 Firebase формат, возвращаем как есть
-    warn("[CFProxy] Non-Firebase URL passed: " .. tostring(firebaseUrl))
-    return firebaseUrl
-end
-
+-- ====================== FIREBASE WORKER ======================
 local function safeRequest(url, method, body)
-    local workerUrl = toWorkerUrl(url)
     local result = nil
     for attempt = 1, 3 do
         local ok, res = pcall(function()
             return request({
-                Url     = workerUrl,
+                Url     = url,
                 Method  = method,
                 Headers = method ~= "GET" and {["Content-Type"] = "application/json"} or nil,
-                Body    = body,
-                Timeout = 10
+                Body    = body
             })
         end)
         if ok and res and res.StatusCode == 200 and res.Body then
@@ -126,12 +105,7 @@ local function safeRequest(url, method, body)
             result   = res.Body
             break
         end
-        -- Логируем статус для отладки
-        if ok and res then
-            fbStatus = "E" .. tostring(res.StatusCode)
-        else
-            fbStatus = "ERR" .. attempt
-        end
+        fbStatus = "ERR" .. attempt
         task.wait(attempt * 1.5)
     end
     if not result then fbStatus = "FAIL" end
