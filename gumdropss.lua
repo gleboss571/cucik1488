@@ -1,12 +1,7 @@
--- Star Aura Timer + Token TP + Gumdrops Counter v2.2
--- FLOW: 45с аура → ТП к токенам (цепочкой, без возврата) → ждём следующего гамми стара
---        (подсчёт гамдропов идёт параллельно, после 15с КД, до новой ауры)
--- FIX: ТП не возвращает на место — с токена сразу на следующий
--- FIX: ТП вооружён с конца ауры и работает, пока токены в зоне
--- FIX: Гамдропы считаются ТОЛЬКО вне ауры (после КД), не во время неё
--- FIX: Last Gumdrops виден при старте, сбрасывается после гамми стара
--- FIX: Таймер ауры статичный — refresh/add не сбрасывает отсчёт
--- FIX: Лут токенов ускорен (hold 0.05, gap 0.02, scan 0.05)
+-- Star Aura Timer + Token TP + Gumdrops Counter v2.3
+-- FIX: При подборе токена (взлёт вверх) → мгновенный переход к следующему
+-- FIX: Удаление из очереди по Y-движению, не по Parent=nil
+-- FLOW: AURA(45s) → TP chain (0.1s hold) → next token immediately
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -22,14 +17,15 @@ local Events = ReplicatedStorage:FindFirstChild("Events")
 -- НАСТРОЙКИ
 -- ===============================
 local AURA_DURATION    = 45
-local COOLDOWN         = 15   -- ★ КД после ауры, затем старт подсчёта гамдропов
+local COOLDOWN         = 15
 local TARGET_TOKEN_ID  = 1472135114
-local TOKEN_HOLD       = 0.05   -- ★ быстрее (было 0.11)
-local SCAN_RATE        = 0.05   -- ★ быстрее сканер (было 0.1)
-local TOKEN_GAP        = 0.02   -- ★ пауза между токенами (было 0.05)
-local TP_EMPTY_GRACE   = 1.0    -- ★ зона пуста столько сек → считаем токены исчезли
-local TP_ARM_TIMEOUT   = 30     -- ★ если токены так и не появились за это время → снять ТП
+local TOKEN_HOLD       = 0.1    -- ★ 0.1 секунды на токене
+local SCAN_RATE        = 0.05
+local TOKEN_GAP        = 0.0    -- ★ НУЛЕВАЯ пауза между токенами — сразу следующий
+local TP_EMPTY_GRACE   = 1.0
+local TP_ARM_TIMEOUT   = 30
 local TOGGLE_KEY       = Enum.KeyCode.H
+local COLLECT_Y_THRESHOLD = 2.0 -- ★ если токен поднялся на N стадов → считаем подобранным
 
 local TOKEN_ZONE = {
     minX = -537.67,
@@ -51,24 +47,22 @@ local tokenQueue         = {}
 local activeTokenParts   = {}
 
 local gumdropsCount     = 0
-local counting          = false  -- ★ true = идёт подсчёт (после КД, до новой ауры)
+local counting          = false
 local cooldownEnd       = 0
-local phase             = "IDLE"  -- IDLE | AURA | COOLDOWN | COUNTING
+local phase             = "IDLE"
 
--- ★ Флаги активности ауры (сбрасываются по Remove ИЛИ по истечении таймера)
 local gummyApplied  = false
 local scorchApplied = false
-
 local gummyEndTime  = 0
 local scorchEndTime = 0
 
--- ★ Показываем последний результат Gumdrops даже после завершения
-local lastGumdropsResult = 0  -- ★ виден сразу при старте (0), сброс в -1 в конце ауры
+local lastGumdropsResult = 0
+
+-- ★ Отслеживание Y-позиции токенов для детекта подбора
+local tokenBaseY = {}  -- part -> Y при регистрации
 
 -- ===============================
--- HOOK: детект Gumdrops
--- ★ Считаем ТОЛЬКО вне ауры (фаза подсчёта после КД)
--- ★ Ищем "Gumdrop" в любом аргументе FireServer (любой remote)
+-- HOOK: Gumdrops
 -- ===============================
 local function argsMentionGumdrop(args)
     for i = 1, #args do
@@ -90,7 +84,6 @@ oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
         local args = {...}
         if argsMentionGumdrop(args) then
             gumdropsCount = gumdropsCount + 1
-            print(string.format("[Gumdrops] +1 -> %d (remote=%s)", gumdropsCount, tostring(self)))
         end
     end
     return oldNamecall(self, ...)
@@ -195,68 +188,39 @@ statusLabel.Parent = frame
 
 -- ===============================
 -- SERVER BUFF EVENT
--- ★ Каждый Apply (пере)запускает/продлевает таймер
--- ★ Remove сбрасывает флаг немедленно
--- ★ Если Remove не пришёл — флаг сбросится сам по истечении таймера
 -- ===============================
 local SBE = Events and Events:FindFirstChild("ServerBuffEvent")
 if SBE then
-    SBE.OnClientEvent:Connect(function(action, buffName, arg3, arg4, arg5, arg6)
+    SBE.OnClientEvent:Connect(function(action, buffName, arg3, arg4)
         if action == "Apply" then
             local dur = AURA_DURATION
-            if type(arg4) == "number" and arg4 > 0 then
-                dur = arg4
-            elseif type(arg3) == "number" and arg3 > 0 and arg3 < 1000 then
-                dur = arg3
+            if type(arg4) == "number" and arg4 > 0 then dur = arg4
+            elseif type(arg3) == "number" and arg3 > 0 and arg3 < 1000 then dur = arg3 end
+
+            if buffName == "Gummy Star Aura" and not gummyVisible then
+                gummyApplied = true
+                gummyVisible = true
+                gummyEndTime = tick() + dur
+                gummyRemaining = dur
             end
 
-            if buffName == "Gummy Star Aura" then
-                -- ★ Пока аура активна — НЕ сбрасываем отсчёт (static countdown)
-                if not gummyVisible then
-                    gummyApplied = true
-                    gummyVisible = true
-                    gummyEndTime = tick() + dur
-                    gummyRemaining = dur
-                    print(string.format("[SBE] Gummy Star START, dur=%.1fs", dur))
-                else
-                    print("[SBE] Gummy refresh ignored (countdown static)")
-                end
-            end
-
-            if buffName == "Scorching Star Aura" then
-                -- ★ Пока аура активна — НЕ сбрасываем отсчёт (static countdown)
-                if not scorchVisible then
-                    scorchApplied = true
-                    scorchVisible = true
-                    scorchEndTime = tick() + dur
-                    scorchRemaining = dur
-                    print(string.format("[SBE] Scorching Star START, dur=%.1fs", dur))
-                else
-                    print("[SBE] Scorch refresh ignored (countdown static)")
-                end
+            if buffName == "Scorching Star Aura" and not scorchVisible then
+                scorchApplied = true
+                scorchVisible = true
+                scorchEndTime = tick() + dur
+                scorchRemaining = dur
             end
         end
 
         if action == "Remove" then
             if buffName == "Gummy Star Aura" then
-                gummyApplied = false  -- ★ Сброс флага → следующий Apply будет новым
-                gummyEndTime = 0
-                gummyRemaining = 0
-                gummyVisible = false
-                print("[SBE] Gummy Star REMOVED")
+                gummyApplied = false; gummyEndTime = 0; gummyRemaining = 0; gummyVisible = false
             end
-
             if buffName == "Scorching Star Aura" then
-                scorchApplied = false
-                scorchEndTime = 0
-                scorchRemaining = 0
-                scorchVisible = false
-                print("[SBE] Scorching Star REMOVED")
+                scorchApplied = false; scorchEndTime = 0; scorchRemaining = 0; scorchVisible = false
             end
         end
     end)
-else
-    warn("[StarTP] ServerBuffEvent not found!")
 end
 
 -- ===============================
@@ -264,46 +228,32 @@ end
 -- ===============================
 task.spawn(function()
     while true do
-        -- Обновляем remaining через tick()
         if gummyVisible then
             gummyRemaining = math.max(0, gummyEndTime - tick())
-            if gummyRemaining <= 0 then
-                gummyVisible = false
-                gummyApplied = false  -- ★ страховка: следующая аура сработает даже без Remove
-            end
+            if gummyRemaining <= 0 then gummyVisible = false; gummyApplied = false end
         end
-
         if scorchVisible then
             scorchRemaining = math.max(0, scorchEndTime - tick())
-            if scorchRemaining <= 0 then
-                scorchVisible = false
-                scorchApplied = false  -- ★ страховка
-            end
+            if scorchRemaining <= 0 then scorchVisible = false; scorchApplied = false end
         end
 
-        -- Gummy GUI
-        gummyLabel.Visible = gummyVisible
-        gummyBarBg.Visible = gummyVisible
+        gummyLabel.Visible = gummyVisible; gummyBarBg.Visible = gummyVisible
         if gummyVisible then
             gummyLabel.Text = string.format("Gummy: %.1fs", gummyRemaining)
             gummyBarFill.Size = UDim2.new(math.min(1, gummyRemaining / AURA_DURATION), 0, 1, 0)
         end
 
-        -- Scorch GUI
-        scorchLabel.Visible = scorchVisible
-        scorchBarBg.Visible = scorchVisible
+        scorchLabel.Visible = scorchVisible; scorchBarBg.Visible = scorchVisible
         if scorchVisible then
             scorchLabel.Text = string.format("Scorch: %.1fs", scorchRemaining)
             scorchBarFill.Size = UDim2.new(math.min(1, scorchRemaining / AURA_DURATION), 0, 1, 0)
         end
 
-        -- ★ Gumdrops GUI: живой счёт во время подсчёта, иначе последний результат
         if phase == "COUNTING" then
             gumdropsLabel.Visible = true
             gumdropsLabel.Text = string.format("Gumdrops: %d", gumdropsCount)
             gumdropsLabel.TextColor3 = Color3.fromRGB(220, 100, 220)
         elseif lastGumdropsResult >= 0 then
-            -- ★ Показываем последний результат, пока идёт аура
             gumdropsLabel.Visible = true
             gumdropsLabel.Text = string.format("Last: %d Gumdrops", lastGumdropsResult)
             gumdropsLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
@@ -311,19 +261,14 @@ task.spawn(function()
             gumdropsLabel.Visible = false
         end
 
-        -- Status
         local phaseText
         if phase == "AURA" then phaseText = "AURA ACTIVE"
         elseif phase == "COOLDOWN" then phaseText = "COOLDOWN"
         elseif phase == "COUNTING" then phaseText = "COUNTING"
         else phaseText = "WAIT" end
 
-        local tpText
-        if not tpEnabled then tpText = "OFF"
-        elseif tpActive then tpText = "TP"
-        else tpText = "idle" end
-
-        statusLabel.Text = string.format("%s | %s | Tokens: %d", phaseText, tpText, #tokenQueue)
+        statusLabel.Text = string.format("%s | %s | T:%d",
+            phaseText, tpActive and "TP" or (tpEnabled and "idle" or "OFF"), #tokenQueue)
 
         task.wait(0.1)
     end
@@ -331,7 +276,6 @@ end)
 
 -- ===============================
 -- TOKEN SCANNER
--- ★ Детект через Workspace.DescendantAdded — весь Workspace, любая глубина
 -- ===============================
 local function getTextureId(texture)
     local id = texture:match("id=(%d+)") or texture:match("rbxassetid://(%d+)")
@@ -343,19 +287,12 @@ local function isInTokenZone(pos)
         and pos.Z >= TOKEN_ZONE.minZ and pos.Z <= TOKEN_ZONE.maxZ
 end
 
--- ★ Детект токенов: событие DescendantAdded по ВСЕМУ Workspace (любая глубина)
 local function tryRegister(obj)
     if not obj or not obj.Parent then return end
-
-    -- obj может быть самим токеном (BasePart) или его Decal-потомком
     local part
-    if obj:IsA("BasePart") then
-        part = obj
-    elseif obj:IsA("Decal") and obj.Parent and obj.Parent:IsA("BasePart") then
-        part = obj.Parent
-    else
-        return
-    end
+    if obj:IsA("BasePart") then part = obj
+    elseif obj:IsA("Decal") and obj.Parent and obj.Parent:IsA("BasePart") then part = obj.Parent
+    else return end
 
     if part.Name ~= "C" then return end
     if activeTokenParts[part] then return end
@@ -368,26 +305,32 @@ local function tryRegister(obj)
     if not isInTokenZone(part.Position) then return end
 
     activeTokenParts[part] = true
+    tokenBaseY[part] = part.Position.Y  -- ★ запоминаем стартовую Y
     tokenQueue[#tokenQueue + 1] = {part = part, addedAt = tick()}
 end
 
 Workspace.DescendantAdded:Connect(tryRegister)
+for _, obj in ipairs(Workspace:GetDescendants()) do tryRegister(obj) end
 
--- Начальный скан (токены, появившиеся до запуска скрипта)
-for _, obj in ipairs(Workspace:GetDescendants()) do
-    tryRegister(obj)
-end
-
--- Чистка очереди от исчезнувших токенов
+-- ★ Чистка + детект подбора через Y-движение
 task.spawn(function()
     while true do
         local filtered = {}
         for _, entry in ipairs(tokenQueue) do
             local p = entry.part
             if p and p.Parent and activeTokenParts[p] then
-                filtered[#filtered + 1] = entry
+                -- ★ Детект подбора: токен взлетел вверх
+                local baseY = tokenBaseY[p] or p.Position.Y
+                if p.Position.Y - baseY > COLLECT_Y_THRESHOLD then
+                    -- Токен подобран → убираем из очереди
+                    activeTokenParts[p] = nil
+                    tokenBaseY[p] = nil
+                else
+                    filtered[#filtered + 1] = entry
+                end
             elseif p then
                 activeTokenParts[p] = nil
+                tokenBaseY[p] = nil
             end
         end
         tokenQueue = filtered
@@ -404,7 +347,6 @@ local function getHRP()
     return c:FindFirstChild("HumanoidRootPart"), c:FindFirstChildOfClass("Humanoid")
 end
 
--- ★ Камера пинится один раз на всю серию тп и возвращается в конце
 local camLocked = false
 local camSavedCF, camSavedType
 
@@ -425,13 +367,11 @@ local function endCollection()
         camLocked = false
     end
     local _, hum = getHRP()
-    if hum then
-        hum.AutoRotate = true
-        hum:ChangeState(Enum.HumanoidStateType.Running)
-    end
+    if hum then hum.AutoRotate = true; hum:ChangeState(Enum.HumanoidStateType.Running) end
 end
 
--- ★ ТП на токен без возврата: держимся TOKEN_HOLD и сразу идём к следующему
+-- ★ ТП: стоим 0.1с, потом СРАЗУ следующий (TOKEN_GAP = 0)
+-- ★ Если токен улетел вверх во время hold → прерываем и берём следующий
 local function tpToToken(part)
     if not part or not part.Parent then return false end
     local hrp, hum = getHRP()
@@ -441,6 +381,7 @@ local function tpToToken(part)
     hum.AutoRotate = false
 
     local targetCF = CFrame.new(part.Position.X, part.Position.Y, part.Position.Z)
+    local baseY = tokenBaseY[part] or part.Position.Y
 
     local hbConn = RunService.Heartbeat:Connect(function()
         if hrp.Parent then
@@ -450,92 +391,75 @@ local function tpToToken(part)
         end
     end)
 
-    task.wait(TOKEN_HOLD)
-    hbConn:Disconnect()
+    -- ★ Ждём TOKEN_HOLD, но прерываем если токен улетел вверх
+    local startTime = tick()
+    while tick() - startTime < TOKEN_HOLD do
+        -- Проверяем: токен ещё на месте?
+        if not part.Parent or part.Position.Y - baseY > COLLECT_Y_THRESHOLD then
+            break  -- ★ Токен подобран → выходим немедленно
+        end
+        task.wait(0.01)
+    end
 
+    hbConn:Disconnect()
     return true
 end
 
 -- ===============================
 -- MAIN STATE MACHINE
--- ★ ТП: вооружён с конца ауры, работает пока токены в зоне, затем ждёт следующего гамми стара
--- ★ Гамдропы: считаются после КД 15с, до новой ауры
--- ★ Детектит окончание через tick() сравнение, не через SBE Remove
 -- ===============================
 task.spawn(function()
     local wasGummyActive = false
-    local emptySince = nil   -- когда зона опустела (nil = есть токены)
-    local sawToken   = false -- видели ли хоть один токен с момента вооружения
-    local armedAt    = 0     -- когда ТП вооружён
+    local emptySince = nil
+    local sawToken = false
+    local armedAt = 0
 
     while true do
-        -- ★ Активна = visible И remaining > 0 И применялась
         local gummyNow = gummyApplied and gummyVisible and gummyRemaining > 0
 
-        -- ★ Новая аура: сохраняем прошлый итог, начинаем цикл заново
         if not wasGummyActive and gummyNow then
-            if counting then
-                lastGumdropsResult = gumdropsCount  -- итог прошлого цикла
-            end
-            counting = false
-            gumdropsCount = 0
+            if counting then lastGumdropsResult = gumdropsCount end
+            counting = false; gumdropsCount = 0
             if tpActive then endCollection() end
-            tpActive = false
-            emptySince = nil
-            sawToken = false
-            cooldownEnd = 0
+            tpActive = false; emptySince = nil; sawToken = false; cooldownEnd = 0
             phase = "AURA"
-            print("[StarTP] New Gummy Star → AURA")
         end
 
-        -- ★ Конец ауры: вооружаем ТП + старт 15с КД
         if wasGummyActive and not gummyNow then
-            lastGumdropsResult = -1  -- ★ Last сбрасывается после гамми стара
+            lastGumdropsResult = -1
             counting = false
             tpActive = tpEnabled
-            emptySince = nil
-            sawToken = false
-            armedAt = tick()
+            emptySince = nil; sawToken = false; armedAt = tick()
             cooldownEnd = tick() + COOLDOWN
             phase = "COOLDOWN"
-            print(string.format("[StarTP] Gummy ended → TP armed + %ds cooldown", COOLDOWN))
         end
 
-        -- ★ КД прошёл → старт подсчёта гамдропов (до новой ауры)
         if phase == "COOLDOWN" and tick() >= cooldownEnd then
-            counting = true
-            gumdropsCount = 0
-            phase = "COUNTING"
-            print("[StarTP] Cooldown done → COUNTING gumdrops")
+            counting = true; gumdropsCount = 0; phase = "COUNTING"
         end
 
-        -- ★ ТП: пока вооружён — тепаемся ко всем токенам в зоне
         if tpActive and tpEnabled then
             if #tokenQueue > 0 then
-                sawToken = true
-                emptySince = nil
+                sawToken = true; emptySince = nil
                 local entry = tokenQueue[1]
                 if entry and entry.part and entry.part.Parent then
                     tpToToken(entry.part)
+                    -- ★ После hold: убираем токен из очереди (он либо подобран, либо мы уходим)
+                    table.remove(tokenQueue, 1)
+                    activeTokenParts[entry.part] = nil
+                    tokenBaseY[entry.part] = nil
                 else
                     table.remove(tokenQueue, 1)
                 end
-                task.wait(TOKEN_GAP)
+                -- ★ TOKEN_GAP = 0 → никакого ожидания, сразу следующий
             else
-                -- Зона пуста: ждём грейс, потом снимаем ТП до следующего гамми стара
                 emptySince = emptySince or tick()
                 local waited = tick() - emptySince
                 local noTokensEver = (not sawToken) and (tick() - armedAt >= TP_ARM_TIMEOUT)
                 if sawToken and waited >= TP_EMPTY_GRACE then
-                    tpActive = false
-                    emptySince = nil
-                    endCollection()
-                    print("[StarTP] Tokens gone → TP idle until next Gummy Star")
+                    tpActive = false; emptySince = nil; endCollection()
                 elseif noTokensEver then
-                    tpActive = false
-                    emptySince = nil
-                    endCollection()
-                    print("[StarTP] No tokens appeared → TP idle until next Gummy Star")
+                    tpActive = false; emptySince = nil; endCollection()
                 end
             end
         end
@@ -552,34 +476,19 @@ UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.KeyCode == TOGGLE_KEY then
         tpEnabled = not tpEnabled
-        if not tpEnabled then
-            tpActive = false
-            endCollection()
-        end
+        if not tpEnabled then tpActive = false; endCollection() end
         print("[StarTP] TP " .. (tpEnabled and "ON" or "OFF"))
     end
 end)
 
 LP.CharacterAdded:Connect(function()
     if tpActive then endCollection() end
-    tpActive = false
-    tokenQueue = {}
-    activeTokenParts = {}
-    gumdropsCount = 0
-    counting = false
-    cooldownEnd = 0
-    lastGumdropsResult = 0
-    phase = "IDLE"
-    gummyVisible = false
-    scorchVisible = false
-    gummyApplied = false
-    scorchApplied = false
-    gummyEndTime = 0
-    scorchEndTime = 0
+    tpActive = false; tokenQueue = {}; activeTokenParts = {}; tokenBaseY = {}
+    gumdropsCount = 0; counting = false; cooldownEnd = 0; lastGumdropsResult = 0
+    phase = "IDLE"; gummyVisible = false; scorchVisible = false
+    gummyApplied = false; scorchApplied = false; gummyEndTime = 0; scorchEndTime = 0
 end)
 
-print("=== Star Aura + Token TP + Gumdrops v2.2 ===")
-print("  Flow: AURA(45s) -> TP chain through tokens (no return) -> wait next Gummy Star")
-print("  Gumdrops: counted after 15s cooldown, until next aura")
-print("  TP: ON by default | H = toggle")
+print("=== Star Aura + Token TP + Gumdrops v2.3 ===")
+print("  Hold=0.1s | Gap=0 | Instant next on collect")
 print("=============================================")
