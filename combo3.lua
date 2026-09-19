@@ -9,10 +9,10 @@ local Workspace         = game:GetService("Workspace")
 
 -- ====================== НАСТРОЙКИ ======================
 local FIREBASE_URL        = "https://combo-6dd8a-default-rtdb.europe-west1.firebasedatabase.app"
-local ACCOUNT_ID          = 3
-local TOTAL_ACCOUNTS      = 3
+local ACCOUNT_ID          = 2
+local TOTAL_ACCOUNTS      = 2
 local START_DELAY         = 10
-local COMBO_DELAY         = 12
+local COMBO_DELAY         = 11
 local CYCLE_COUNT         = 14
 local CYCLE_DELAY         = 10
 local COCONUT_INTERVAL    = 10
