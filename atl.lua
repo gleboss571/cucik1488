@@ -3,8 +3,8 @@ local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
-local ABILITY_TOKEN_MULTIPLIER = 1.22
-local DIGITAL_BEE_LEVEL = 22
+local ABILITY_TOKEN_MULTIPLIER = 1.21
+local DIGITAL_BEE_LEVEL = 23
 local DUPED_HEIGHT_THRESHOLD = 5
 local LOGS = false
 
