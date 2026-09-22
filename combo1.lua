@@ -37,6 +37,7 @@ local lastValueChangeTime     = tick()
 local hasCanister             = false
 local hasPorcelain            = false
 local comboThread             = nil
+local cycleThread             = nil
 local totalThrows             = 0
 local cycleActive             = false
 local firstUpdateReceived     = false
@@ -79,6 +80,12 @@ local isPaused        = false
 local valueHistory     = {}
 local lastWrittenValue = -1
 
+-- Queue safety / arbitration
+local queueWriteBusy      = false
+local queueClaimBlocked   = false -- после броска не позволяем тому же аккаунту сразу вернуть очередь
+local lastQueueOwnerWrite = 0
+
+local addLog
 local logLines = {"", "", ""}
 
 local fbWriteQueue = {}
@@ -131,15 +138,26 @@ end)
 local SV_TIMESTAMP = '{".sv":"timestamp"}'
 
 local function writeThrowBatch(nextQueue)
+    -- Критическая запись: queue + lastThrowTime должны уйти одним PATCH.
+    if queueWriteBusy then
+        return false
+    end
+    queueWriteBusy = true
+
     local data = string.format(
         '{"comboQueue":%d,"comboThrownBy":%d,"lastThrowTime":{".sv":"timestamp"}}',
         nextQueue, ACCOUNT_ID
     )
-    fbWriteAsync(FIREBASE_URL .. "/.json", "PATCH", data)
-    cachedQueue    = nextQueue
-    lastQueueCheck = tick()
-    comboThrownBy  = ACCOUNT_ID
-    lastThrowTime  = serverNow()
+    local ok = safeRequest(FIREBASE_URL .. "/.json", "PATCH", data) ~= nil
+    if ok then
+        cachedQueue    = nextQueue
+        lastQueueCheck = tick()
+        comboThrownBy  = ACCOUNT_ID
+        lastThrowTime  = serverNow()
+        lastQueueOwnerWrite = tick()
+    end
+    queueWriteBusy = false
+    return ok
 end
 
 local function readQueue()
@@ -161,10 +179,25 @@ local function readQueueFresh()
 end
 
 local function writeQueue(value)
-    fbWriteAsync(FIREBASE_URL .. "/comboQueue.json", "PUT", tostring(value))
-    fbWriteAsync(FIREBASE_URL .. "/comboQueueLastUpdate.json", "PUT", SV_TIMESTAMP)
-    cachedQueue    = value
-    lastQueueCheck = tick()
+    value = tonumber(value) or 0
+    value = math.floor(value)
+
+    -- Очередь — критическое состояние. Пишем синхронно, чтобы следующий GET
+    -- не прочитал старое значение, пока локальный PUT ещё стоит в очереди.
+    if queueWriteBusy then
+        return false
+    end
+
+    queueWriteBusy = true
+    local ok = safeRequest(FIREBASE_URL .. "/comboQueue.json", "PUT", tostring(value)) ~= nil
+    if ok then
+        safeRequest(FIREBASE_URL .. "/comboQueueLastUpdate.json", "PUT", SV_TIMESTAMP)
+        cachedQueue    = value
+        lastQueueCheck = tick()
+        lastQueueOwnerWrite = tick()
+    end
+    queueWriteBusy = false
+    return ok
 end
 
 local function readLastUpdateTime()
@@ -186,10 +219,16 @@ local function readLastThrowTime()
 end
 
 local function writeMyValue(value)
-    fbWriteAsync(
-        FIREBASE_URL .. "/accountValues/" .. ACCOUNT_ID .. ".json",
-        "PUT", tostring(value)
-    )
+    local url = FIREBASE_URL .. "/accountValues/" .. ACCOUNT_ID .. ".json"
+
+    -- Значения 39 и выход из 39 критичны для очереди, поэтому для них
+    -- ждём подтверждение Firebase; обычные изменения остаются асинхронными.
+    local critical = (value == 39) or (lastWrittenValue == 39 and value ~= 39)
+    if critical then
+        safeRequest(url, "PUT", tostring(value))
+    else
+        fbWriteAsync(url, "PUT", tostring(value))
+    end
     lastWrittenValue = value
 end
 
@@ -234,10 +273,6 @@ local function writeMyStatus(state)
     fbWriteAsync(FIREBASE_URL .. "/status/" .. ACCOUNT_ID .. ".json", "PUT", data)
 end
 
-local function getNextQueue()
-    return (ACCOUNT_ID % TOTAL_ACCOUNTS) + 1
-end
-
 -- ====================== СИНХРОНИЗАЦИЯ ВРЕМЕНИ ======================
 local function syncServerTime()
     local body = safeRequest(
@@ -255,14 +290,54 @@ local function syncServerTime()
 end
 
 -- ====================== УМНАЯ ОЧЕРЕДЬ ======================
+-- Возвращает другой аккаунт, который действительно имеет 39.
+-- 0 = никто не готов; не назначаем очередь случайному аккаунту.
 local function findAccountWith39()
-    local values = readAllValues()
-    if not values then return getNextQueue() end
-    for i = 1, TOTAL_ACCOUNTS - 1 do
-        local checkId = (ACCOUNT_ID - 1 + i) % TOTAL_ACCOUNTS + 1
-        if values[checkId] == 39 then return checkId end
+    local values = readAllValues() or {}
+
+    for offset = 1, TOTAL_ACCOUNTS do
+        local checkId = (ACCOUNT_ID - 1 + offset) % TOTAL_ACCOUNTS + 1
+        if checkId ~= ACCOUNT_ID and values[checkId] == 39 then
+            return checkId
+        end
     end
-    return getNextQueue()
+
+    return 0
+end
+
+local function claimQueueIfReady(reason)
+    if lastValue ~= 39 or queueClaimBlocked or isPaused or not canThrow then
+        return false
+    end
+
+    if cachedQueue == ACCOUNT_ID then
+        return true
+    end
+
+    local values = readAllValues() or {}
+
+    -- Если текущий владелец очереди всё ещё реально имеет 39, не перетягиваем очередь.
+    if cachedQueue >= 1 and cachedQueue <= TOTAL_ACCOUNTS and cachedQueue ~= ACCOUNT_ID then
+        if values[cachedQueue] == 39 then
+            return false
+        end
+    end
+
+    -- Если очередь свободна и несколько аккаунтов одновременно готовы, выбираем
+    -- детерминированно наименьший ID, чтобы они не перетягивали очередь друг у друга.
+    if cachedQueue <= 0 then
+        for id = 1, ACCOUNT_ID - 1 do
+            if values[id] == 39 then
+                return false
+            end
+        end
+    end
+
+    local ok = writeQueue(ACCOUNT_ID)
+    if ok then
+        addLog("39 → Queue me" .. (reason and (" (" .. reason .. ")") or ""))
+    end
+    return ok
 end
 
 -- ====================== ПРЕДСКАЗАНИЕ ======================
@@ -435,7 +510,7 @@ local btnReset = Instance.new("TextButton")
 btnReset.Size             = UDim2.new(0, 58, 0, 16)
 btnReset.Position         = UDim2.new(0, 4, 0, BTN_Y)
 btnReset.BackgroundColor3 = Color3.fromRGB(160, 45, 45)
-btnReset.Text             = "Reset Q→1"
+btnReset.Text             = "Reset Q"
 btnReset.TextColor3       = Color3.fromRGB(255, 255, 255)
 btnReset.Font             = Enum.Font.Gotham
 btnReset.TextSize         = 8
@@ -465,7 +540,7 @@ btnPause.BorderSizePixel  = 0
 btnPause.Parent           = frame
 
 -- ====================== ЛОГ ======================
-local function addLog(msg)
+function addLog(msg)
     table.insert(logLines, 1, msg)
     if #logLines > 3 then table.remove(logLines, 4) end
     for i = 1, 3 do
@@ -699,6 +774,7 @@ end
 -- ====================== СБРОС ======================
 local function resetAllStates(reason)
     if comboThread then pcall(task.cancel, comboThread); comboThread = nil end
+    if cycleThread then pcall(task.cancel, cycleThread); cycleThread = nil end
     comboLock               = false
     comboStarting           = false
     comboLockTime           = 0
@@ -710,6 +786,7 @@ local function resetAllStates(reason)
     chainWatchActive        = false
     waitingCoconutGone      = false
     coconutSeenWhileMyQueue = false
+    queueClaimBlocked       = false
     stopGuiTimer()
     addLog("Reset: " .. (reason or "?"))
     updateGUI()
@@ -733,7 +810,7 @@ local function startCycle(count)
     ourCycleActive = true
     cycleStartTime = tick()
     updateGUI()
-    task.spawn(function()
+    cycleThread = task.spawn(function()
         local ok, err = pcall(function()
             task.wait(CYCLE_DELAY)
             for i = 1, count do
@@ -746,6 +823,7 @@ local function startCycle(count)
         cycleActive    = false
         ourCycleActive = false
         cycleStartTime = 0
+        cycleThread    = nil
         updateGUI()
     end)
 end
@@ -885,12 +963,18 @@ local function startCombo()
                 return
             end
 
+            -- Первый бросок освобождает очередь; фоновый цикл продолжается независимо.
             local nextQ = findAccountWith39()
             SpawnCoconut()
-            writeThrowBatch(nextQ)
+            local writeOk = writeThrowBatch(nextQ)
+            queueClaimBlocked = writeOk
             coconutSeenWhileMyQueue = false
             writeMyStatus("threw")
-            addLog("Threw! → Acc" .. nextQ)
+            if writeOk then
+                addLog("Threw! → Acc" .. tostring(nextQ))
+            else
+                addLog("Threw! → queue write failed")
+            end
             startCycle(CYCLE_COUNT)
         end)
 
@@ -940,7 +1024,6 @@ task.spawn(function()
                 and canThrow
                 and not comboLock
                 and not comboStarting
-                and not cycleActive
                 and not skipping
                 and not isPaused
             then
@@ -951,8 +1034,6 @@ task.spawn(function()
                     addLog("Not my turn Q=" .. tostring(queueToUse))
                 elseif comboLock then
                     addLog("Skip: comboLock")
-                elseif cycleActive then
-                    addLog("Skip: cycleActive")
                 elseif not canThrow then
                     addLog("Skip: canThrow=false")
                 elseif isPaused then
@@ -975,8 +1056,13 @@ task.spawn(function()
         task.wait(QUEUE_POLL_INTERVAL)
         if isPaused then continue end
         if canThrow and not comboLock and not comboStarting
-            and not skipping and not cycleActive then
+            and not skipping then
             readQueue()
+
+            if lastValue == 39 and not queueClaimBlocked then
+                claimQueueIfReady("poll")
+            end
+
             updateGUI()
             if cachedQueue == ACCOUNT_ID then
                 if coconutPresent then
@@ -1011,6 +1097,15 @@ PlayerAbilityEvent.OnClientEvent:Connect(function(data)
                 if value <= 34 then equipCanister() else equipPorcelain() end
                 updateGUI()
                 addLog("Init val=" .. value)
+                if value == 39 and not queueClaimBlocked then
+                    task.spawn(function()
+                        if claimQueueIfReady("init39") and not coconutPresent
+                            and cachedQueue == ACCOUNT_ID and not comboLock and not comboStarting
+                            and not isPaused then
+                            startCombo()
+                        end
+                    end)
+                end
                 return
             end
             if value ~= lastValue then
@@ -1020,22 +1115,36 @@ PlayerAbilityEvent.OnClientEvent:Connect(function(data)
                 writeMyValueIfSignificant(value)
                 updateGUI()
                 if value <= 34 then equipCanister() else equipPorcelain() end
-                if value < 39 and comboLock and comboThread then
-                    pcall(task.cancel, comboThread)
-                    waitingCoconutGone = false
-                    stopGuiTimer()
-                    comboThread   = nil
-                    comboLock     = false
-                    comboLockTime = 0
+
+                if value < 39 then
+                    queueClaimBlocked = false
+
+                    if comboLock and comboThread then
+                        pcall(task.cancel, comboThread)
+                        waitingCoconutGone = false
+                        stopGuiTimer()
+                        comboThread   = nil
+                        comboLock     = false
+                        comboLockTime = 0
+                    end
+
                     task.spawn(function()
                         local cur = readQueueFresh()
                         if cur == ACCOUNT_ID then
                             local t = findAccountWith39()
                             writeQueue(t)
-                            addLog("Val<39 → Acc" .. t)
+                            addLog("Val<39 → Acc" .. tostring(t))
                         end
                         coconutSeenWhileMyQueue = false
                         updateGUI()
+                    end)
+                elseif value == 39 and not queueClaimBlocked then
+                    task.spawn(function()
+                        if claimQueueIfReady("39") and not coconutPresent
+                            and cachedQueue == ACCOUNT_ID and not comboLock and not comboStarting
+                            and not isPaused then
+                            startCombo()
+                        end
                     end)
                 end
             end
@@ -1052,6 +1161,7 @@ btnPause.MouseButton1Click:Connect(function()
         btnPause.BackgroundColor3 = Color3.fromRGB(180, 130, 0)
         btnPause.Text             = "▶ Resume"
         if comboThread then pcall(task.cancel, comboThread); comboThread = nil end
+        if cycleThread then pcall(task.cancel, cycleThread); cycleThread = nil end
         stopGuiTimer()
         comboLock          = false
         comboStarting      = false
@@ -1063,8 +1173,9 @@ btnPause.MouseButton1Click:Connect(function()
         task.spawn(function()
             local cur = readQueueFresh()
             if cur == ACCOUNT_ID then
-                writeQueue(getNextQueue())
-                addLog("Paused → Acc" .. getNextQueue())
+                local t = findAccountWith39()
+                writeQueue(t)
+                addLog("Paused → Acc" .. tostring(t))
             end
             writeMyStatus("paused")
             updateGUI()
@@ -1088,6 +1199,7 @@ task.spawn(function()
             isPaused = serverPaused
             if isPaused then
                 if comboThread then pcall(task.cancel, comboThread); comboThread = nil end
+                if cycleThread then pcall(task.cancel, cycleThread); cycleThread = nil end
                 stopGuiTimer()
                 comboLock      = false
                 comboStarting  = false
@@ -1118,8 +1230,9 @@ local function onCharacterAdded()
     task.spawn(function()
         local cur = readQueueFresh()
         if cur == ACCOUNT_ID then
-            writeQueue(getNextQueue())
-            addLog("Respawn: Q → Acc" .. getNextQueue())
+            local t = findAccountWith39()
+            writeQueue(t)
+            addLog("Respawn: Q → Acc" .. tostring(t))
         end
         updateGUI()
     end)
@@ -1162,8 +1275,9 @@ task.spawn(function()
     local lastUpdate = readLastUpdateTime()
     if lastUpdate and (serverNow() - lastUpdate) > 300 then
         if ACCOUNT_ID == 1 then
-            writeQueue(1)
-            addLog("Queue idle >5m → reset")
+            local t = findAccountWith39()
+            writeQueue(t)
+            addLog("Queue idle >5m → reset to " .. tostring(t))
         end
     end
 
@@ -1185,6 +1299,15 @@ task.spawn(function()
     canThrow = true
     addLog("Start #" .. ACCOUNT_ID)
     updateGUI()
+    if lastValue == 39 and not queueClaimBlocked then
+        task.spawn(function()
+            if claimQueueIfReady("startup39") and not coconutPresent
+                and cachedQueue == ACCOUNT_ID and not comboLock and not comboStarting
+                and not isPaused then
+                startCombo()
+            end
+        end)
+    end
 end)
 
 -- ====================== ВОТЧДОГ ======================
@@ -1197,8 +1320,9 @@ task.spawn(function()
         local lastUpdate = readLastUpdateTime()
         if lastUpdate and (serverNow() - lastUpdate) > 180 then
             if ACCOUNT_ID == 1 then
-                writeQueue(1)
-                addLog("WD: Q dead → reset")
+                local t = findAccountWith39()
+                writeQueue(t)
+                addLog("WD: Q dead → reset to " .. tostring(t))
             end
         end
 
@@ -1254,7 +1378,7 @@ task.spawn(function()
 
         if since > CHAIN_TIMEOUT
             and not comboLock and not comboStarting
-            and not cycleActive and not skipping
+            and not skipping
             and not chainWatchActive and not isPaused
             and cachedQueue == ACCOUNT_ID and lastValue == 39
         then
@@ -1267,8 +1391,9 @@ task.spawn(function()
                     while coconutPresent do task.wait(COCONUT_SCAN) end
                 end
                 chainWatchActive = false
-                if canThrow and not comboLock and not cycleActive
+                if canThrow and not comboLock
                     and cachedQueue == ACCOUNT_ID and lastValue == 39 and not isPaused
+                    and not queueClaimBlocked
                 then
                     coconutSeenWhileMyQueue = false
                     addLog("Chain recover → combo")
@@ -1295,12 +1420,15 @@ end)
 -- ====================== КНОПКИ ======================
 btnReset.MouseButton1Click:Connect(function()
     resetAllStates("manual")
-    writeQueue(1)
-    addLog("Reset Q=1")
+    queueClaimBlocked = false
+    local t = (lastValue == 39 and ACCOUNT_ID) or findAccountWith39()
+    writeQueue(t)
+    addLog("Reset Q=" .. tostring(t))
     updateGUI()
 end)
 
 btnForce.MouseButton1Click:Connect(function()
+    queueClaimBlocked = false
     writeQueue(ACCOUNT_ID)
     addLog("Force Q=" .. ACCOUNT_ID)
     updateGUI()
