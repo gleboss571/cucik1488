@@ -56,6 +56,16 @@ local INSPIRE_TOKEN_URGENT_THRESHOLD = 0.5
 -- Минимальный интервал между TP.
 local TELEPORT_COOLDOWN = 0.1
 
+-- Невидимая круглая стена вокруг Inspire / Token Link
+-- при активном Inspire buff.
+local PROTECTED_RADIUS = 6
+local WALL_SEGMENTS = 16
+local WALL_HEIGHT = 20
+local WALL_THICKNESS = 0.8
+local WALL_ARC_SCALE = 1.10
+local walls = {}
+local activeTokens = {}
+
 -- Частота принятия решения.
 -- Нет полного сканирования Workspace.
 local DECISION_INTERVAL = 0.05
@@ -189,11 +199,143 @@ local function tokenKind(id)
 end
 
 -- ============================================================
+-- INVISIBLE 6-STUD TOKEN WALLS
+-- ============================================================
+
+local function destroyWall(part)
+    local group = walls[part]
+    if not group then
+        return
+    end
+
+    for _, wallPart in ipairs(group) do
+        if wallPart and wallPart.Parent then
+            wallPart:Destroy()
+        end
+    end
+
+    walls[part] = nil
+end
+
+local function destroyAllWalls()
+    for part in pairs(walls) do
+        destroyWall(part)
+    end
+end
+
+local function createWall(part)
+    if not part or not part.Parent or walls[part] then
+        return
+    end
+
+    local group = {}
+
+    -- Polygonal circular ring. The interior remains empty, so the
+    -- player cannot cross the 6-stud boundary from outside.
+    local circumference = 2 * math.pi * PROTECTED_RADIUS
+    local segmentLength =
+        (circumference / WALL_SEGMENTS) * WALL_ARC_SCALE
+
+    for i = 1, WALL_SEGMENTS do
+        local angle = ((i - 1) / WALL_SEGMENTS) * (2 * math.pi)
+
+        local x = math.cos(angle) * PROTECTED_RADIUS
+        local z = math.sin(angle) * PROTECTED_RADIUS
+
+        local wallPart = Instance.new("Part")
+        wallPart.Name = "InspireRefreshWall"
+        wallPart.Anchored = true
+        wallPart.CanCollide = true
+        wallPart.CanTouch = false
+        wallPart.CanQuery = false
+        wallPart.CastShadow = false
+        wallPart.Transparency = 1
+        wallPart.Size = Vector3.new(
+            segmentLength,
+            WALL_HEIGHT,
+            WALL_THICKNESS
+        )
+
+        -- X axis of the part follows the circle tangent.
+        wallPart.CFrame =
+            CFrame.new(
+                part.Position.X + x,
+                part.Position.Y,
+                part.Position.Z + z
+            )
+            * CFrame.Angles(0, angle + math.pi / 2, 0)
+
+        wallPart.Parent = Workspace
+        group[#group + 1] = wallPart
+    end
+
+    walls[part] = group
+end
+
+local function updateWallPositions()
+    for tokenPart, group in pairs(walls) do
+        if not tokenPart or not tokenPart.Parent then
+            destroyWall(tokenPart)
+        elseif activeTokens[tokenPart] and not activeTokens[tokenPart].teleported then
+            local tokenPos = tokenPart.Position
+
+            for i, wallPart in ipairs(group) do
+                if not wallPart or not wallPart.Parent then
+                    -- Rebuild if a wall segment was unexpectedly removed.
+                    destroyWall(tokenPart)
+                    createWall(tokenPart)
+                    break
+                end
+
+                local angle = ((i - 1) / WALL_SEGMENTS) * (2 * math.pi)
+
+                local x = math.cos(angle) * PROTECTED_RADIUS
+                local z = math.sin(angle) * PROTECTED_RADIUS
+
+                wallPart.CFrame =
+                    CFrame.new(
+                        tokenPos.X + x,
+                        tokenPos.Y,
+                        tokenPos.Z + z
+                    )
+                    * CFrame.Angles(0, angle + math.pi / 2, 0)
+            end
+        else
+            destroyWall(tokenPart)
+        end
+    end
+end
+
+local function syncWalls(buffRemaining)
+    if buffRemaining > INSPIRE_BUFF_REFRESH_THRESHOLD then
+        for part, data in pairs(activeTokens) do
+            if data
+                and not data.teleported
+                and part
+                and part.Parent
+            then
+                if not walls[part] then
+                    createWall(part)
+                end
+            else
+                destroyWall(part)
+            end
+        end
+
+        updateWallPositions()
+    else
+        -- Refresh window: remove every barrier before TP.
+        destroyAllWalls()
+    end
+end
+
+-- ============================================================
 -- TOKEN STATE
 -- ============================================================
 
 local function unregisterToken(part)
     activeTokens[part] = nil
+    destroyWall(part)
 end
 
 local function registerToken(part)
@@ -457,8 +599,11 @@ local function teleportToToken(data, reason)
 
     -- Один конкретный токен = максимум один TP.
     -- Токен может ещё физически существовать после подбора,
-    -- поэтому помечаем его consumed сразу и больше не выбираем.
+    -- поэтому помечаем его consumed сразу.
     data.teleported = true
+
+    -- Перед TP убираем защитное кольцо именно этого токена.
+    destroyWall(data.part)
 
     pcall(function()
         root.CFrame = CFrame.new(data.part.Position)
@@ -546,6 +691,10 @@ RunService.Heartbeat:Connect(function(dt)
 
     accumulator = 0
 
+    -- При активном buff > 0.5s строим 6-stud barriers.
+    -- В окне обновления barriers удаляются ДО выбора цели/TP.
+    syncWalls(getBuffRemaining())
+
     if teleportBusy then
         return
     end
@@ -586,6 +735,7 @@ end)
 LocalPlayer.CharacterAdded:Connect(function()
     teleportBusy = false
     lastTeleport = 0
+    destroyAllWalls()
 end)
 
 print("========================================")
@@ -597,5 +747,7 @@ print("[InspireRefresh] Inspire urgent <= 0.5s (only with active buff)")
 print("[InspireRefresh] Inspire buff refresh <= 0.5s")
 print("[InspireRefresh] No TP to Inspire/Token Link without active Inspire buff")
 print("[InspireRefresh] One TP per token object")
+print("[InspireRefresh] Invisible 6-stud collision ring while buff > 0.5s")
+print("[InspireRefresh] Walls removed before refresh TP")
 print("[InspireRefresh] Token priority: Token Link > Inspire")
 print("========================================")
