@@ -1,10 +1,9 @@
 --[[
-    Inspire Auto Refresh v2.0
-    CHANGES from original:
-    - Normal Inspire TP hold = 0.1s (was 1.1s for all)
-    - Duped Inspire TP hold = 1.1s with FULL FREEZE at player height
-    - Duped TP targets player Y, not token Y
-    - Character frozen (Anchored + velocity zero) during duped hold
+    Inspire Auto Refresh v2.1
+    FIX: Duped freeze теперь использует Heartbeat CFrame lock
+    вместо Anchored (который работает только локально).
+    Каждый кадр принудительно ставит HRP на место + обнуляет velocity.
+    Это работает даже против серверной физики.
 ]]
 
 local Workspace = game:GetService("Workspace")
@@ -33,9 +32,8 @@ local INSPIRE_TOKEN_URGENT_THRESHOLD = 0.5
 
 local DUPED_BUFF_REFRESH_THRESHOLD = 1.6
 
--- ★ РАЗНЫЕ HOLD ДЛЯ NORMAL И DUPED
-local NORMAL_INSPIRE_HOLD = 0.1    -- ★ обычные токены: 0.1с
-local DUPED_INSPIRE_HOLD = 1.1     -- ★ duped токены: 1.1с с заморозкой
+local NORMAL_INSPIRE_HOLD = 0.1
+local DUPED_INSPIRE_HOLD = 1.1
 
 local TELEPORT_COOLDOWN = 0.1
 
@@ -76,6 +74,7 @@ local multiInspireMode = false
 local dupedInspireHoldUntil = 0
 local dupedInspireHoldPart = nil
 local dupedFreezeActive = false
+local freezeLockCF = nil  -- ★ CFrame для принудительного удержания
 
 local inspireLifetimeQueueMode = false
 local inspireLifetimeLastPart = nil
@@ -153,52 +152,74 @@ local function tokenKind(id)
 end
 
 -- ============================================================
--- ★ CHARACTER FREEZE / UNFREEZE
+-- ★ CHARACTER FREEZE / UNFREEZE (v2.1 — Heartbeat CFrame Lock)
 -- ============================================================
 
-local function freezeCharacter()
+local freezeConnection = nil
+
+local function freezeCharacter(lockPosition)
     if dupedFreezeActive then return end
     local root = getRoot()
     local hum = getHumanoid()
     if not root then return end
-    
+
     dupedFreezeActive = true
-    
-    -- Anchored = true → персонаж не может двигаться
-    root.Anchored = true
-    root.AssemblyLinearVelocity = Vector3.zero
-    root.AssemblyAngularVelocity = Vector3.zero
-    
+    freezeLockCF = CFrame.new(lockPosition)
+
     if hum then
         hum.AutoRotate = false
     end
-    
-    log("FREEZE ON")
+
+    -- ★ Heartbeat lock: каждый кадр принудительно ставим CFrame + zero velocity
+    -- Это сильнее чем Anchored — перезаписывает серверную физику 60fps
+    if freezeConnection then freezeConnection:Disconnect() end
+    freezeConnection = RunService.Heartbeat:Connect(function()
+        if not dupedFreezeActive then return end
+        local r = getRoot()
+        if r and freezeLockCF then
+            r.CFrame = freezeLockCF
+            r.AssemblyLinearVelocity = Vector3.zero
+            r.AssemblyAngularVelocity = Vector3.zero
+        end
+    end)
+
+    -- Начальное применение
+    root.CFrame = freezeLockCF
+    root.AssemblyLinearVelocity = Vector3.zero
+    root.AssemblyAngularVelocity = Vector3.zero
+
+    log(string.format("FREEZE ON | pos=%.1f,%.1f,%.1f", lockPosition.X, lockPosition.Y, lockPosition.Z))
 end
 
 local function unfreezeCharacter()
     if not dupedFreezeActive then return end
     local root = getRoot()
     local hum = getHumanoid()
-    
+
     dupedFreezeActive = false
-    
+    freezeLockCF = nil
+
+    -- ★ Отключаем Heartbeat lock
+    if freezeConnection then
+        freezeConnection:Disconnect()
+        freezeConnection = nil
+    end
+
     if root then
-        root.Anchored = false
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
     end
-    
+
     if hum then
         hum.AutoRotate = true
         hum:ChangeState(Enum.HumanoidStateType.Running)
     end
-    
+
     log("FREEZE OFF")
 end
 
 -- ============================================================
--- INVISIBLE WALLS (unchanged)
+-- INVISIBLE WALLS
 -- ============================================================
 
 local function destroyWall(part)
@@ -393,18 +414,8 @@ local function cleanupExpiredTokens()
 end
 
 -- ============================================================
--- TARGET SELECTION (unchanged)
+-- TARGET SELECTION
 -- ============================================================
-
-local function getNormalInspireCount()
-    local count = 0
-    for part, data in pairs(activeTokens) do
-        if data and data.kind == "Inspire" and not data.duped and part and part.Parent and getRemaining(data) > 0 then
-            count += 1
-        end
-    end
-    return count
-end
 
 local function getNextNormalInspire(excludePart)
     local best, bestRemaining = nil, math.huge
@@ -443,7 +454,7 @@ local function getMostExpiringInspire(excludePart)
 end
 
 -- ============================================================
--- ★ TELEPORT (FIXED: different hold for normal/duped + freeze)
+-- ★ TELEPORT v2.1
 -- ============================================================
 
 local function teleportToToken(data, reason)
@@ -458,37 +469,37 @@ local function teleportToToken(data, reason)
     data.teleported = true
     destroyWall(data.part)
 
-    -- ★ DUPED: TP на высоте ПЕРСОНАЖА, не токена
     if data.duped and data.kind == "Inspire" then
+        -- ★ DUPED: TP под токен (X,Z токена, Y игрока) + Heartbeat freeze
         local playerY = root.Position.Y
+        local lockPos = Vector3.new(data.part.Position.X, playerY, data.part.Position.Z)
+
         pcall(function()
-            root.CFrame = CFrame.new(data.part.Position.X, playerY, data.part.Position.Z)
+            root.CFrame = CFrame.new(lockPos)
         end)
-        
-        -- ★ ЗАМОРОЗКА на DUPED_INSPIRE_HOLD (1.1с)
-        freezeCharacter()
+
+        freezeCharacter(lockPos)
         dupedInspireHoldPart = data.part
         dupedInspireHoldUntil = tick() + DUPED_INSPIRE_HOLD
-        
-        log(string.format("TP -> %s DUPED | reason=%s | FREEZE %.1fs | playerY=%.1f",
-            data.kind, tostring(reason), DUPED_INSPIRE_HOLD, playerY))
+
+        log(string.format("TP -> %s DUPED | reason=%s | FREEZE %.1fs | pos=%.1f,%.1f,%.1f",
+            data.kind, tostring(reason), DUPED_INSPIRE_HOLD, lockPos.X, lockPos.Y, lockPos.Z))
     else
-        -- ★ NORMAL: обычный TP на позицию токена
+        -- ★ NORMAL: обычный TP
         pcall(function()
             root.CFrame = CFrame.new(data.part.Position)
         end)
-        
-        -- ★ NORMAL hold = 0.1с, БЕЗ заморозки
+
         dupedInspireHoldPart = nil
         dupedInspireHoldUntil = tick() + NORMAL_INSPIRE_HOLD
-        
+
         log(string.format("TP -> %s NORMAL | reason=%s | hold=%.1fs",
             data.kind, tostring(reason), NORMAL_INSPIRE_HOLD))
     end
 
     lastTeleport = now
 
-    -- Multi-inspire queue logic (unchanged)
+    -- Multi-inspire queue logic
     if data.kind == "Inspire" and not data.duped then
         local remainingNormalAfter = 0
         for part, other in pairs(activeTokens) do
@@ -518,7 +529,7 @@ local function teleportToToken(data, reason)
 end
 
 -- ============================================================
--- DECISION (unchanged logic)
+-- DECISION
 -- ============================================================
 
 local function makeDecision()
@@ -527,24 +538,20 @@ local function makeDecision()
 
     if buffRemaining <= 0 then
         multiInspireMode = false; multiInspireTargetPart = nil; multiInspireHoldUntil = 0
-        -- ★ Разморозка если buff кончился
         if dupedFreezeActive then unfreezeCharacter() end
         dupedInspireHoldUntil = 0; dupedInspireHoldPart = nil
         inspireLifetimeQueueMode = false; inspireLifetimeLastPart = nil; inspireLifetimeHoldUntil = 0
         return nil, "NO_ACTIVE_INSPIRE_BUFF"
     end
 
-    -- ★ Hold после TP
     if dupedInspireHoldUntil > 0 then
         if tick() < dupedInspireHoldUntil then
             return nil, dupedFreezeActive and "DUPED_FREEZE_HOLD" or "NORMAL_HOLD"
         end
-        -- ★ Hold закончился → разморозка
         if dupedFreezeActive then unfreezeCharacter() end
         dupedInspireHoldUntil = 0; dupedInspireHoldPart = nil
     end
 
-    -- Lifetime queue
     if buffRemaining <= DUPED_BUFF_REFRESH_THRESHOLD then
         local nextInspire
         if inspireLifetimeQueueMode then
@@ -590,6 +597,7 @@ RunService.Heartbeat:Connect(function(dt)
     syncWalls(getBuffRemaining())
 
     -- ★ Не принимаем решения во время заморозки
+    -- (но Heartbeat freeze connection продолжает работать!)
     if teleportBusy or dupedFreezeActive then return end
 
     local target, reason = makeDecision()
@@ -613,7 +621,6 @@ end)
 LocalPlayer.CharacterAdded:Connect(function()
     teleportBusy = false; lastTeleport = 0
     multiInspireHoldUntil = 0; multiInspireTargetPart = nil; multiInspireMode = false
-    -- ★ Разморозка при респавне
     unfreezeCharacter()
     dupedInspireHoldUntil = 0; dupedInspireHoldPart = nil
     inspireLifetimeQueueMode = false; inspireLifetimeLastPart = nil; inspireLifetimeHoldUntil = 0
@@ -621,8 +628,7 @@ LocalPlayer.CharacterAdded:Connect(function()
 end)
 
 print("========================================")
-print("[InspireRefresh] v2.0 ACTIVE")
-print("[InspireRefresh] Normal hold=0.1s | Duped hold=1.1s+FREEZE")
-print("[InspireRefresh] Duped TP at player height")
-print("[InspireRefresh] Character anchored during duped hold")
+print("[InspireRefresh] v2.1 ACTIVE")
+print("[InspireRefresh] Duped freeze = Heartbeat CFrame lock (server-proof)")
+print("[InspireRefresh] Normal hold=0.1s | Duped hold=1.1s+LOCK")
 print("========================================")
