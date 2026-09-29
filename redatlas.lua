@@ -1,11 +1,11 @@
--- Marmot Z v5.3.0
+-- Marmot Z v5.3.1
 local P=game:GetService("Players");local W=game:GetService("Workspace")
 local R=game:GetService("RunService");local U=game:GetService("UserInputService")
 local RS=game:GetService("ReplicatedStorage");local H=game:GetService("HttpService")
 local V=game:GetService("VirtualInputManager");local D=game:GetService("Debris")
 local L=P.LocalPlayer;local G=L:WaitForChild("PlayerGui");local ENABLED=true;local ELA=true
 if not math.round then math.round=function(n)return math.floor(n+.5)end end
-Q_VERSION="Marmot Z - Glass UI v5.3.0"
+Q_VERSION="Marmot Z - Glass UI v5.3.1"
 task.wait(2)
 
 -- COMPAT
@@ -16,14 +16,14 @@ local function cfLookAt(from,to)local ok,res=pcall(function()return CFrame.lookA
 local gFCB,gFCPath,scanPreciseBee
 
 -- ERROR GUI
-local elog,egui,elbl,ebtn,ecnt={},nil,nil,nil,0
-local function mkE()pcall(function()if egui then return end
-egui=Instance.new("ScreenGui");egui.Name="E";egui.ResetOnSpawn=false;egui.Parent=G
-local b=Instance.new("Frame",egui);b.Size=UDim2.new(0,380,0,240);b.Position=UDim2.new(.5,-190,.5,-120)
+local elog,egui,elbl,ebtn,ecnt,ebox={},nil,nil,nil,0,nil
+local function mkE()pcall(function()if egui and egui.Parent then egui.Enabled=true;if ebox then ebox.Visible=true end;return end
+egui=Instance.new("ScreenGui");egui.Name="MarmotZ_ErrorLog";egui.ResetOnSpawn=false;egui.DisplayOrder=100;egui.Parent=G
+local b=Instance.new("Frame",egui);ebox=b;b.Size=UDim2.new(0,380,0,240);b.Position=UDim2.new(.5,-190,.5,-120)
 b.BackgroundColor3=Color3.fromRGB(15,15,25);b.BackgroundTransparency=.08;b.BorderSizePixel=0;b.Active=true;b.Draggable=true
 Instance.new("UICorner",b).CornerRadius=UDim.new(0,8)
 local t=Instance.new("TextLabel",b);t.Size=UDim2.new(1,-16,0,24);t.Position=UDim2.new(0,8,0,8);t.BackgroundTransparency=1
-t.Text="Marmot Z v5.2.9";t.TextColor3=Color3.fromRGB(255,180,60);t.Font=Enum.Font.GothamBold;t.TextSize=14;t.TextXAlignment=Enum.TextXAlignment.Left
+t.Text="Marmot Z v5.3.1 | Diagnostics";t.TextColor3=Color3.fromRGB(255,180,60);t.Font=Enum.Font.GothamBold;t.TextSize=14;t.TextXAlignment=Enum.TextXAlignment.Left
 elbl=Instance.new("TextLabel",b);elbl.Size=UDim2.new(1,-16,0,130);elbl.Position=UDim2.new(0,8,0,42);elbl.BackgroundTransparency=1
 elbl.Text="Marmot Z boot...";elbl.TextColor3=Color3.fromRGB(200,200,200);elbl.Font=Enum.Font.Code;elbl.TextSize=11;elbl.TextWrapped=true;elbl.RichText=true
 ebtn=Instance.new("TextButton",b);ebtn.Size=UDim2.new(0,140,0,28);ebtn.Position=UDim2.new(0,8,0,180)
@@ -32,10 +32,10 @@ Instance.new("UICorner",ebtn).CornerRadius=UDim.new(0,4)
 local cb=Instance.new("TextButton",b);cb.Size=UDim2.new(0,80,0,28);cb.Position=UDim2.new(0,156,0,180)
 cb.Text="Close";cb.TextColor3=Color3.fromRGB(220,220,220);cb.Font=Enum.Font.Gotham;cb.TextSize=11
 Instance.new("UICorner",cb).CornerRadius=UDim.new(0,4)
-cb.MouseButton1Click:Connect(function()egui.Enabled=false;egui:Destroy()end)
+cb.MouseButton1Click:Connect(function()if ebox then ebox.Visible=false end end)
 ebtn.MouseButton1Click:Connect(function()local x=table.concat(elog,"\n");if #x==0 then x="No errors"end;pcall(setclipboard,x);ebtn.Text="Done";task.wait(1.5);ebtn.Text="Copy logs"end)
-task.spawn(function()task.wait(4);if egui and ecnt==0 then egui.Enabled=false;egui:Destroy()end end)end)end
-local function le(m)ecnt=ecnt+1;table.insert(elog,string.format("[%02d] %s",ecnt,m));while #elog>20 do table.remove(elog,1)end;if elbl then local LL={};for i=math.max(1,#elog-12),#elog do table.insert(LL,elog[i])end;elbl.Text=table.concat(LL,"\n");if ecnt==1 then elbl.TextColor3=Color3.fromRGB(255,140,100)end end;warn("MarmotZ:",m)end
+task.spawn(function()task.wait(6);if egui and ecnt==0 and ebox then ebox.Visible=false end end)end)end
+local function le(m)ecnt=ecnt+1;table.insert(elog,string.format("[%02d] %s",ecnt,m));while #elog>20 do table.remove(elog,1)end;if not egui or not egui.Parent then egui=nil;mkE()end;if egui then egui.Enabled=true end;if ebox then ebox.Visible=true end;if elbl then local LL={};for i=math.max(1,#elog-12),#elog do table.insert(LL,elog[i])end;elbl.Text=table.concat(LL,"\n");elbl.TextColor3=Color3.fromRGB(255,140,100)end;warn("MarmotZ:",m)end
 local function lo(m)if elbl then elbl.Text="o "..m;elbl.TextColor3=Color3.fromRGB(140,255,160)end end
 mkE();lo("GUI OK")
 
@@ -1394,10 +1394,16 @@ for _i=1,#cQ do local ch=cQ[_i];if not ch.col and ch.pPos and ch.part.Position.Y
 if not best2 then return-1 end;tL="PredCH";INT=false
 if goTo(Vector3.new(best2.pPos.X,r2.Position.Y,best2.pPos.Z),3,5)then if best2.part.Parent and not best2.col then best2.col=true;if best2.isP then st.pr=st.pr+1;return 18 else st.ch=st.ch+1;return 12 end end;return 5 end;return-2 end
 if action=="go_token_near"then
-local r4=h();if not r4 then return-1 end;local bt4,bd4=nil,math.huge;local n4=os.clock()
-for p,t in pairs(aT)do if not t.col and p.Parent and not tokenBL[p]and t.p>=7 and(t.l-(n4-t.s))>0.3 and not btBlocked(p,t)and not moHold(t)then local d=d3(r4.Position,p.Position);if d<bd4 then bd4=d;bt4=p end end end
-if not bt4 then return-1 end;tL=aT[bt4].n;INT=false
-if goTo(bt4.Position,4,4)and bt4.Parent then aT[bt4].col=true;tokenBL[bt4]=os.clock()+1.2;return 3+aT[bt4].p*0.2 end;tokenBL[bt4]=os.clock()+3;return-2 end
+local r4=h();if not r4 then return-1 end;local n4=os.clock();local cand={}
+for p,t in pairs(aT)do if not t.col and p.Parent and not tokenBL[p]and t.p>=7 and(t.l-(n4-t.s))>0.3 and not btBlocked(p,t)and not moHold(t)then local rem=t.l-(n4-t.s);local dist=d3(r4.Position,p.Position);local nearby=0;for q,u in pairs(aT)do if q~=p and not u.col and q.Parent and not tokenBL[q] then local qrem=u.l-(n4-u.s);if qrem>0.35 and d3(p.Position,q.Position)<=13 then nearby=nearby+1 end end end;local score=rem+dist/35-nearby*0.22;table.insert(cand,{p=p,t=t,rem=rem,dist=dist,score=score})end end
+if #cand==0 then return-1 end
+-- Expiring tokens lead; nearby tokens are clustered only when they have enough lifetime left.
+table.sort(cand,function(a,b)if math.abs(a.rem-b.rem)>0.45 then return a.rem<b.rem end;return a.score<b.score end)
+local route={cand[1]};local used={[cand[1].p]=true};local cursor=cand[1].p.Position
+for _=2,math.min(3,#cand)do local best,bs=nil,math.huge;for _,e in ipairs(cand)do if not used[e.p] and e.rem>0.8 then local d=d3(cursor,e.p.Position);if d<=14 then local score=e.rem+d/28;if score<bs then best,bs=e,score end end end end;if not best then break end;table.insert(route,best);used[best.p]=true;cursor=best.p.Position end
+local rw=0;tL="Token cluster ("..#route..")";INT=false
+for _,e in ipairs(route)do if e.p.Parent and aT[e.p]and not aT[e.p].col then local rem=e.t.l-(os.clock()-e.t.s);if rem>0.25 and goTo(e.p.Position,4,3)and e.p.Parent then e.t.col=true;tokenBL[e.p]=os.clock()+1.2;rw=rw+3+e.t.p*0.2 else tokenBL[e.p]=os.clock()+0.8 end end end
+return rw>0 and rw or-2 end
 if action=="go_urgent_token"then
 local p=urgentToken();if not p or not p.Parent then return-1 end
 tL="Urgent token";INT=false
@@ -1618,7 +1624,7 @@ end end)
 
 -- INIT
 local mLS=false
-local function sML()if mLS then return end;mLS=true;task.wait(2);refreshServices();scriptStartH=getHoney()or 0;scriptStartT=os.clock();lSS();lPat();fAR();fF();lo("Marmot Z v5.3.0 ready! "..fmtH(scriptStartH));print("Marmot Z v5.3.0 — Complete");tL="init";lMT=os.clock()end
+local function sML()if mLS then return end;mLS=true;task.wait(2);refreshServices();scriptStartH=getHoney()or 0;scriptStartT=os.clock();lSS();lPat();fAR();fF();lo("Marmot Z v5.3.1 ready! "..fmtH(scriptStartH));print("Marmot Z v5.3.1 — Complete");tL="init";lMT=os.clock()end
 task.spawn(function()
 	while true do
 		task.wait(5)
@@ -1711,7 +1717,7 @@ local sgV4=Instance.new("ScreenGui",G);sgV4.Name="MarmotZ_V4"
 local frV4=Instance.new("Frame",sgV4);frV4.Size=UDim2.new(0,440,0,390);frV4.Position=UDim2.new(0,10,0,10)
 frV4.BackgroundColor3=Color3.fromRGB(20,20,30);frV4.BorderSizePixel=0;frV4.Active=true;frV4.Draggable=true;Instance.new("UICorner",frV4).CornerRadius=UDim.new(0,8)
 local titleV4=Instance.new("TextLabel",frV4);titleV4.Size=UDim2.new(1,0,0,28);titleV4.BackgroundTransparency=1;titleV4.Position=UDim2.new(0,0,0,2)
-titleV4.Text="  Marmot Z v5.2.9";titleV4.TextColor3=Color3.fromRGB(150,200,255);titleV4.Font=Enum.Font.GothamBold;titleV4.TextSize=15;titleV4.TextXAlignment=Enum.TextXAlignment.Left
+titleV4.Text="  Marmot Z v5.3.1";titleV4.TextColor3=Color3.fromRGB(150,200,255);titleV4.Font=Enum.Font.GothamBold;titleV4.TextSize=15;titleV4.TextXAlignment=Enum.TextXAlignment.Left
 local sideBar=Instance.new("Frame",frV4);sideBar.Size=UDim2.new(0,110,1,-34);sideBar.Position=UDim2.new(0,0,0,32);sideBar.BackgroundColor3=Color3.fromRGB(15,15,22);sideBar.BorderSizePixel=0;Instance.new("UICorner",sideBar).CornerRadius=UDim.new(0,6)
 local tMain=Instance.new("Frame",frV4);tMain.Size=UDim2.new(1,-120,1,-40);tMain.Position=UDim2.new(0,115,0,35);tMain.BackgroundTransparency=1;tMain.Visible=true
 local tBoost=Instance.new("Frame",frV4);tBoost.Size=UDim2.new(1,-120,1,-40);tBoost.Position=UDim2.new(0,115,0,35);tBoost.BackgroundTransparency=1;tBoost.Visible=false
@@ -2103,7 +2109,7 @@ scorchActive=false;scorchRecording=false;scorchActions={};scorchStartH=0;scorchS
 for _,v in pairs(activeTG)do if v.gui then pcall(function()v.gui:Destroy()end)end end;activeShowers={};activeBlooms={};activeCocos={};activeComboCocos={};activeTG={};tokenVerify={};tokenBL=setmetatable({},{__mode="k"});greenCH_cache={}
 for fl in pairs(flameCD)do flameCD[fl]=nil end;for fl in pairs(scytheParts)do scytheParts[fl]=nil end
 end)
-print("Marmot Z v5.3.0 — Full script active.")
+print("Marmot Z v5.3.1 — Full script active.")
 
 
 -- GLASS UI / ROUTE VISUALIZER / FALL RECOVERY
@@ -2145,6 +2151,7 @@ R.Heartbeat:Connect(function()
     end
 end)
 
+local _guiBuildOk, _guiBuildError = xpcall(function()
 -- Disable the legacy panel while keeping its backing controls alive for compatibility.
 pcall(function() if sgV4 then sgV4.Enabled = false end end)
 local oldGlass = G:FindFirstChild("MarmotZ_Glass")
@@ -2238,7 +2245,7 @@ header.Size = UDim2.new(1, 0, 0, 54)
 header.BackgroundTransparency = 1
 header.Parent = main
 label(header, "MARMOT Z", UDim2.new(0, 190, 0, 22), UDim2.new(0, 18, 0, 7), 17, C.text, true)
-label(header, "BEE SWARM AUTOMATION  /  v5.3.0", UDim2.new(0, 300, 0, 16), UDim2.new(0, 19, 0, 30), 9, C.muted, false)
+label(header, "BEE SWARM AUTOMATION  /  v5.3.1", UDim2.new(0, 300, 0, 16), UDim2.new(0, 19, 0, 30), 9, C.muted, false)
 local statusDot = Instance.new("Frame")
 statusDot.Size = UDim2.fromOffset(7, 7); statusDot.Position = UDim2.new(1, -106, 0, 23)
 statusDot.BackgroundColor3 = C.green; statusDot.BorderSizePixel = 0; statusDot.Parent = header; round(statusDot, 4)
@@ -2246,7 +2253,7 @@ local statusText = label(header, "ACTIVE", UDim2.fromOffset(60, 18), UDim2.new(1
 local closeBtn = button(header, "×", UDim2.fromOffset(30, 28), UDim2.new(1, -40, 0, 12), false)
 closeBtn.TextSize = 19
 closeBtn.MouseButton1Click:Connect(function() main.Visible = false end)
-U.InputBegan:Connect(function(input, processed) if not processed and input.KeyCode == Enum.KeyCode.RightShift then main.Visible = not main.Visible end end)
+-- Hotkey Manager input listener is registered after the keybind controls are created.
 
 local nav = Instance.new("Frame")
 nav.Size = UDim2.new(0, 142, 1, -68); nav.Position = UDim2.new(0, 10, 0, 58)
@@ -2393,7 +2400,47 @@ for i, def in ipairs(advDefs) do
     end)
     refresh(); advRows[def[2]] = refresh
 end
-label(advanced, "Updates are throttled to avoid unnecessary per-frame UI work.", UDim2.new(1, -8, 0, 28), UDim2.new(0, 6, 0, 236), 9, C.muted, false)
+label(advanced, "HOTKEY MANAGER  •  Click a key, then press a new key", UDim2.new(1, -8, 0, 18), UDim2.new(0, 6, 0, 228), 10, C.text, true)
+local hotkeys = {gui = Enum.KeyCode.RightShift, farm = Enum.KeyCode.F6, errors = Enum.KeyCode.F7}
+local waitingHotkey = nil
+local hotkeyButtons = {}
+local function keyName(key) return key == Enum.KeyCode.Unknown and "Unbound" or key.Name end
+local hotkeyDefs = {{"Toggle GUI", "gui"}, {"Toggle Autofarm", "farm"}, {"Toggle Error Log", "errors"}}
+for i, def in ipairs(hotkeyDefs) do
+    local x = (i-1) * (1/3)
+    local holder = Instance.new("Frame"); holder.Size = UDim2.new(1/3, -6, 0, 44); holder.Position = UDim2.new(x, 2, 0, 250); holder.BackgroundTransparency = 1; holder.Parent = advanced
+    label(holder, def[1], UDim2.new(1, 0, 0, 16), UDim2.new(0, 0, 0, 0), 9, C.muted, false)
+    local kb = button(holder, keyName(hotkeys[def[2]]), UDim2.new(1, -2, 0, 25), UDim2.new(0, 0, 0, 17), false)
+    hotkeyButtons[def[2]] = kb
+    kb.MouseButton1Click:Connect(function() waitingHotkey = def[2]; kb.Text = "Press key..."; kb.TextColor3 = C.accent end)
+end
+label(advanced, "Default: RightShift = GUI  •  F6 = Autofarm  •  F7 = Error Log", UDim2.new(1, -8, 0, 16), UDim2.new(0, 6, 0, 298), 8, C.muted, false)
+
+U.InputBegan:Connect(function(input, processed)
+    if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+    if waitingHotkey then
+        if input.KeyCode ~= Enum.KeyCode.Unknown then
+            hotkeys[waitingHotkey] = input.KeyCode
+            local b = hotkeyButtons[waitingHotkey]
+            if b then b.Text = keyName(input.KeyCode); b.TextColor3 = C.text end
+            waitingHotkey = nil
+        end
+        return
+    end
+    if processed then return end
+    if input.KeyCode == hotkeys.gui then main.Visible = not main.Visible
+    elseif input.KeyCode == hotkeys.farm then
+        ENABLED = not ENABLED
+        runBtn.Text = ENABLED and "STOP AUTOFARM" or "START AUTOFARM"
+        runBtn.BackgroundColor3 = ENABLED and C.accent or C.green
+        statusDot.BackgroundColor3 = ENABLED and C.green or C.red
+        statusText.Text = ENABLED and "ACTIVE" or "PAUSED"
+        statusText.TextColor3 = ENABLED and C.green or C.red
+    elseif input.KeyCode == hotkeys.errors then
+        if not egui or not egui.Parent then egui=nil;mkE() end
+        if egui then egui.Enabled = true;if ebox then ebox.Visible = not ebox.Visible end end
+    end
+end)
 
 local function makeRoutePart(name, color, size)
     local part = Instance.new("Part")
@@ -2488,4 +2535,6 @@ task.spawn(function()
     end
 end)
 
-print("Marmot Z v5.3.0 — Glass UI loaded.")
+end, function(err) return tostring(err) end)
+if not _guiBuildOk then le("GUI build failed: " .. tostring(_guiBuildError)) end
+print("Marmot Z v5.3.1 — Glass UI loaded.")
