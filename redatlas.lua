@@ -1,11 +1,11 @@
--- Marmot Z v5.3.0
+-- Marmot Z v5.2.8
 local P=game:GetService("Players");local W=game:GetService("Workspace")
 local R=game:GetService("RunService");local U=game:GetService("UserInputService")
 local RS=game:GetService("ReplicatedStorage");local H=game:GetService("HttpService")
 local V=game:GetService("VirtualInputManager");local D=game:GetService("Debris")
 local L=P.LocalPlayer;local G=L:WaitForChild("PlayerGui");local ENABLED=true;local ELA=true
 if not math.round then math.round=function(n)return math.floor(n+.5)end end
-Q_VERSION="Marmot Z - HRL & Velocity Overdrive v5.3.0"
+Q_VERSION="Marmot Z - HRL & Velocity Overdrive v5.2.8"
 task.wait(2)
 
 -- COMPAT
@@ -23,7 +23,7 @@ local b=Instance.new("Frame",egui);b.Size=UDim2.new(0,380,0,240);b.Position=UDim
 b.BackgroundColor3=Color3.fromRGB(15,15,25);b.BackgroundTransparency=.08;b.BorderSizePixel=0;b.Active=true;b.Draggable=true
 Instance.new("UICorner",b).CornerRadius=UDim.new(0,8)
 local t=Instance.new("TextLabel",b);t.Size=UDim2.new(1,-16,0,24);t.Position=UDim2.new(0,8,0,8);t.BackgroundTransparency=1
-t.Text="Marmot Z v5.3.0";t.TextColor3=Color3.fromRGB(255,180,60);t.Font=Enum.Font.GothamBold;t.TextSize=14;t.TextXAlignment=Enum.TextXAlignment.Left
+t.Text="Marmot Z v5.2.5";t.TextColor3=Color3.fromRGB(255,180,60);t.Font=Enum.Font.GothamBold;t.TextSize=14;t.TextXAlignment=Enum.TextXAlignment.Left
 elbl=Instance.new("TextLabel",b);elbl.Size=UDim2.new(1,-16,0,130);elbl.Position=UDim2.new(0,8,0,42);elbl.BackgroundTransparency=1
 elbl.Text="Marmot Z boot...";elbl.TextColor3=Color3.fromRGB(200,200,200);elbl.Font=Enum.Font.Code;elbl.TextSize=11;elbl.TextWrapped=true;elbl.RichText=true
 ebtn=Instance.new("TextButton",b);ebtn.Size=UDim2.new(0,140,0,28);ebtn.Position=UDim2.new(0,8,0,180)
@@ -168,7 +168,7 @@ local function getVec(x,y,z)return table.remove(vecPool)or Vector3.new(x,y,z)end
 local function retVec(v)if #vecPool<200 then v=Vector3.new(0,0,0);table.insert(vecPool,v)end end
 
 -- CONFIG
-local cfg={simple_gui=false,ss_on=false,sp_x10=90,sp_nab=70,sp_ref=75,coco_on=true,coco_lim=0,combo_on=true,combo_lim=0,shower_on=true,shower_lim=0,purple_on=true,purple_lim=0,hachapuri=false,pepper_x4=false,boost_purple_potion=false,boost_glue=false,boost_oil=false,boost_enzymes=false,boost_red_extract=false,boost_tropical_drink=false,pl_auto=false,pl_inv=false,pl_ref=false,pl_sat=false,pl_mot=false,pl_comf=false,pl_inv_h=22,pl_ref_h=22,pl_sat_h=22,pl_mot_h=22,pl_comf_h=22,pl_min=43,mv_mode="tp",tw_speed=150,rejoin_on=true,allow_pesticide=true,allow_tacky=true,allow_blue_clay=true,allow_red_clay=true,allow_petal=true,allow_hydroponic=true,allow_heat_treated=true,allow_planter_of_plenty=true}
+local cfg={ss_on=false,sp_x10=90,sp_nab=70,sp_ref=75,coco_on=true,coco_lim=0,combo_on=true,combo_lim=0,shower_on=true,shower_lim=0,purple_on=true,purple_lim=0,hachapuri=false,pepper_x4=false,boost_purple_potion=false,boost_glue=false,boost_oil=false,boost_enzymes=false,boost_red_extract=false,boost_tropical_drink=false,pl_auto=false,pl_inv=false,pl_ref=false,pl_sat=false,pl_mot=false,pl_comf=false,pl_inv_h=22,pl_ref_h=22,pl_sat_h=22,pl_mot_h=22,pl_comf_h=22,pl_min=43,mv_mode="tp",tw_speed=150,rejoin_on=true,allow_pesticide=true,allow_tacky=true,allow_blue_clay=true,allow_red_clay=true,allow_petal=true,allow_hydroponic=true,allow_heat_treated=true,allow_planter_of_plenty=true}
 local function saveCfg()if writefile then pcall(function()writefile("marmot_z_data.json",H:JSONEncode({cfg=cfg,plHist=plHist or PLHIST_LOADED}))end)end end
 local function loadCfg()if not readfile then return end
 local d=nil
@@ -417,6 +417,7 @@ end
 -- CROSSHAIR AVOIDANCE
 local cATCache={};local cATFrame=0
 local function gRCT(mP,dP,tp)
+if(not prec.isX or prec.nR)and not tp then return{}end
 if cATFrame~=hbF then cATCache={};cATFrame=hbF end
 local cached=cATCache[mP];if cached and cached.tp==tp then return cached.th end
 local mf=Vector3.new(mP.X,0,mP.Z)
@@ -447,33 +448,17 @@ end
 -- FIX #1: deterministic 8-way tangent bypass; no frame-to-frame side switching.
 local function cAT(mP,dP,targetIsPurple)
 local th=gRCT(mP,dP,targetIsPurple);if #th==0 then return nil end
-table.sort(th,function(a,b)return a.dist<b.dist end)
 local mf=Vector3.new(mP.X,0,mP.Z);local df=Vector3.new(dP.X,0,dP.Z);local b=th[1]
-local function segmentClearance(a,z)
-local seg=z-a;local len=seg.Magnitude;if len<0.05 then return false,-math.huge end
-local u=seg.Unit;local minClear=math.huge
-for _,q in ipairs(cQ)do
-if not q.col and q.part and q.part.Parent and not q.isP then
-local qp=Vector3.new(q.part.Position.X,0,q.part.Position.Z);local rr=math.max(q.part.Size.X,q.part.Size.Z)*0.5+6
-local along=math.clamp((qp-a):Dot(u),0,len);local nearest=a+u*along;local clear=(qp-nearest).Magnitude-rr
-if clear<minClear then minClear=clear end;if clear<0 then return false,clear end
-end
-end
-return true,minClear
-end
-local base=b.sz*0.5+(targetIsPurple and 11 or 10);local best,bestScore=nil,math.huge
-for ring=0,2 do local radius=base+ring*6
-for i=0,15 do local ang=i*math.pi/8;local wp=b.pos+Vector3.new(math.cos(ang)*radius,0,math.sin(ang)*radius)
-local ok1,c1=segmentClearance(mf,wp);local ok2,c2=segmentClearance(wp,df)
-if ok1 and ok2 then local clearance=math.min(c1,c2);local score=(wp-mf).Magnitude+(df-wp).Magnitude+80/math.max(clearance,0.5)
-if score<bestScore then bestScore=score;best=wp end end
-end end
+local r0=b.sz*.5+(targetIsPurple and 10 or 8);local best,bestScore=nil,math.huge
+local function clear(a,z)
+for _,q in ipairs(cQ)do if not q.col and q.part.Parent and not q.isP then
+local rr=math.max(q.part.Size.X,q.part.Size.Z)*.5+5;local v=z-a;local w=Vector3.new(q.part.Position.X,0,q.part.Position.Z)-a;local u=v.Magnitude>0 and v.Unit or ZERO
+local along=w:Dot(u);local side=(w-u*math.clamp(along,0,v.Magnitude)).Magnitude
+if along>0 and along<v.Magnitude and side<rr then return false end
+end end;return true end
+for i=0,7 do local ang=i*math.pi/4;local wp=b.pos+Vector3.new(math.cos(ang)*r0,0,math.sin(ang)*r0);if clear(mf,wp)and clear(wp,df)then local s=(wp-mf).Magnitude+(df-wp).Magnitude;if s<bestScore then bestScore=s;best=wp end end end
 st.chA=st.chA+1
-if best then return cP(Vector3.new(best.X,mP.Y,best.Z))end
-local travel=df-mf;local side=travel.Magnitude>0.1 and Vector3.new(-travel.Unit.Z,0,travel.Unit.X)or Vector3.new(1,0,0)
-local a=b.pos+side*(base+8);local z=b.pos-side*(base+8);local oka,ca=segmentClearance(mf,a);local okz,cz=segmentClearance(mf,z)
-local fallback=(oka and(not okz or ca>=cz))and a or z
-return cP(Vector3.new(fallback.X,mP.Y,fallback.Z))
+return best and cP(Vector3.new(best.X,mP.Y,best.Z))or cP(Vector3.new(b.pos.X,mP.Y,b.pos.Z+r0))
 end
 
 -- GREEN CH
@@ -754,45 +739,10 @@ end
 ptSeen=seen2
 table.sort(fP,function(a,b)local n5=os.clock();local la=(n5-(ptSeen[a.part]or 0))>=2.5;local lb=(n5-(ptSeen[b.part]or 0))>=2.5;if la~=lb then return la end;if a.pr~=b.pr then return a.pr<b.pr end;return a.dist<b.dist end)
 end
-local function isInCurrentField(pos)
-if not curF or not curF.part then return false end
-local c=curF.part.Position;local z=curF.part.Size
-return math.abs(pos.X-c.X)<=z.X*0.5 and math.abs(pos.Z-c.Z)<=z.Z*0.5
-end
-local function allAreaRings()
-local out,seen={},{}
-local function add(o)if o and o.Parent and o:IsA("BasePart")and o.Name=="AreaRing"and not seen[o]then seen[o]=true;out[#out+1]=o end end
-add(aR)
-local particles=W:FindFirstChild("Particles")
-if particles then for _,o in ipairs(particles:GetDescendants())do add(o)end end
-local direct=W:FindFirstChild("AreaRing");add(direct)
-return out
-end
-local function ringTargetFor(pos)
-local bestTarget,bestRing,bestScore=nil,nil,math.huge
-for _,ring in ipairs(allAreaRings())do
-local rad=math.max(5,(ring.Size.X+ring.Size.Z)*0.25)
-local off=Vector3.new(pos.X-ring.Position.X,0,pos.Z-ring.Position.Z)
-local dist=off.Magnitude;local dir=dist>0.05 and off.Unit or Vector3.new(1,0,0)
-local inside=dist<=rad*0.98
-local target=inside and Vector3.new(pos.X,ring.Position.Y,pos.Z)or Vector3.new(ring.Position.X+dir.X*rad*0.94,ring.Position.Y,ring.Position.Z+dir.Z*rad*0.94)
-local score=inside and dist*0.01 or math.abs(dist-rad)+1000
-if score<bestScore then bestScore=score;bestTarget=target;bestRing=ring end
-end
-return bestTarget,bestRing,(bestRing and d2Sq(pos,bestRing.Position)<=((bestRing.Size.X+bestRing.Size.Z)*0.25)^2)or false
-end
-local function sSm()
-local n=os.clock();smT=nil;smTR=math.huge;local r=h();if not r or dupCnt<6 then return end
-local best,bestRem=nil,math.huge
-for p,t in pairs(aT)do
-if not t.col and p.Parent and t.id==SMI and not tokenBL[p]then
-local rem=t.l-(n-t.s);local ringPos,_,inside=ringTargetFor(p.Position)
-if rem>0 and ringPos and(inside or d3(ringPos,p.Position)<=4)and rem<bestRem then best,bestRem=p,rem end
-end
-end
-smT=best;smTR=bestRem
-if smT and not isCS and not chBusy then INT=true end
-end
+local function sSm()local n=os.clock();smT=nil;smTR=math.huge;local r=h();if not r then return end;if dupCnt<6 then return end
+local bestInRing,bestInRem=nil,math.huge;local bestOut,bestOutRem=nil,math.huge
+for p,t in pairs(aT)do if not t.col and p.Parent and t.id==SMI and not tokenBL[p]then local rem=t.l-(n-t.s);if rem>0 then local inRing=(aR and aR.Parent and d2Sq(p.Position,aR.Position)<=aRR*aRR*1.2);if inRing and rem<bestInRem then bestInRem=rem;bestInRing=p elseif not inRing and rem<bestOutRem then bestOutRem=rem;bestOut=p end end end end
+if bestInRing then smT=bestInRing;smTR=bestInRem elseif bestOut then smT=bestOut;smTR=bestOutRem end;if smT and not isCS and not chBusy then INT=true end end
 local function scS()local pf=W:FindFirstChild("PlayerFlames");if not pf then return end;for fl,_ in pairs(scytheParts)do if not fl.Parent then scytheParts[fl]=nil;flameCD[fl]=nil end end;for _,f in ipairs(pf:GetChildren())do local nm=f.Name or"";if nm:sub(1,3)=="Flm"or nm:find("Scythe")or nm:find("Flame")then if not scytheParts[f]then scytheParts[f]={sT=os.clock(),hit=false}end end end end
 local PETAL_CLUSTER_R=12;local PETAL_CLUSTER_MIN=3
 local function gPetCluster()if #fP<PETAL_CLUSTER_MIN then return nil end;local clusters={};local used={}
@@ -1130,31 +1080,23 @@ end
 return-2
 end
 if action=="go_coconut"then
-local now=os.clock();local bestCo,bestScore=nil,math.huge
-for _,c2 in ipairs(activeCocos)do
-if not c2.collected and c2.part and c2.part.Parent then
-local age=now-(c2.spawnTime or now);local dist=d3(r.Position,c2.part.Position);local score=dist-math.min(age,4)*6
-if score<bestScore then bestScore=score;bestCo=c2 end
-end end
+local n=os.clock()
+local bestCo,bestCoD=nil,math.huge
+for i,c2 in ipairs(activeCocos)do if not c2.collected and c2.part.Parent then local dd=d3(r.Position,c2.part.Position);if dd<bestCoD then bestCoD=dd;bestCo=c2 end end end
 local coco=bestCo
 if coco then
-tL="Coco";INT=false;local hh=hm();local origSp=hh and hh.WalkSpeed or cS;if hh then hh.WalkSpeed=math.max(origSp,cS+12)end
-local cRad=math.max(coco.part.Size.X,coco.part.Size.Z)*0.5;local target=Vector3.new(coco.part.Position.X,r.Position.Y,coco.part.Position.Z)
-local reached=goTo(target,math.max(2,cRad*0.55),3.2)
-if reached then
-local hold=os.clock();local wasInside=false
-while coco.part and coco.part.Parent and os.clock()-hold<4.5 do
-task.wait(0.04);local rr=h();if not rr or not ENABLED then break end
-local liveTarget=Vector3.new(coco.part.Position.X,rr.Position.Y,coco.part.Position.Z)
-if hh then hh:MoveTo(liveTarget)end
-wasInside=wasInside or d2Sq(rr.Position,coco.part.Position)<=math.max(4,(cRad*0.72)^2)
-collectPassingLoot(rr);pcall(hitBloom);pcall(hitFlames)
-end
-if not coco.part.Parent or wasInside then coco.collected=true;cocoCnt=cocoCnt+1;cocoCycle=cocoCycle+1;if hh then hh.WalkSpeed=origSp end;return 40 end
-end
+tL="Coco";INT=false
+local hh=hm();local origSp=cS
+if hh then hh.WalkSpeed=cS+10 end
+-- FIX #12: collect when inside the WarningDisk-sized landing zone.
+local cRad=math.max(coco.part.Size.X,coco.part.Size.Z)*0.5
+local edgePos=Vector3.new(coco.part.Position.X,r.Position.Y,coco.part.Position.Z)
+if goTo(edgePos,cRad,2.5)then
 if hh then hh.WalkSpeed=origSp end
-end
-return-2 end
+if coco.part.Parent then
+coco.collected=true;cocoCnt=cocoCnt+1;cocoCycle=cocoCycle+1 end
+return 30 end
+if hh then hh.WalkSpeed=origSp end end;return-2 end
 if action=="go_crosshair_all"then
 local all=gCH(false,false,true);if #all==0 then return-1 end;all=variedCHRoute(all,r.Position)
 local rw=0;INT=false
@@ -1259,22 +1201,41 @@ return 5+aT[be].p*0.3
 end;return-3
 end;return-1
 end
-if action=="go_smile"then
-local sm=smT;if not sm or not sm.Parent then smT=nil;return-1 end;local td=aT[sm];if not td or td.col then smT=nil;return-1 end
-isCS=true;tL="Sm";INT=false;goSm=true;local hh=hm();local origSp=hh and hh.WalkSpeed or cS
-local bestPink,bestPinkD=nil,math.huge
-for _,fp in ipairs(fP)do
-if fp.cn=="Pink"and fp.part and fp.part.Parent and isInCurrentField(fp.part.Position)then local dd=d3(r.Position,fp.part.Position);if dd<bestPinkD then bestPink,bestPinkD=fp,dd end end
+if action=="go_smile"then local sm=smT;if not sm or not sm.Parent then smT=nil;return-1 end;local td=aT[sm];if not td or td.col then smT=nil;return-1 end;isCS=true;tL="Sm";INT=false;goSm=true;local hh=hm();local origSp=cS
+for _,fp in ipairs(fP)do if fp.cn=="Pink"and fp.part.Parent then if hh then hh.WalkSpeed=cS+10 end;tL="Sm+10";if goTo(Vector3.new(fp.part.Position.X,0,fp.part.Position.Z),PCD,1.5)then st.pt=st.pt+1 end;break end end
+local smTarget=sm.Position
+if aR and aR.Parent then
+local toSm=sm.Position-aR.Position
+toSm=Vector3.new(toSm.X,0,toSm.Z)
+if toSm.X*toSm.X+toSm.Z*toSm.Z>aRR*aRR then
+smTarget=aR.Position+toSm.Unit*aRR*0.92
 end
-if bestPink then if hh then hh.WalkSpeed=math.max(origSp,cS+10)end;tL="Pink > Smile";if goTo(Vector3.new(bestPink.part.Position.X,r.Position.Y,bestPink.part.Position.Z),PCD,2.2)then st.pt=st.pt+1;stP[bestPink.part]=os.clock()+5 end end
-local smTarget,smRing,smInside=ringTargetFor(sm.Position)
-if not smTarget or not smRing or(not smInside and d3(smTarget,sm.Position)>4)then isCS=false;smT=nil;goSm=false;if hh then hh.WalkSpeed=origSp end;return-3 end
-local toVal=math.max(0.8,math.min(4,smTR-0.2));local ok=goTo(Vector3.new(smTarget.X,r.Position.Y,smTarget.Z),3.5,toVal)
+goTo(aR.Position,5,2)
+local wt=os.clock()
+while os.clock()-wt<0.3 do
+ task.wait(0.05)
+ local h__=hm()
+ if h__ then h__:MoveTo(Vector3.new(aR.Position.X,aR.Position.Y,aR.Position.Z))end
+end
+end
+local toVal=math.max(0.5,math.min(3,smTR-0.3))
+local ok=goTo(Vector3.new(smTarget.X,r.Position.Y,smTarget.Z),4,toVal)
+goSm=false;if hh then hh.WalkSpeed=origSp end
 if ok and sm.Parent then
-local hold=os.clock();while sm.Parent and os.clock()-hold<TSD do task.wait(0.05);local rr=h();if rr and hh then hh:MoveTo(Vector3.new(smTarget.X,rr.Position.Y,smTarget.Z))end end
-td.col=true;smT=nil;st.sm=st.sm+1;dupCnt=0;smCd=os.clock()+12;isCS=false;goSm=false;if hh then hh.WalkSpeed=origSp end;return 50
+if not td.dp then
+td.col=true;smT=nil;st.sm=st.sm+1;isCS=false;dupCnt=0;smCd=os.clock()+12;return 45
 end
-isCS=false;smT=nil;goSm=false;if hh then hh.WalkSpeed=origSp end;return-10
+local st_=os.clock()
+while os.clock()-st_<TSD do
+ task.wait(0.1)
+ if not sm.Parent then break end
+ local h__=hm()
+ if h__ then h__:MoveTo(Vector3.new(smTarget.X,smTarget.Y,smTarget.Z))end
+end
+td.col=true;smT=nil;st.sm=st.sm+1;isCS=false;dupCnt=0;smCd=os.clock()+12;return 45
+end
+isCS=false;smT=nil;goSm=false
+if hh then hh.WalkSpeed=origSp end;return-10
 end
 if action=="go_petal_cluster"then
 local cl=gPetCluster();if not cl then return-1 end
@@ -1431,15 +1392,17 @@ for _,e in ipairs(cand)do if e.p.Parent and not e.t.col and e.rem>0 then if goTo
 return rw>0 and rw or-2 end
 if action=="go_smile_area"then
 local sm2=smT;if not sm2 or not sm2.Parent then smT=nil;return-1 end
+if not aR or not aR.Parent then return-1 end
 tL="SmArea";INT=false;isCS=true
-local bestPink,bestPinkD=nil,math.huge
-for _,fp in ipairs(fP)do if fp.cn=="Pink"and fp.part and fp.part.Parent and isInCurrentField(fp.part.Position)then local dd=d3(r.Position,fp.part.Position);if dd<bestPinkD then bestPink,bestPinkD=fp,dd end end end
-if bestPink then tL="Pink > SmArea";if goTo(Vector3.new(bestPink.part.Position.X,r.Position.Y,bestPink.part.Position.Z),PCD,2.2)then st.pt=st.pt+1;stP[bestPink.part]=os.clock()+5 end end
-local edgePos,_,smInside=ringTargetFor(sm2.Position);if not edgePos or(not smInside and d3(edgePos,sm2.Position)>4)then isCS=false;smT=nil;return-3 end
-local ok3=goTo(Vector3.new(edgePos.X,r.Position.Y,edgePos.Z),3.5,5);isCS=false
+local toSm=sm2.Position-aR.Position;toSm=Vector3.new(toSm.X,0,toSm.Z)
+-- FIX #5
+local edgePos=aR.Position+toSm.Unit*(aRR*0.96)
+goTo(edgePos,3,2)
+local ok3=goTo(Vector3.new(sm2.Position.X,r.Position.Y,sm2.Position.Z),4,5)
+isCS=false
 if ok3 and sm2.Parent then if aT[sm2]then aT[sm2].col=true end;smT=nil;st.sm=st.sm+1;dupCnt=0;smCd=os.clock()+12;return 50 end
-if not sm2.Parent then smT=nil end;return-2
-end
+if not sm2.Parent then smT=nil end
+return-2 end
 if action=="go_scorch_token"then
 local n3=os.clock();local bp5,bd5=nil,math.huge
 for p,t in pairs(aT)do if not t.col and p.Parent and not t.dp and(t.id==TPI or t.id==1629547638)and(n3-t.s)<2.5 and not btBlocked(p,t)then local d=d3(r.Position,p.Position);if d<bd5 then bd5=d;bp5=p end end end
@@ -1632,7 +1595,7 @@ end end)
 
 -- INIT
 local mLS=false
-local function sML()if mLS then return end;mLS=true;task.wait(2);refreshServices();scriptStartH=getHoney()or 0;scriptStartT=os.clock();lSS();lPat();fAR();fF();lo("Marmot Z v5.3.0 ready! "..fmtH(scriptStartH));print("Marmot Z v5.3.0 — Complete");tL="init";lMT=os.clock()end
+local function sML()if mLS then return end;mLS=true;task.wait(2);refreshServices();scriptStartH=getHoney()or 0;scriptStartT=os.clock();lSS();lPat();fAR();fF();lo("Marmot Z v5.2.6 ready! "..fmtH(scriptStartH));print("Marmot Z v5.2.6 — Complete");tL="init";lMT=os.clock()end
 task.spawn(function()
 	while true do
 		task.wait(5)
@@ -1721,123 +1684,134 @@ local timed={{key="boost_purple_potion",name="Purple Potion",cd=900},{key="boost
 for _,it in ipairs(timed)do if cfg[it.key]and(not boostLast[it.key]or now-boostLast[it.key]>=it.cd)then pcall(function()RS.Events.PlayerActivesCommand:FireServer({["Name"]=it.name})end);boostLast[it.key]=now end end
 task.wait(5)
 end end)
-local TWS=game:GetService("TweenService")
-local sgV4=Instance.new("ScreenGui",G);sgV4.Name="MarmotZ_V530";sgV4.ResetOnSpawn=false
-local frV4=Instance.new("Frame",sgV4);frV4.Size=UDim2.new(0,560,0,430);frV4.Position=UDim2.new(0,16,0,16)
-frV4.BackgroundColor3=Color3.fromRGB(20,29,45);frV4.BackgroundTransparency=0.12;frV4.BorderSizePixel=0;frV4.Active=true;frV4.Draggable=true
-Instance.new("UICorner",frV4).CornerRadius=UDim.new(0,18)
-local uiStroke=Instance.new("UIStroke",frV4);uiStroke.Color=Color3.fromRGB(170,205,255);uiStroke.Transparency=0.72;uiStroke.Thickness=1
-local titleV4=Instance.new("TextLabel",frV4);titleV4.Size=UDim2.new(1,-24,0,34);titleV4.Position=UDim2.new(0,14,0,4);titleV4.BackgroundTransparency=1
-titleV4.Text="Marmot Z  5.3.0";titleV4.TextColor3=Color3.fromRGB(240,247,255);titleV4.Font=Enum.Font.GothamBold;titleV4.TextSize=16;titleV4.TextXAlignment=Enum.TextXAlignment.Left
-local navBar=Instance.new("Frame",frV4);navBar.Size=UDim2.new(1,-24,0,42);navBar.Position=UDim2.new(0,12,0,40);navBar.BackgroundColor3=Color3.fromRGB(31,44,64);navBar.BackgroundTransparency=0.2;navBar.BorderSizePixel=0
-Instance.new("UICorner",navBar).CornerRadius=UDim.new(0,12)
-local navLayout=Instance.new("UIListLayout",navBar);navLayout.FillDirection=Enum.FillDirection.Horizontal;navLayout.Padding=UDim.new(0,5);navLayout.VerticalAlignment=Enum.VerticalAlignment.Center;navLayout.HorizontalAlignment=Enum.HorizontalAlignment.Center
-local content=Instance.new("Frame",frV4);content.Size=UDim2.new(1,-24,1,-96);content.Position=UDim2.new(0,12,0,88);content.BackgroundTransparency=1
-local function mkPanel()local p=Instance.new("CanvasGroup",content);p.Size=UDim2.fromScale(1,1);p.BackgroundTransparency=1;p.Visible=false;p.GroupTransparency=1;return p end
-local tMain=mkPanel();local tAuto=mkPanel();local tBoost=mkPanel();local tFarm=mkPanel();local tPlant=mkPanel();local tSet=mkPanel();tPat=mkPanel()
-local panels={tMain,tAuto,tBoost,tFarm,tPlant,tSet,tPat};local selectedTab=nil;local selectedPanel=nil
-local function tween(obj,goal,dur)if cfg.simple_gui then for k,v in pairs(goal)do obj[k]=v end;return end;TWS:Create(obj,TweenInfo.new(dur or 0.26,Enum.EasingStyle.Quint,Enum.EasingDirection.Out),goal):Play()end
-local function selectTab(btn,panel)
- if selectedPanel==panel then return end
- local old=selectedPanel;selectedPanel=panel
- if selectedTab then tween(selectedTab,{BackgroundTransparency=0.55},0.18)end
- selectedTab=btn;tween(btn,{BackgroundTransparency=0.08},0.18)
- if old then tween(old,{GroupTransparency=1,Position=UDim2.new(0,-12,0,0)},0.18);task.delay(cfg.simple_gui and 0 or 0.18,function()if old~=selectedPanel then old.Visible=false end end)end
- panel.Visible=true;panel.Position=UDim2.new(0,12,0,0);panel.GroupTransparency=cfg.simple_gui and 0 or 1
- tween(panel,{GroupTransparency=0,Position=UDim2.new(0,0,0,0)},0.28)
+local sgV4=Instance.new("ScreenGui",G);sgV4.Name="MarmotZ_V4"
+local frV4=Instance.new("Frame",sgV4);frV4.Size=UDim2.new(0,440,0,390);frV4.Position=UDim2.new(0,10,0,10)
+frV4.BackgroundColor3=Color3.fromRGB(20,20,30);frV4.BorderSizePixel=0;frV4.Active=true;frV4.Draggable=true;Instance.new("UICorner",frV4).CornerRadius=UDim.new(0,8)
+local titleV4=Instance.new("TextLabel",frV4);titleV4.Size=UDim2.new(1,0,0,28);titleV4.BackgroundTransparency=1;titleV4.Position=UDim2.new(0,0,0,2)
+titleV4.Text="  Marmot Z v5.2.5";titleV4.TextColor3=Color3.fromRGB(150,200,255);titleV4.Font=Enum.Font.GothamBold;titleV4.TextSize=15;titleV4.TextXAlignment=Enum.TextXAlignment.Left
+local sideBar=Instance.new("Frame",frV4);sideBar.Size=UDim2.new(0,110,1,-34);sideBar.Position=UDim2.new(0,0,0,32);sideBar.BackgroundColor3=Color3.fromRGB(15,15,22);sideBar.BorderSizePixel=0;Instance.new("UICorner",sideBar).CornerRadius=UDim.new(0,6)
+local tMain=Instance.new("Frame",frV4);tMain.Size=UDim2.new(1,-120,1,-40);tMain.Position=UDim2.new(0,115,0,35);tMain.BackgroundTransparency=1;tMain.Visible=true
+local tBoost=Instance.new("Frame",frV4);tBoost.Size=UDim2.new(1,-120,1,-40);tBoost.Position=UDim2.new(0,115,0,35);tBoost.BackgroundTransparency=1;tBoost.Visible=false
+local tSet=Instance.new("Frame",frV4);tSet.Size=UDim2.new(1,-120,1,-40);tSet.Position=UDim2.new(0,115,0,35);tSet.BackgroundTransparency=1;tSet.Visible=false
+local tAuto=Instance.new("Frame",frV4);tAuto.Size=UDim2.new(1,-120,1,-40);tAuto.Position=UDim2.new(0,115,0,35);tAuto.BackgroundTransparency=1;tAuto.Visible=false
+local tFarm=Instance.new("Frame",frV4);tFarm.Size=UDim2.new(1,-120,1,-40);tFarm.Position=UDim2.new(0,115,0,35);tFarm.BackgroundTransparency=1;tFarm.Visible=false
+local tPlant=Instance.new("Frame",frV4);tPlant.Size=UDim2.new(1,-120,1,-40);tPlant.Position=UDim2.new(0,115,0,35);tPlant.BackgroundTransparency=1;tPlant.Visible=false
+tPat=Instance.new("Frame",frV4);tPat.Size=UDim2.new(1,-120,1,-40);tPat.Position=UDim2.new(0,115,0,35);tPat.BackgroundTransparency=1;tPat.Visible=false
+local selectedTab=nil
+local function selectTab(btn,panel)if selectedTab then selectedTab.BackgroundColor3=Color3.fromRGB(30,30,45)end;btn.BackgroundColor3=Color3.fromRGB(55,55,75);selectedTab=btn;for _,p in ipairs({tMain,tBoost,tSet,tAuto,tFarm,tPlant,tPat})do p.Visible=(p==panel)end end
+local function mkSideBtn(y,name,panel)local b=Instance.new("TextButton",sideBar);b.Size=UDim2.new(1,-8,0,32);b.Position=UDim2.new(0,4,0,y);b.Text="  "..name;b.BackgroundColor3=Color3.fromRGB(30,30,45);b.TextColor3=Color3.fromRGB(200,200,200);b.Font=Enum.Font.GothamSemibold;b.TextSize=11;b.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",b).CornerRadius=UDim.new(0,4);b.MouseButton1Click:Connect(function()selectTab(b,panel)end);return b end
+local btnStats=mkSideBtn(2,"Stats",tMain);local btnAuto=mkSideBtn(38,"Autofarm",tAuto);local btnBoost=mkSideBtn(74,"Boosts",tBoost);local btnFarm=mkSideBtn(110,"Farm pattern",tFarm);local btnPlant=mkSideBtn(146,"Planters",tPlant);local btnSet=mkSideBtn(182,"Settings",tSet);btnPat=mkSideBtn(218,"Patterns",tPat);selectTab(btnStats,tMain)
+-- Stats
+local function mkStat(y,color)local l=Instance.new("TextLabel",tMain);l.Size=UDim2.new(1,0,0,17);l.Position=UDim2.new(0,4,0,y);l.BackgroundTransparency=1;l.Font=Enum.Font.Gotham;l.TextSize=11;l.TextXAlignment=Enum.TextXAlignment.Left;l.TextColor3=color or Color3.new(1,1,1);return l end
+local lb=mkStat(0);local hl=mkStat(30,Color3.fromRGB(150,255,150));local tmLbl=mkStat(44,Color3.fromRGB(255,220,120));tmLbl.Text="Time: --:--"
+local scLab=Instance.new("TextButton",tMain);scLab.Size=UDim2.new(1,-8,0,17);scLab.Position=UDim2.new(0,4,0,60);scLab.BackgroundTransparency=1;scLab.Font=Enum.Font.Gotham;scLab.TextSize=11;scLab.TextXAlignment=Enum.TextXAlignment.Left;scLab.TextColor3=Color3.fromRGB(255,180,80);scLab.Text="Scorch: --"
+local scScroll=Instance.new("ScrollingFrame",frV4);scScroll.Size=UDim2.new(1,-120,1,-40);scScroll.Position=UDim2.new(0,115,0,35);scScroll.BackgroundColor3=Color3.fromRGB(15,15,22);scScroll.BorderSizePixel=0;scScroll.Visible=false;scScroll.ScrollBarThickness=4;scScroll.ZIndex=5;Instance.new("UICorner",scScroll).CornerRadius=UDim.new(0,6)
+local scList=Instance.new("UIListLayout",scScroll);scList.SortOrder=Enum.SortOrder.LayoutOrder;scList.Padding=UDim.new(0,2)
+local scClose=Instance.new("TextButton",scScroll);scClose.Size=UDim2.new(1,-8,0,18);scClose.BackgroundTransparency=1;scClose.Font=Enum.Font.GothamBold;scClose.TextSize=11;scClose.TextXAlignment=Enum.TextXAlignment.Left;scClose.TextColor3=Color3.fromRGB(255,180,80);scClose.Text="< Top-24 Scorch (клик — закрыть)";scClose.LayoutOrder=0;scClose.ZIndex=6;scClose.MouseButton1Click:Connect(function()scScroll.Visible=false end)
+local function refreshScTop()
+for _,c in ipairs(scScroll:GetChildren())do if c:IsA("TextLabel")then c:Destroy()end end
+local tmp={};for i=1,#scorchSessions do table.insert(tmp,scorchSessions[i])end
+table.sort(tmp,function(a,b)return a.honeyGained>b.honeyGained end)
+local cnt=math.min(24,#tmp)
+for i=1,cnt do local s=tmp[i]
+local row=Instance.new("TextLabel",scScroll);row.Size=UDim2.new(1,-8,0,16);row.BackgroundTransparency=1;row.Font=Enum.Font.Code;row.TextSize=10;row.TextXAlignment=Enum.TextXAlignment.Left;row.LayoutOrder=i;row.ZIndex=6;row.TextTruncate=Enum.TextTruncate.AtEnd
+row.TextColor3=(i<=3)and Color3.fromRGB(255,215,80)or Color3.fromRGB(200,200,200)
+local acts=""
+if type(s.actions)=="table"and #s.actions>0 then
+local cA={};for j=1,#s.actions do local a3=tostring(s.actions[j].a or"?");cA[a3]=(cA[a3]or 0)+1 end
+local ar={};for a3,n3 in pairs(cA)do table.insert(ar,{a=a3,n=n3})end
+table.sort(ar,function(x,y)return x.n>y.n end)
+local pieces={};for j=1,math.min(3,#ar)do table.insert(pieces,(ar[j].a:gsub("^go_","")).." x"..ar[j].n)end
+acts=" | "..table.concat(pieces,", ")
 end
-local function mkTopTab(icon,name,panel,image)
- local b=Instance.new("TextButton",navBar);b.Size=UDim2.new(0,48,0,32);b.BackgroundColor3=Color3.fromRGB(91,139,205);b.BackgroundTransparency=0.55;b.BorderSizePixel=0;b.Text="";b.ClipsDescendants=true
- Instance.new("UICorner",b).CornerRadius=UDim.new(0,10)
- local glyph
- if image then glyph=Instance.new("ImageLabel",b);glyph.Image=image;glyph.ScaleType=Enum.ScaleType.Fit else glyph=Instance.new("TextLabel",b);glyph.Text=icon;glyph.Font=Enum.Font.GothamBold;glyph.TextColor3=Color3.fromRGB(224,237,255);glyph.TextSize=12 end
- glyph.Size=UDim2.new(0,24,0,24);glyph.Position=UDim2.new(0,12,0.5,-12);glyph.BackgroundTransparency=1;glyph.ZIndex=2
- local tx=Instance.new("TextLabel",b);tx.Size=UDim2.new(1,-42,1,0);tx.Position=UDim2.new(0,38,0,0);tx.BackgroundTransparency=1;tx.Text=name;tx.TextColor3=Color3.fromRGB(245,249,255);tx.Font=Enum.Font.GothamSemibold;tx.TextSize=10;tx.TextXAlignment=Enum.TextXAlignment.Left;tx.TextTransparency=1
- b.MouseEnter:Connect(function()if cfg.simple_gui then return end;tween(b,{Size=UDim2.new(0,112,0,32)},0.28);tween(tx,{TextTransparency=0},0.2)end)
- b.MouseLeave:Connect(function()if cfg.simple_gui then return end;tween(b,{Size=UDim2.new(0,48,0,32)},0.24);tween(tx,{TextTransparency=1},0.12)end)
- b.MouseButton1Click:Connect(function()selectTab(b,panel)end)
- return b
+row.Text=string.format("#%d +%s %.1fm SSx%d%s",i,s.honeyGainedFmt or fmtH(s.honeyGained),s.durationMin or 0,s.ssCombo or 0,acts)
 end
-local btnStats=mkTopTab("ST","Stats",tMain)
-local btnAuto=mkTopTab("AF","Autofarm",tAuto,"rbxthumb://type=Asset&id=114208409848097&w=150&h=150")
-local btnBoost=mkTopTab("BS","Boosts",tBoost)
-local btnFarm=mkTopTab("FP","Farm pattern",tFarm)
-local btnPlant=mkTopTab("PL","Planters",tPlant)
-local btnSet=mkTopTab("SE","Settings",tSet)
-btnPat=mkTopTab("PT","Patterns",tPat)
-local function mkCard(parent,x,y,w,h,title)
- local c=Instance.new("Frame",parent);c.Size=UDim2.new(0,w,0,h);c.Position=UDim2.new(0,x,0,y);c.BackgroundColor3=Color3.fromRGB(83,109,145);c.BackgroundTransparency=0.58;c.BorderSizePixel=0
- Instance.new("UICorner",c).CornerRadius=UDim.new(0,14);local s=Instance.new("UIStroke",c);s.Color=Color3.fromRGB(213,229,255);s.Transparency=0.76
- local k=Instance.new("TextLabel",c);k.Size=UDim2.new(1,-20,0,20);k.Position=UDim2.new(0,10,0,8);k.BackgroundTransparency=1;k.Text=title;k.TextColor3=Color3.fromRGB(180,202,229);k.Font=Enum.Font.Gotham;k.TextSize=11;k.TextXAlignment=Enum.TextXAlignment.Left
- local v=Instance.new("TextLabel",c);v.Size=UDim2.new(1,-20,0,h-34);v.Position=UDim2.new(0,10,0,27);v.BackgroundTransparency=1;v.Text="--";v.TextColor3=Color3.fromRGB(247,250,255);v.Font=Enum.Font.GothamSemibold;v.TextSize=17;v.TextWrapped=true;v.TextXAlignment=Enum.TextXAlignment.Left;v.TextYAlignment=Enum.TextYAlignment.Top
- return v,c
+if cnt==0 then local row=Instance.new("TextLabel",scScroll);row.Size=UDim2.new(1,-8,0,16);row.BackgroundTransparency=1;row.Font=Enum.Font.Code;row.TextSize=11;row.TextXAlignment=Enum.TextXAlignment.Left;row.TextColor3=Color3.fromRGB(150,150,150);row.Text="No scorch sessions yet";row.LayoutOrder=1;row.ZIndex=6 end
+scScroll.CanvasSize=UDim2.new(0,0,0,math.max(cnt,1)*18+30)
 end
-local hl=mkCard(tMain,4,4,250,82,"HONEY PER 40 MIN")
-local tmLbl=mkCard(tMain,270,4,250,82,"SESSION TIME")
-local lb=mkCard(tMain,4,100,250,82,"CURRENT TASK")
-local fieldLbl=mkCard(tMain,270,100,250,82,"CURRENT FIELD")
-local sb=Instance.new("TextButton",tMain);sb.Size=UDim2.new(0,516,0,64);sb.Position=UDim2.new(0,4,0,200);sb.BackgroundColor3=Color3.fromRGB(87,151,231);sb.BackgroundTransparency=0.12;sb.Text="AUTOFARM  ON";sb.TextColor3=Color3.fromRGB(255,255,255);sb.Font=Enum.Font.GothamBold;sb.TextSize=18
-Instance.new("UICorner",sb).CornerRadius=UDim.new(0,16)
-sb.MouseButton1Click:Connect(function()ENABLED=not ENABLED;sb.Text=ENABLED and"AUTOFARM  ON"or"AUTOFARM  OFF";tween(sb,{BackgroundColor3=ENABLED and Color3.fromRGB(87,151,231)or Color3.fromRGB(92,103,122)},0.22)end)
-local scLab=Instance.new("TextLabel",tMain);scLab.Visible=false
-local function tabTitle(parent,text)local l=Instance.new("TextLabel",parent);l.Size=UDim2.new(1,-8,0,24);l.Position=UDim2.new(0,4,0,2);l.BackgroundTransparency=1;l.Text=text;l.TextColor3=Color3.fromRGB(240,247,255);l.Font=Enum.Font.GothamBold;l.TextSize=14;l.TextXAlignment=Enum.TextXAlignment.Left;return l end
-local function glassButton(parent,y,text)
- local b=Instance.new("TextButton",parent);b.Size=UDim2.new(1,-8,0,30);b.Position=UDim2.new(0,4,0,y);b.BackgroundColor3=Color3.fromRGB(65,86,116);b.BackgroundTransparency=0.42;b.Text=text;b.TextColor3=Color3.fromRGB(218,229,244);b.Font=Enum.Font.Gotham;b.TextSize=11;b.TextXAlignment=Enum.TextXAlignment.Left
- Instance.new("UICorner",b).CornerRadius=UDim.new(0,9);return b
-end
+scLab.MouseButton1Click:Connect(function()scScroll.Visible=not scScroll.Visible;if scScroll.Visible then refreshScTop()end end)
+local sb=Instance.new("TextButton",tMain);sb.Size=UDim2.new(1,-8,0,30);sb.Position=UDim2.new(0,4,1,-30);sb.BackgroundColor3=Color3.fromRGB(180,40,40);sb.Text="STOP";sb.TextColor3=Color3.new(1,1,1);sb.Font=Enum.Font.GothamBold;sb.TextSize=13;Instance.new("UICorner",sb).CornerRadius=UDim.new(0,5);sb.MouseButton1Click:Connect(function()ENABLED=not ENABLED;sb.Text=ENABLED and"STOP"or"RESUME";sb.BackgroundColor3=ENABLED and Color3.fromRGB(180,40,40)or Color3.fromRGB(40,180,40)end)
 -- Boosts
-tabTitle(tBoost,"Auto Use Materials")
-local function mkToggle(y,name,key)local b=glassButton(tBoost,y,"");local function upd()b.Text=(cfg[key]and"  ON   "or"  OFF  ")..name;b.TextColor3=cfg[key]and Color3.fromRGB(130,235,185)or Color3.fromRGB(205,215,230)end;b.MouseButton1Click:Connect(function()cfg[key]=not cfg[key];upd();saveCfg()end);upd();return b end
-local ssBtn=mkToggle(34,"Super Smoothie (20m)","ss_on");local purplePotionBtn=mkToggle(68,"Purple Potion (15m)","boost_purple_potion");local glueBtn=mkToggle(102,"Glue (10m)","boost_glue");local oilBtn=mkToggle(136,"Oil (10m)","boost_oil");local enzymesBtn=mkToggle(170,"Enzymes (10m)","boost_enzymes");local tropicalBtn=mkToggle(204,"Tropical Drink (10m)","boost_tropical_drink");local redExtractBtn=mkToggle(238,"Red Extract (10m)","boost_red_extract");local pepperX4Btn=mkToggle(272,"Pepper Patch x4 (Hachapuri)","pepper_x4")
+local bTitle=Instance.new("TextLabel",tBoost);bTitle.Size=UDim2.new(1,0,0,22);bTitle.Position=UDim2.new(0,4,0,2);bTitle.BackgroundTransparency=1;bTitle.Text="Auto Use Materials";bTitle.TextColor3=Color3.new(1,1,1);bTitle.Font=Enum.Font.GothamBold;bTitle.TextSize=13;bTitle.TextXAlignment=Enum.TextXAlignment.Left
+local function mkToggle(y,name,key)local b=Instance.new("TextButton",tBoost);b.Size=UDim2.new(1,-8,0,30);b.Position=UDim2.new(0,4,0,y);b.BackgroundColor3=Color3.fromRGB(35,35,50);b.TextColor3=Color3.fromRGB(200,200,200);b.Font=Enum.Font.Gotham;b.TextSize=12;b.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",b).CornerRadius=UDim.new(0,4);b.MouseButton1Click:Connect(function()cfg[key]=not cfg[key];b.Text=(cfg[key]and"[X] "or"[ ] ")..name;b.TextColor3=cfg[key]and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200);saveCfg()end);b.Text=(cfg[key]and"[X] "or"[ ] ")..name;b.TextColor3=cfg[key]and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200);return b end
+local ssBtn=mkToggle(28,"Super Smoothie (20m)","ss_on")
+local purplePotionBtn=mkToggle(62,"Purple Potion (15m)","boost_purple_potion")
+local glueBtn=mkToggle(96,"Glue (10m)","boost_glue")
+local oilBtn=mkToggle(130,"Oil (10m)","boost_oil")
+local enzymesBtn=mkToggle(164,"Enzymes (10m)","boost_enzymes")
+local tropicalBtn=mkToggle(198,"Tropical Drink (10m)","boost_tropical_drink")
+local redExtractBtn=mkToggle(232,"Red Extract (10m)","boost_red_extract")
+local pepperX4Btn=mkToggle(266,"Pepper Patch x4 (Hachapuri)","pepper_x4")
 -- Autofarm
-tabTitle(tAuto,"Autofarm Limits  ·  0 = unlimited")
-local function mkLimit(y,name,onKey,limKey,maxVal)local row=Instance.new("Frame",tAuto);row.Size=UDim2.new(1,-8,0,38);row.Position=UDim2.new(0,4,0,y);row.BackgroundTransparency=1
- local tg=glassButton(row,4,"");tg.Size=UDim2.new(1,-74,0,30);local function upd()tg.Text=(cfg[onKey]and"  ON   "or"  OFF  ")..name;tg.TextColor3=cfg[onKey]and Color3.fromRGB(130,235,185)or Color3.fromRGB(205,215,230)end;tg.MouseButton1Click:Connect(function()cfg[onKey]=not cfg[onKey];upd();saveCfg()end);upd()
- local bx=Instance.new("TextBox",row);bx.Size=UDim2.new(0,62,0,30);bx.Position=UDim2.new(1,-62,0,4);bx.BackgroundColor3=Color3.fromRGB(51,68,94);bx.BackgroundTransparency=0.24;bx.TextColor3=Color3.new(1,1,1);bx.Text=tostring(cfg[limKey]);bx.Font=Enum.Font.Code;bx.TextSize=12;Instance.new("UICorner",bx).CornerRadius=UDim.new(0,9)
- bx.FocusLost:Connect(function()local n=tonumber(bx.Text);if n and n>=0 and n<=(maxVal or 999)then cfg[limKey]=n else bx.Text=tostring(cfg[limKey])end;saveCfg()end);return tg,bx end
-local cocoTg,cocoBx=mkLimit(34,"Farm Coconuts","coco_on","coco_lim",11);local shwTg,shwBx=mkLimit(78,"Farm Showers","shower_on","shower_lim",15);local prpTg,prpBx=mkLimit(122,"Farm Precise Marks","purple_on","purple_lim",10);local comboTg,comboBx=mkLimit(166,"Farm Combo Coconuts","combo_on","combo_lim",50)
+local faTitle=Instance.new("TextLabel",tAuto);faTitle.Size=UDim2.new(1,0,0,22);faTitle.Position=UDim2.new(0,4,0,2);faTitle.BackgroundTransparency=1;faTitle.Text="Autofarm Limits (0=unlimited)";faTitle.TextColor3=Color3.new(1,1,1);faTitle.Font=Enum.Font.GothamBold;faTitle.TextSize=12;faTitle.TextXAlignment=Enum.TextXAlignment.Left
+local function mkLimit(y,name,onKey,limKey,maxVal)local row=Instance.new("Frame",tAuto);row.Size=UDim2.new(1,-4,0,30);row.Position=UDim2.new(0,4,0,y);row.BackgroundTransparency=1
+local tg=Instance.new("TextButton",row);tg.Size=UDim2.new(0,165,1,0);tg.BackgroundColor3=Color3.fromRGB(35,35,50);tg.TextColor3=Color3.fromRGB(200,200,200);tg.Font=Enum.Font.Gotham;tg.TextSize=11;tg.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",tg).CornerRadius=UDim.new(0,4)
+tg.Text=(cfg[onKey]and"[X] "or"[ ] ")..name;tg.TextColor3=cfg[onKey]and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200);tg.MouseButton1Click:Connect(function()cfg[onKey]=not cfg[onKey];tg.Text=(cfg[onKey]and"[X] "or"[ ] ")..name;tg.TextColor3=cfg[onKey]and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200);saveCfg()end)
+local bx=Instance.new("TextBox",row);bx.Size=UDim2.new(0,55,1,0);bx.Position=UDim2.new(1,-60,0,0);bx.BackgroundColor3=Color3.fromRGB(35,35,45);bx.TextColor3=Color3.new(1,1,1);bx.Text=tostring(cfg[limKey]);bx.Font=Enum.Font.Code;bx.TextSize=12;bx.TextXAlignment=Enum.TextXAlignment.Center;Instance.new("UICorner",bx).CornerRadius=UDim.new(0,4)
+bx.FocusLost:Connect(function()local n=tonumber(bx.Text);if n and n>=0 and n<=(maxVal or 999)then cfg[limKey]=n;bx.Text=tostring(n)else bx.Text=tostring(cfg[limKey])end;saveCfg()end);return tg,bx end
+local cocoTg,cocoBx=mkLimit(28,"Farm Coconuts","coco_on","coco_lim",11)
+local shwTg,shwBx=mkLimit(68,"Farm Showers","shower_on","shower_lim",15)
+local prpTg,prpBx=mkLimit(108,"Farm Precise Marks","purple_on","purple_lim",10)
+local comboTg,comboBx=mkLimit(148,"Farm Combo Coconuts","combo_on","combo_lim",50)
 -- Settings
-tabTitle(tSet,"Settings")
-local function mkSpd(y,name,key)local l=Instance.new("TextLabel",tSet);l.Size=UDim2.new(0,150,0,28);l.Position=UDim2.new(0,8,0,y);l.BackgroundTransparency=1;l.Text=name;l.TextColor3=Color3.fromRGB(216,226,240);l.Font=Enum.Font.Gotham;l.TextSize=11;l.TextXAlignment=Enum.TextXAlignment.Left
- local bx=Instance.new("TextBox",tSet);bx.Size=UDim2.new(0,70,0,28);bx.Position=UDim2.new(0,160,0,y);bx.BackgroundColor3=Color3.fromRGB(51,68,94);bx.BackgroundTransparency=0.2;bx.TextColor3=Color3.new(1,1,1);bx.Text=tostring(cfg[key]);bx.Font=Enum.Font.Code;bx.TextSize=12;Instance.new("UICorner",bx).CornerRadius=UDim.new(0,8)
- bx.FocusLost:Connect(function()local n=tonumber(bx.Text);if n then cfg[key]=n;SB.X10=cfg.sp_x10;SB.NABOR=cfg.sp_nab;SB.REFRESH=cfg.sp_ref else bx.Text=tostring(cfg[key])end;saveCfg()end);return bx end
-mkSpd(36,"Speed X10","sp_x10");mkSpd(70,"Speed NABOR","sp_nab");mkSpd(104,"Speed REFRESH","sp_ref")
-local mvTitle=tabTitle(tSet,"Movement");mvTitle.Position=UDim2.new(0,4,0,142)
-mvBtn=glassButton(tSet,170,"");mvBtn.Size=UDim2.new(0,230,0,30)
-function updMvBtn()mvBtn.Text=(cfg.mv_mode=="tween")and"  Mode: Tween (fly)"or"  Mode: Teleport";mvBtn.TextColor3=(cfg.mv_mode=="tween")and Color3.fromRGB(130,198,255)or Color3.fromRGB(130,235,185)end
+local sTitle=Instance.new("TextLabel",tSet);sTitle.Size=UDim2.new(1,0,0,22);sTitle.Position=UDim2.new(0,4,0,2);sTitle.BackgroundTransparency=1;sTitle.Text="Speedhack";sTitle.TextColor3=Color3.new(1,1,1);sTitle.Font=Enum.Font.GothamBold;sTitle.TextSize=13;sTitle.TextXAlignment=Enum.TextXAlignment.Left
+local function mkSpd(y,name,key)local l=Instance.new("TextLabel",tSet);l.Size=UDim2.new(0,100,0,22);l.Position=UDim2.new(0,4,0,y);l.BackgroundTransparency=1;l.Text=name;l.TextColor3=Color3.new(1,1,1);l.Font=Enum.Font.Gotham;l.TextSize=11;l.TextXAlignment=Enum.TextXAlignment.Left
+local bx=Instance.new("TextBox",tSet);bx.Size=UDim2.new(0,55,0,22);bx.Position=UDim2.new(0,108,0,y);bx.BackgroundColor3=Color3.fromRGB(35,35,45);bx.TextColor3=Color3.new(1,1,1);bx.Text=tostring(cfg[key]);bx.Font=Enum.Font.Code;bx.TextSize=12;Instance.new("UICorner",bx).CornerRadius=UDim.new(0,4)
+bx.FocusLost:Connect(function()local n=tonumber(bx.Text);if n then cfg[key]=n;SB.X10=cfg.sp_x10;SB.NABOR=cfg.sp_nab;SB.REFRESH=cfg.sp_ref else bx.Text=tostring(cfg[key])end;saveCfg()end)end
+mkSpd(30,"Speed X10","sp_x10");mkSpd(58,"Speed NABOR","sp_nab");mkSpd(86,"Speed REFRESH","sp_ref")
+mvTitle=Instance.new("TextLabel",tSet);mvTitle.Size=UDim2.new(1,0,0,22);mvTitle.Position=UDim2.new(0,4,0,118);mvTitle.BackgroundTransparency=1;mvTitle.Text="Movement (planters / farm pattern)";mvTitle.TextColor3=Color3.new(1,1,1);mvTitle.Font=Enum.Font.GothamBold;mvTitle.TextSize=13;mvTitle.TextXAlignment=Enum.TextXAlignment.Left
+mvBtn=Instance.new("TextButton",tSet);mvBtn.Size=UDim2.new(0,159,0,26);mvBtn.Position=UDim2.new(0,4,0,144);mvBtn.BackgroundColor3=Color3.fromRGB(35,35,50);mvBtn.Font=Enum.Font.Gotham;mvBtn.TextSize=12;mvBtn.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",mvBtn).CornerRadius=UDim.new(0,4)
+function updMvBtn()mvBtn.Text=(cfg.mv_mode=="tween")and"  Mode: Tween (fly)"or"  Mode: Teleport";mvBtn.TextColor3=(cfg.mv_mode=="tween")and Color3.fromRGB(120,200,255)or Color3.fromRGB(100,255,100)end
 mvBtn.MouseButton1Click:Connect(function()cfg.mv_mode=(cfg.mv_mode=="tween")and"tp"or"tween";updMvBtn();saveCfg()end);updMvBtn()
-local twLbl=Instance.new("TextLabel",tSet);twLbl.Size=UDim2.new(0,115,0,30);twLbl.Position=UDim2.new(0,250,0,170);twLbl.BackgroundTransparency=1;twLbl.Text="Tween speed";twLbl.TextColor3=Color3.fromRGB(216,226,240);twLbl.Font=Enum.Font.Gotham;twLbl.TextSize=11
-twBx=Instance.new("TextBox",tSet);twBx.Size=UDim2.new(0,70,0,30);twBx.Position=UDim2.new(0,370,0,170);twBx.BackgroundColor3=Color3.fromRGB(51,68,94);twBx.TextColor3=Color3.new(1,1,1);twBx.Text=tostring(cfg.tw_speed);twBx.Font=Enum.Font.Code;twBx.TextSize=12;Instance.new("UICorner",twBx).CornerRadius=UDim.new(0,8)
+twLbl=Instance.new("TextLabel",tSet);twLbl.Size=UDim2.new(0,100,0,22);twLbl.Position=UDim2.new(0,4,0,176);twLbl.BackgroundTransparency=1;twLbl.Text="Tween speed";twLbl.TextColor3=Color3.new(1,1,1);twLbl.Font=Enum.Font.Gotham;twLbl.TextSize=11;twLbl.TextXAlignment=Enum.TextXAlignment.Left
+twBx=Instance.new("TextBox",tSet);twBx.Size=UDim2.new(0,55,0,22);twBx.Position=UDim2.new(0,108,0,176);twBx.BackgroundColor3=Color3.fromRGB(35,35,45);twBx.TextColor3=Color3.new(1,1,1);twBx.Text=tostring(cfg.tw_speed);twBx.Font=Enum.Font.Code;twBx.TextSize=12;Instance.new("UICorner",twBx).CornerRadius=UDim.new(0,4)
 twBx.FocusLost:Connect(function()local n=tonumber(twBx.Text);if n and n>=10 and n<=1000 then cfg.tw_speed=math.floor(n)end;twBx.Text=tostring(cfg.tw_speed);saveCfg()end)
-local simpleBtn=glassButton(tSet,220,"")
-local function applySimpleGui()simpleBtn.Text=(cfg.simple_gui and"  ON   "or"  OFF  ").."Simple GUI / no animations";simpleBtn.TextColor3=cfg.simple_gui and Color3.fromRGB(130,235,185)or Color3.fromRGB(205,215,230);frV4.BackgroundTransparency=cfg.simple_gui and 0 or 0.12;uiStroke.Enabled=not cfg.simple_gui end
-simpleBtn.MouseButton1Click:Connect(function()cfg.simple_gui=not cfg.simple_gui;applySimpleGui();saveCfg()end);applySimpleGui()
--- Farm pattern
-tabTitle(tFarm,"Farm pattern")
-hchBtn=glassButton(tFarm,38,"");function updHch()hchBtn.Text=(cfg.hachapuri and"  ON   "or"  OFF  ").."Hachapuri method";hchBtn.TextColor3=cfg.hachapuri and Color3.fromRGB(130,235,185)or Color3.fromRGB(205,215,230)end
+-- FARM PATTERN TAB
+hchTitle=Instance.new("TextLabel",tFarm);hchTitle.Size=UDim2.new(1,0,0,22);hchTitle.Position=UDim2.new(0,4,0,2);hchTitle.BackgroundTransparency=1;hchTitle.Text="Farm pattern";hchTitle.TextColor3=Color3.new(1,1,1);hchTitle.Font=Enum.Font.GothamBold;hchTitle.TextSize=13;hchTitle.TextXAlignment=Enum.TextXAlignment.Left
+hchBtn=Instance.new("TextButton",tFarm);hchBtn.Size=UDim2.new(1,-8,0,30);hchBtn.Position=UDim2.new(0,4,0,28);hchBtn.BackgroundColor3=Color3.fromRGB(35,35,50);hchBtn.Font=Enum.Font.Gotham;hchBtn.TextSize=12;hchBtn.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",hchBtn).CornerRadius=UDim.new(0,4)
+function updHch()hchBtn.Text=(cfg.hachapuri and"[X] "or"[ ] ").."Hachapuri method";hchBtn.TextColor3=cfg.hachapuri and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200)end
 hchBtn.MouseButton1Click:Connect(function()cfg.hachapuri=not cfg.hachapuri;updHch();saveCfg()end);updHch()
-hchStat=Instance.new("TextLabel",tFarm);hchStat.Size=UDim2.new(1,-16,0,190);hchStat.Position=UDim2.new(0,8,0,82);hchStat.BackgroundTransparency=1;hchStat.Font=Enum.Font.Code;hchStat.TextSize=11;hchStat.TextXAlignment=Enum.TextXAlignment.Left;hchStat.TextYAlignment=Enum.TextYAlignment.Top;hchStat.TextColor3=Color3.fromRGB(205,220,240);hchStat.TextWrapped=true
+hchStat=Instance.new("TextLabel",tFarm);hchStat.Size=UDim2.new(1,-8,0,150);hchStat.Position=UDim2.new(0,4,0,64);hchStat.BackgroundTransparency=1;hchStat.Font=Enum.Font.Code;hchStat.TextSize=10;hchStat.TextXAlignment=Enum.TextXAlignment.Left;hchStat.TextYAlignment=Enum.TextYAlignment.Top;hchStat.TextColor3=Color3.fromRGB(200,200,200);hchStat.TextWrapped=true
 hchStat.Text=":43 planters (auto plant)\n:50 pollen dump (canvas)\n:58 Tickets + TP FP14-11-21, x10, purple CH\n:00 Mondo Chick dodge 11 studs\nthen: collect token, sprinkler FP18-10-13, smoothie x2"
--- Planters
-tabTitle(tPlant,"Planters")
-NCOL={inv=Color3.fromRGB(255,110,110),ref=Color3.fromRGB(110,235,145),sat=Color3.fromRGB(235,235,235),mot=Color3.fromRGB(195,135,255),comf=Color3.fromRGB(110,165,255)};NNAME={inv="farm inv. nectar",ref="farm ref. nectar",sat="farm sat. nectar",mot="farm mot. nectar",comf="farm comf. nectar"};NORD={"inv","ref","sat","mot","comf"}
-plBtn=glassButton(tPlant,32,"");plBtn.Size=UDim2.new(1,-66,0,28);plMinBx=Instance.new("TextBox",tPlant);plMinBx.Size=UDim2.new(0,54,0,28);plMinBx.Position=UDim2.new(1,-58,0,32);plMinBx.BackgroundColor3=Color3.fromRGB(51,68,94);plMinBx.TextColor3=Color3.new(1,1,1);plMinBx.Text=tostring(cfg.pl_min or 43);plMinBx.Font=Enum.Font.Code;plMinBx.TextSize=12;Instance.new("UICorner",plMinBx).CornerRadius=UDim.new(0,8)
-function updPlBtn()plBtn.Text=(cfg.pl_auto and"  ON   "or"  OFF  ")..string.format("auto plant planters (:%02d)",tonumber(cfg.pl_min)or 43);plBtn.TextColor3=cfg.pl_auto and Color3.fromRGB(130,235,185)or Color3.fromRGB(205,215,230)end
-plMinBx.FocusLost:Connect(function()local n2=tonumber(plMinBx.Text);if n2 and n2>=0 and n2<=59 then cfg.pl_min=math.floor(n2)end;plMinBx.Text=tostring(cfg.pl_min or 43);updPlBtn();saveCfg()end);plBtn.MouseButton1Click:Connect(function()cfg.pl_auto=not cfg.pl_auto;updPlBtn();saveCfg()end);updPlBtn()
-plRows={};for i,k in ipairs(NORD)do local y=66+(i-1)*40;local tg=glassButton(tPlant,y,"");tg.Size=UDim2.new(0,210,0,26)
- local bx=Instance.new("TextBox",tPlant);bx.Size=UDim2.new(0,48,0,26);bx.Position=UDim2.new(0,222,0,y);bx.BackgroundColor3=Color3.fromRGB(51,68,94);bx.TextColor3=Color3.new(1,1,1);bx.Text=tostring(cfg["pl_"..k.."_h"]);bx.Font=Enum.Font.Code;bx.TextSize=11;Instance.new("UICorner",bx).CornerRadius=UDim.new(0,8)
- local remL=Instance.new("TextLabel",tPlant);remL.Size=UDim2.new(0,90,0,26);remL.Position=UDim2.new(0,280,0,y);remL.BackgroundTransparency=1;remL.Font=Enum.Font.Code;remL.TextSize=10;remL.TextXAlignment=Enum.TextXAlignment.Left;remL.TextColor3=NCOL[k];remL.Text="0h 00m"
- local barBg=Instance.new("Frame",tPlant);barBg.Size=UDim2.new(0,140,0,6);barBg.Position=UDim2.new(0,376,0,y+10);barBg.BackgroundColor3=Color3.fromRGB(38,52,73);barBg.BorderSizePixel=0;Instance.new("UICorner",barBg).CornerRadius=UDim.new(1,0)
- local barFill=Instance.new("Frame",barBg);barFill.Size=UDim2.new(0,0,1,0);barFill.BackgroundColor3=NCOL[k];barFill.BorderSizePixel=0;Instance.new("UICorner",barFill).CornerRadius=UDim.new(1,0)
- local function updTg()tg.Text=(cfg["pl_"..k]and"  ON   "or"  OFF  ")..NNAME[k];tg.TextColor3=cfg["pl_"..k]and NCOL[k]or Color3.fromRGB(160,170,185)end;tg.MouseButton1Click:Connect(function()cfg["pl_"..k]=not cfg["pl_"..k];updTg();saveCfg()end);updTg();bx.FocusLost:Connect(function()local n2=tonumber(bx.Text);if n2 and n2>=1 and n2<=22 then cfg["pl_"..k.."_h"]=math.floor(n2)end;bx.Text=tostring(cfg["pl_"..k.."_h"]);saveCfg()end);plRows[k]={remL=remL,bar=barFill,k=k} end
--- Patterns
-tabTitle(tPat,"Patterns")
-patRefBtn=glassButton(tPat,34,"  Refresh");patRefBtn.Size=UDim2.new(0,100,0,28);patCpyBtn=glassButton(tPat,34,"  Copy");patCpyBtn.Size=UDim2.new(0,100,0,28);patCpyBtn.Position=UDim2.new(0,112,0,34);patRstBtn=glassButton(tPat,34,"  Reset");patRstBtn.Size=UDim2.new(0,100,0,28);patRstBtn.Position=UDim2.new(0,220,0,34);patRstBtn.TextColor3=Color3.fromRGB(255,140,140)
-patScroll=Instance.new("ScrollingFrame",tPat);patScroll.Size=UDim2.new(1,-8,1,-74);patScroll.Position=UDim2.new(0,4,0,70);patScroll.BackgroundColor3=Color3.fromRGB(31,44,64);patScroll.BackgroundTransparency=0.3;patScroll.BorderSizePixel=0;patScroll.ScrollBarThickness=4;patScroll.CanvasSize=UDim2.new(0,0,0,860);Instance.new("UICorner",patScroll).CornerRadius=UDim.new(0,12)
-patLbl=Instance.new("TextLabel",patScroll);patLbl.Size=UDim2.new(1,-16,0,840);patLbl.Position=UDim2.new(0,8,0,6);patLbl.BackgroundTransparency=1;patLbl.Font=Enum.Font.Code;patLbl.TextSize=10;patLbl.TextXAlignment=Enum.TextXAlignment.Left;patLbl.TextYAlignment=Enum.TextYAlignment.Top;patLbl.TextColor3=Color3.fromRGB(205,225,255);patLbl.TextWrapped=true;patLbl.Text="Нажми Refresh — отчёт по actLog появится тут"
-patRefBtn.MouseButton1Click:Connect(function()local okA,resA=pcall(analyzePat);patLbl.Text=okA and resA or("Ошибка анализа: "..tostring(resA))end);patCpyBtn.MouseButton1Click:Connect(function()pcall(setclipboard,patLbl.Text)end);patRstBtn.MouseButton1Click:Connect(function()actLog={};pcall(sPat);patLbl.Text="Лог паттернов сброшен"end)
-selectTab(btnStats,tMain)
-
+-- PLANTERS TAB
+NCOL={inv=Color3.fromRGB(255,80,80),ref=Color3.fromRGB(90,255,110),sat=Color3.fromRGB(255,255,255),mot=Color3.fromRGB(190,110,255),comf=Color3.fromRGB(90,150,255)}
+NNAME={inv="farm inv. nectar",ref="farm ref. nectar",sat="farm sat. nectar",mot="farm mot. nectar",comf="farm comf. nectar"}
+NORD={"inv","ref","sat","mot","comf"}
+plBtn=Instance.new("TextButton",tPlant);plBtn.Size=UDim2.new(1,-52,0,26);plBtn.Position=UDim2.new(0,4,0,2);plBtn.BackgroundColor3=Color3.fromRGB(35,35,50);plBtn.Font=Enum.Font.Gotham;plBtn.TextSize=12;plBtn.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",plBtn).CornerRadius=UDim.new(0,4)
+plMinBx=Instance.new("TextBox",tPlant);plMinBx.Size=UDim2.new(0,40,0,26);plMinBx.Position=UDim2.new(1,-46,0,2);plMinBx.BackgroundColor3=Color3.fromRGB(35,35,45);plMinBx.TextColor3=Color3.new(1,1,1);plMinBx.Text=tostring(cfg.pl_min or 43);plMinBx.Font=Enum.Font.Code;plMinBx.TextSize=12;Instance.new("UICorner",plMinBx).CornerRadius=UDim.new(0,4)
+function updPlBtn()plBtn.Text=(cfg.pl_auto and"[X] "or"[ ] ")..string.format("auto plant planters (:%02d)",tonumber(cfg.pl_min)or 43);plBtn.TextColor3=cfg.pl_auto and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200)end
+plMinBx.FocusLost:Connect(function()local n2=tonumber(plMinBx.Text);if n2 and n2>=0 and n2<=59 then cfg.pl_min=math.floor(n2)end;plMinBx.Text=tostring(cfg.pl_min or 43);updPlBtn();saveCfg()end)
+plBtn.MouseButton1Click:Connect(function()cfg.pl_auto=not cfg.pl_auto;updPlBtn();saveCfg()end);updPlBtn()
+plRows={}
+for i,k in ipairs(NORD)do
+local y=32+(i-1)*42
+local tg=Instance.new("TextButton",tPlant);tg.Size=UDim2.new(0,158,0,20);tg.Position=UDim2.new(0,4,0,y);tg.BackgroundColor3=Color3.fromRGB(35,35,50);tg.Font=Enum.Font.Gotham;tg.TextSize=11;tg.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",tg).CornerRadius=UDim.new(0,4)
+local bx=Instance.new("TextBox",tPlant);bx.Size=UDim2.new(0,34,0,20);bx.Position=UDim2.new(0,166,0,y);bx.BackgroundColor3=Color3.fromRGB(35,35,45);bx.TextColor3=Color3.new(1,1,1);bx.Text=tostring(cfg["pl_"..k.."_h"]);bx.Font=Enum.Font.Code;bx.TextSize=11;Instance.new("UICorner",bx).CornerRadius=UDim.new(0,4)
+local remL=Instance.new("TextLabel",tPlant);remL.Size=UDim2.new(0,90,0,20);remL.Position=UDim2.new(0,206,0,y);remL.BackgroundTransparency=1;remL.Font=Enum.Font.Code;remL.TextSize=10;remL.TextXAlignment=Enum.TextXAlignment.Left;remL.TextColor3=NCOL[k];remL.Text="0h 00m"
+local barBg=Instance.new("Frame",tPlant);barBg.Size=UDim2.new(0,290,0,6);barBg.Position=UDim2.new(0,4,0,y+22);barBg.BackgroundColor3=Color3.fromRGB(25,25,35);barBg.BorderSizePixel=0;Instance.new("UICorner",barBg).CornerRadius=UDim.new(0,3)
+local barFill=Instance.new("Frame",barBg);barFill.Size=UDim2.new(0,0,1,0);barFill.BackgroundColor3=NCOL[k];barFill.BorderSizePixel=0;Instance.new("UICorner",barFill).CornerRadius=UDim.new(0,3)
+local function updTg()tg.Text=(cfg["pl_"..k]and"[X] "or"[ ] ")..NNAME[k];tg.TextColor3=cfg["pl_"..k]and NCOL[k]or Color3.fromRGB(140,140,140)end
+tg.MouseButton1Click:Connect(function()cfg["pl_"..k]=not cfg["pl_"..k];updTg();saveCfg()end);updTg()
+bx.FocusLost:Connect(function()local n2=tonumber(bx.Text);if n2 and n2>=1 and n2<=22 then cfg["pl_"..k.."_h"]=math.floor(n2)end;bx.Text=tostring(cfg["pl_"..k.."_h"]);saveCfg()end)
+plRows[k]={remL=remL,bar=barFill,k=k}
+end
+ local allowedTitle=Instance.new("TextLabel",tPlant);allowedTitle.Size=UDim2.new(1,-8,0,18);allowedTitle.Position=UDim2.new(0,4,0,238);allowedTitle.BackgroundTransparency=1;allowedTitle.Text="Allowed Planters";allowedTitle.TextColor3=Color3.fromRGB(150,200,255);allowedTitle.Font=Enum.Font.GothamBold;allowedTitle.TextSize=12;allowedTitle.TextXAlignment=Enum.TextXAlignment.Left
+local allowedDefs={{"Pesticide Planter","allow_pesticide"},{"Tacky Planter","allow_tacky"},{"Blue Clay Planter","allow_blue_clay"},{"Red Clay Planter","allow_red_clay"},{"Petal Planter","allow_petal"},{"Hydroponic Planter","allow_hydroponic"},{"Heat-Treated Planter","allow_heat_treated"},{"The Planter Of Plenty","allow_planter_of_plenty"}}
+ for i,def in ipairs(allowedDefs)do
+ local col=(i-1)%2;local row=math.floor((i-1)/2)
+ local b=Instance.new("TextButton",tPlant);b.Size=UDim2.new(0,145,0,20);b.Position=UDim2.new(0,4+col*150,0,258+row*24);b.BackgroundColor3=Color3.fromRGB(35,35,50);b.Font=Enum.Font.Gotham;b.TextSize=10;b.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",b).CornerRadius=UDim.new(0,4)
+ local function updAllowed()b.Text=(cfg[def[2]]and"[X] "or"[ ] ")..def[1];b.TextColor3=cfg[def[2]]and Color3.fromRGB(100,255,100)or Color3.fromRGB(180,180,180)end
+ b.MouseButton1Click:Connect(function()cfg[def[2]]=not cfg[def[2]];updAllowed();saveCfg()end);updAllowed()
+ end
+-- PATTERNS TAB
+patRefBtn=Instance.new("TextButton",tPat);patRefBtn.Size=UDim2.new(0,90,0,26);patRefBtn.Position=UDim2.new(0,4,0,2);patRefBtn.BackgroundColor3=Color3.fromRGB(35,35,50);patRefBtn.Text="Refresh";patRefBtn.TextColor3=Color3.fromRGB(100,255,100);patRefBtn.Font=Enum.Font.Gotham;patRefBtn.TextSize=11;Instance.new("UICorner",patRefBtn).CornerRadius=UDim.new(0,4)
+patCpyBtn=Instance.new("TextButton",tPat);patCpyBtn.Size=UDim2.new(0,90,0,26);patCpyBtn.Position=UDim2.new(0,100,0,2);patCpyBtn.BackgroundColor3=Color3.fromRGB(35,35,50);patCpyBtn.Text="Copy";patCpyBtn.TextColor3=Color3.fromRGB(200,200,200);patCpyBtn.Font=Enum.Font.Gotham;patCpyBtn.TextSize=11;Instance.new("UICorner",patCpyBtn).CornerRadius=UDim.new(0,4)
+patScroll=Instance.new("ScrollingFrame",tPat);patScroll.Size=UDim2.new(1,-8,1,-36);patScroll.Position=UDim2.new(0,4,0,32);patScroll.BackgroundColor3=Color3.fromRGB(15,15,22);patScroll.BorderSizePixel=0;patScroll.ScrollBarThickness=4;patScroll.CanvasSize=UDim2.new(0,0,0,860);Instance.new("UICorner",patScroll).CornerRadius=UDim.new(0,6)
+patLbl=Instance.new("TextLabel",patScroll);patLbl.Size=UDim2.new(1,-8,0,840);patLbl.Position=UDim2.new(0,4,0,2);patLbl.BackgroundTransparency=1;patLbl.Font=Enum.Font.Code;patLbl.TextSize=10;patLbl.TextXAlignment=Enum.TextXAlignment.Left;patLbl.TextYAlignment=Enum.TextYAlignment.Top;patLbl.TextColor3=Color3.fromRGB(200,220,255);patLbl.TextWrapped=true;patLbl.Text="Нажми Refresh — отчёт по actLog появится тут"
+patRefBtn.MouseButton1Click:Connect(function()local okA,resA=pcall(analyzePat);patLbl.Text=okA and resA or("Ошибка анализа: "..tostring(resA))end)
+patCpyBtn.MouseButton1Click:Connect(function()pcall(setclipboard,patLbl.Text)end)
+patRstBtn=Instance.new("TextButton",tPat);patRstBtn.Size=UDim2.new(0,90,0,26);patRstBtn.Position=UDim2.new(0,196,0,2);patRstBtn.BackgroundColor3=Color3.fromRGB(50,30,30);patRstBtn.Text="Reset";patRstBtn.TextColor3=Color3.fromRGB(255,120,120);patRstBtn.Font=Enum.Font.Gotham;patRstBtn.TextSize=11;Instance.new("UICorner",patRstBtn).CornerRadius=UDim.new(0,4)
+patRstBtn.MouseButton1Click:Connect(function()actLog={};pcall(sPat);patLbl.Text="Лог паттернов сброшен (actLog=0, marmot_z_pat.json перезаписан). Нажми Refresh после пары минут фарма";print("MarmotZ: pattern log reset")end)
 
 -- ===== PLANTER ENGINE =====
 NFIELDS={inv={"Mountain Top Field","Cactus Field","Clover Field"},ref={"Coconut Field","Blue Flower Field","Strawberry Field"},sat={"Pumpkin Patch","Pineapple Patch","Sunflower Field"},mot={"Rose Field","Stump Field","Mushroom Field","Spider Field"},comf={"Pine Tree Forest","Bamboo Field","Dandelion Field"}}
@@ -2072,8 +2046,8 @@ end)
 
 -- GUI LOOP
 task.spawn(function()while true do task.wait(0.3)pcall(function()
-lb.Text=tostring(tL or "Idle");local elapsed=math.max(0,os.clock()-(scriptStartT or os.clock()));tmLbl.Text=string.format("%02d:%02d:%02d",math.floor(elapsed/3600),math.floor((elapsed%3600)/60),math.floor(elapsed%60));local curH=getHoney()or 0;local em=elapsed/60;local hp40m=em>0 and(curH-(scriptStartH or 0))/em*40 or 0
-hl.Text=fmtH(hp40m);fieldLbl.Text=(curF and curF.part and curF.part.Name and curF.part.Name ~= "" and curF.part.Name)or"Unknown"
+lb.Text="Action: "..(tL or"");tmLbl.Text="Time: "..os.date("%H:%M:%S");local curH=getHoney()or 0;local em=(os.clock()-(scriptStartT or 0))/60;local hp40m=em>0 and(curH-(scriptStartH or 0))/em*40 or 0
+hl.Text="HP40M: "..fmtH(hp40m).." | "..fmtH(curH)
 if scorchActive and(scorchStartT or 0)>0 then
 local scDur=os.clock()-scorchStartT
 local scEarned=curH-(scorchStartH or 0)
@@ -2106,4 +2080,4 @@ scorchActive=false;scorchRecording=false;scorchActions={};scorchStartH=0;scorchS
 for _,v in pairs(activeTG)do if v.gui then pcall(function()v.gui:Destroy()end)end end;activeShowers={};activeBlooms={};activeCocos={};activeComboCocos={};activeTG={};tokenVerify={};tokenBL=setmetatable({},{__mode="k"});greenCH_cache={}
 for fl in pairs(flameCD)do flameCD[fl]=nil end;for fl in pairs(scytheParts)do scytheParts[fl]=nil end
 end)
-print("Marmot Z v5.3.0 — Full script active.")
+print("Marmot Z v5.2.8 — Full script active.")
