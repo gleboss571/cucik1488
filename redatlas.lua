@@ -6,7 +6,7 @@ local V=game:GetService("VirtualInputManager");local D=game:GetService("Debris")
 local L=P.LocalPlayer;local G=L:WaitForChild("PlayerGui");local ENABLED=true;local ELA=true
 if not math.round then math.round=function(n)return math.floor(n+.5)end end
 Q_VERSION="Marmot Z - HRL & Velocity Overdrive v5.3.0"
-if not game:IsLoaded() then game.Loaded:Wait() end
+task.wait(2)
 
 -- COMPAT
 local ZERO=Vector3.new(0,0,0)
