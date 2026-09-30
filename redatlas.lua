@@ -1702,13 +1702,24 @@ local function selectTab(btn,panel)if selectedTab then selectedTab.BackgroundCol
 local function mkSideBtn(y,name,panel)local b=Instance.new("TextButton",sideBar);b.Size=UDim2.new(1,-8,0,32);b.Position=UDim2.new(0,4,0,y);b.Text="  "..name;b.BackgroundColor3=Color3.fromRGB(30,30,45);b.TextColor3=Color3.fromRGB(200,200,200);b.Font=Enum.Font.GothamSemibold;b.TextSize=11;b.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",b).CornerRadius=UDim.new(0,4);b.MouseButton1Click:Connect(function()selectTab(b,panel)end);return b end
 local btnStats=mkSideBtn(2,"Stats",tMain);local btnAuto=mkSideBtn(38,"Autofarm",tAuto)
 -- Honey Drop icon to the right of the Autofarm text
-local autoFarmIcon=Instance.new("ImageLabel",btnAuto)
-autoFarmIcon.Name="HoneyDropIcon"
-autoFarmIcon.Size=UDim2.new(0,20,0,20)
-autoFarmIcon.Position=UDim2.new(1,-26,0.5,-10)
-autoFarmIcon.BackgroundTransparency=1
-autoFarmIcon.Image="rbxassetid://1472108394"
-autoFarmIcon.ScaleType=Enum.ScaleType.Fit
+local autoFarmIcon = Instance.new("ImageLabel")
+autoFarmIcon.Name = "HoneyDropIcon"
+autoFarmIcon.Parent = btnAuto
+
+autoFarmIcon.AnchorPoint = Vector2.new(1, 0.5)
+autoFarmIcon.Position = UDim2.new(1, -7, 0.5, 0)
+autoFarmIcon.Size = UDim2.fromOffset(20, 20)
+
+autoFarmIcon.BackgroundTransparency = 1
+autoFarmIcon.BorderSizePixel = 0
+autoFarmIcon.ImageTransparency = 0
+autoFarmIcon.Visible = true
+autoFarmIcon.ZIndex = btnAuto.ZIndex + 1
+
+autoFarmIcon.Image =
+    "rbxthumb://type=Asset&id=1472108394&w=150&h=150"
+
+autoFarmIcon.ScaleType = Enum.ScaleType.Fit
 local btnBoost=mkSideBtn(74,"Boosts",tBoost);local btnFarm=mkSideBtn(110,"Farm pattern",tFarm);local btnPlant=mkSideBtn(146,"Planters",tPlant);local btnSet=mkSideBtn(182,"Settings",tSet);btnPat=mkSideBtn(218,"Patterns",tPat);selectTab(btnStats,tMain)
 -- Stats
 local function mkStat(y,color)local l=Instance.new("TextLabel",tMain);l.Size=UDim2.new(1,0,0,17);l.Position=UDim2.new(0,4,0,y);l.BackgroundTransparency=1;l.Font=Enum.Font.Gotham;l.TextSize=11;l.TextXAlignment=Enum.TextXAlignment.Left;l.TextColor3=color or Color3.new(1,1,1);return l end
