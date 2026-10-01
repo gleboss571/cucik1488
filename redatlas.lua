@@ -1,20 +1,18 @@
--- Marmot Z v5.2.8
+-- Marmot Z v5.3.0
 local P=game:GetService("Players");local W=game:GetService("Workspace")
 local R=game:GetService("RunService");local U=game:GetService("UserInputService")
 local RS=game:GetService("ReplicatedStorage");local H=game:GetService("HttpService")
 local V=game:GetService("VirtualInputManager");local D=game:GetService("Debris")
 local L=P.LocalPlayer;local G=L:WaitForChild("PlayerGui");local ENABLED=true;local ELA=true
 if not math.round then math.round=function(n)return math.floor(n+.5)end end
-Q_VERSION="Marmot Z - HRL & Velocity Overdrive v5.2.8"
+Q_VERSION="Marmot Z - HRL & Velocity Overdrive v5.3.0"
 task.wait(2)
-
 -- COMPAT
 local ZERO=Vector3.new(0,0,0)
+local MZ={} -- v5.3.0: единая таблица новых функций (лимит 200 locals)
 local function cfLookAt(from,to)local ok,res=pcall(function()return CFrame.lookAt(from,to)end);if ok and res then return res end;return CFrame.new(from,to)end
-
 -- FORWARD DECLARATIONS
 local gFCB,gFCPath,scanPreciseBee
-
 -- ERROR GUI
 local elog,egui,elbl,ebtn,ecnt={},nil,nil,nil,0
 local function mkE()pcall(function()if egui then return end
@@ -23,7 +21,7 @@ local b=Instance.new("Frame",egui);b.Size=UDim2.new(0,380,0,240);b.Position=UDim
 b.BackgroundColor3=Color3.fromRGB(15,15,25);b.BackgroundTransparency=.08;b.BorderSizePixel=0;b.Active=true;b.Draggable=true
 Instance.new("UICorner",b).CornerRadius=UDim.new(0,8)
 local t=Instance.new("TextLabel",b);t.Size=UDim2.new(1,-16,0,24);t.Position=UDim2.new(0,8,0,8);t.BackgroundTransparency=1
-t.Text="Marmot Z v5.2.5";t.TextColor3=Color3.fromRGB(255,180,60);t.Font=Enum.Font.GothamBold;t.TextSize=14;t.TextXAlignment=Enum.TextXAlignment.Left
+t.Text="Marmot Z v5.3.0";t.TextColor3=Color3.fromRGB(255,180,60);t.Font=Enum.Font.GothamBold;t.TextSize=14;t.TextXAlignment=Enum.TextXAlignment.Left
 elbl=Instance.new("TextLabel",b);elbl.Size=UDim2.new(1,-16,0,130);elbl.Position=UDim2.new(0,8,0,42);elbl.BackgroundTransparency=1
 elbl.Text="Marmot Z boot...";elbl.TextColor3=Color3.fromRGB(200,200,200);elbl.Font=Enum.Font.Code;elbl.TextSize=11;elbl.TextWrapped=true;elbl.RichText=true
 ebtn=Instance.new("TextButton",b);ebtn.Size=UDim2.new(0,140,0,28);ebtn.Position=UDim2.new(0,8,0,180)
@@ -38,7 +36,6 @@ task.spawn(function()task.wait(4);if egui and ecnt==0 then egui.Enabled=false;eg
 local function le(m)ecnt=ecnt+1;table.insert(elog,string.format("[%02d] %s",ecnt,m));while #elog>20 do table.remove(elog,1)end;if elbl then local LL={};for i=math.max(1,#elog-12),#elog do table.insert(LL,elog[i])end;elbl.Text=table.concat(LL,"\n");if ecnt==1 then elbl.TextColor3=Color3.fromRGB(255,140,100)end end;warn("MarmotZ:",m)end
 local function lo(m)if elbl then elbl.Text="o "..m;elbl.TextColor3=Color3.fromRGB(140,255,160)end end
 mkE();lo("GUI OK")
-
 -- HELPERS
 local HRP,HUM=nil,nil
 local charConn,remConn
@@ -50,9 +47,9 @@ remConn=L.CharacterRemoving:Connect(function()HRP,HUM=nil,nil;disconnectConns()e
 local function h()return HRP end
 local function hm()return HUM end
 local function ti(t)if not t then return nil end;return tonumber(t:match("rbxassetid://(%d+)")or t:match("id=(%d+)"))end
-local function d3(a,b)local dx=a.X-b.X;local dz=a.Z-b.Z;return math.sqrt(dx*dx+dz*dz)end
+local function d3(a,b)local dx=a.X-b.X;local dz=a.Z-b.Z;return math.sqrt(dxdx+dzdz)end
 local function d3d(a,b)return(a-b).Magnitude end
-local function d2Sq(a,b)local dx=a.X-b.X;local dz=a.Z-b.Z;return dx*dx+dz*dz end
+local function d2Sq(a,b)local dx=a.X-b.X;local dz=a.Z-b.Z;return dxdx+dzdz end
 local function fmtH(v)if v>=1e12 then return string.format("%.2fT",v/1e12)end;if v>=1e9 then return string.format("%.2fB",v/1e9)end;if v>=1e6 then return string.format("%.2fM",v/1e6)end;if v>=1e3 then return string.format("%.1fK",v/1e3)end;return string.format("%.0f",v)end
 -- FIX #9
 local function getHoney()
@@ -60,14 +57,12 @@ if cachedHoney and cachedHoney.Parent then return tonumber(cachedHoney.Value)or 
 local cs=L and L:FindFirstChild("CoreStats");local hv=cs and cs:FindFirstChild("Honey")
 return hv and tonumber(hv.Value)or 0
 end
-
 -- ANIM
 local function lootAnim(pos,dur)if not pos then return end;local r=h();if not r then return end
 local spark=Instance.new("Part");spark.Shape=0;spark.Size=Vector3.new(1.2,1.2,1.2);spark.Anchored=true;spark.CanCollide=false;spark.Position=Vector3.new(pos.X,pos.Y+2,pos.Z)
 spark.BrickColor=BrickColor.new("Bright yellow");spark.Material=Enum.Material.Neon;spark.Transparency=0.3;spark.Parent=W;D:AddItem(spark,dur+0.2)
 local bg=r:FindFirstChild("BG_Loot")or Instance.new("BodyGyro");bg.Name="BG_Loot";bg.MaxTorque=Vector3.new(0,40000,0);bg.P=8000;bg.D=300;bg.Parent=r
-local dir=pos-r.Position;dir=Vector3.new(dir.X,0,dir.Z);if dir.Magnitude>0.1 then bg.CFrame=cfLookAt(r.Position,r.Position+dir)end;D:AddItem(bg,dur*1.2)end
-
+local dir=pos-r.Position;dir=Vector3.new(dir.X,0,dir.Z);if dir.Magnitude>0.1 then bg.CFrame=cfLookAt(r.Position,r.Position+dir)end;D:AddItem(bg,dur1.2)end
 -- CONSTANTS
 SB={NABOR=70,X10=90,REFRESH=75}
 SJ=3;AM=1.2;DGL=22;FM=3;AD=5;MT=6
@@ -121,7 +116,6 @@ TKS[107187190]={n="HG",base=4,p=2,pre="HG ",nc=Color3.new(1,.8,.3),bg=Color3.new
 TKS[183390139]={n="CG",base=4,p=2,pre="CG ",nc=Color3.new(.6,.6,.6),bg=Color3.new(0,0,0)}
 AV={};for _,v in ipairs({1674871631,1471882621,1952740625,8055428094,2319943273,3030569073,3036899811,3080740120,3012679515,1838129169,2584584968,1471849394,1952682401,6087969886,2028574353,2028453802})do AV[v]=true end
 PC={Pink=Color3.fromRGB(255,130,201)};PP={Pink=2}
-
 -- STATE
 aT,cQ,lP,curF,tL={},{},nil,nil,"start"
 -- кэшированные ссылки на сервисы/объекты
@@ -129,14 +123,14 @@ local cachedStats=nil;local cachedHoney=nil
 local cachedEvents=nil;local cachedRPS=nil;local cachedToolCollect=nil
 local cachedFlowers=nil;local cachedFlowerZones=nil;local cachedParticles=nil
 local function refreshServices()
-	cachedStats=L:FindFirstChild("CoreStats")
-	if cachedStats then cachedHoney=cachedStats:FindFirstChild("Honey")end
-	local ev=RS:FindFirstChild("Events")
-	cachedEvents=ev
-	if ev then cachedRPS=ev:FindFirstChild("RetrievePlayerStats")cachedToolCollect=ev:FindFirstChild("ToolCollect")end
-	cachedFlowers=W:FindFirstChild("Flowers")
-	cachedFlowerZones=W:FindFirstChild("FlowerZones")
-	cachedParticles=W:FindFirstChild("Particles")
+cachedStats=L:FindFirstChild("CoreStats")
+if cachedStats then cachedHoney=cachedStats:FindFirstChild("Honey")end
+local ev=RS:FindFirstChild("Events")
+cachedEvents=ev
+if ev then cachedRPS=ev:FindFirstChild("RetrievePlayerStats")cachedToolCollect=ev:FindFirstChild("ToolCollect")end
+cachedFlowers=W:FindFirstChild("Flowers")
+cachedFlowerZones=W:FindFirstChild("FlowerZones")
+cachedParticles=W:FindFirstChild("Particles")
 end
 prec={st=0,val=0,isX=false,ls=0,sD=60,sS=0,tL=0,nR=false}
 st={tk=0,ch=0,pr=0,rf=0,tR=0,dc=0,sm=0,chA=0,pt=0,chP=0}
@@ -166,7 +160,6 @@ hchDodge=false;hchBusy=false;hchSmT0=0
 local vecPool={}
 local function getVec(x,y,z)return table.remove(vecPool)or Vector3.new(x,y,z)end
 local function retVec(v)if #vecPool<200 then v=Vector3.new(0,0,0);table.insert(vecPool,v)end end
-
 -- CONFIG
 local cfg={ss_on=false,sp_x10=90,sp_nab=70,sp_ref=75,coco_on=true,coco_lim=0,combo_on=true,combo_lim=0,shower_on=true,shower_lim=0,purple_on=true,purple_lim=0,hachapuri=false,pepper_x4=false,boost_purple_potion=false,boost_glue=false,boost_oil=false,boost_enzymes=false,boost_red_extract=false,boost_tropical_drink=false,pl_auto=false,pl_inv=false,pl_ref=false,pl_sat=false,pl_mot=false,pl_comf=false,pl_inv_h=22,pl_ref_h=22,pl_sat_h=22,pl_mot_h=22,pl_comf_h=22,pl_min=43,mv_mode="tp",tw_speed=150,rejoin_on=true,allow_pesticide=true,allow_tacky=true,allow_blue_clay=true,allow_red_clay=true,allow_petal=true,allow_hydroponic=true,allow_heat_treated=true,allow_planter_of_plenty=true}
 local function saveCfg()if writefile then pcall(function()writefile("marmot_z_data.json",H:JSONEncode({cfg=cfg,plHist=plHist or PLHIST_LOADED}))end)end end
@@ -177,6 +170,8 @@ if ok and raw then local ok2,dd=pcall(H.JSONDecode,H,raw);if ok2 and type(dd)=="
 if not d then local ok3,raw3=pcall(readfile,"marmot_z_config.json");if ok3 and raw3 then local ok4,d4=pcall(H.JSONDecode,H,raw3);if ok4 and type(d4)=="table"then d=d4 end end end
 if type(d)=="table"then for k,v in pairs(d)do if cfg[k]~=nil then cfg[k]=v end end;SB.X10=cfg.sp_x10;SB.NABOR=cfg.sp_nab;SB.REFRESH=cfg.sp_ref end
 end
+-- FIX #20: новые ключи конфига v5.3.0 (до loadCfg, чтобы они сохранялись/загружались)
+for k,v in pairs({pa_astar=true,pa_always=false,pa_dbg=false,pa_margin=3.5,pa_margin_t=2.5,pa_wait=1.5,sm_petal=true,sm_ring=true,sm_ring_fb=false,sm_margin=1.2,sm_reach=4.5,sm_safety=0.6,coco_smart=true,coco_early=1.1,coco_loot_t=1.6,ui_anim=true})do if cfg[k]==nil then cfg[k]=v end end
 loadCfg()
 task.spawn(function()task.wait(3)
 if not writefile then le("writefile НЕДОСТУПЕН: JSON (data/scorch/q/pat) НЕ сохраняются! Включи доступ к файлам в настройках executor")
@@ -188,7 +183,6 @@ pcall(saveCfg)
 if delfile and isfile and isfile("marmot_z_data.json")then pcall(delfile,"marmot_z_config.json");pcall(delfile,"marmot_z_planters.json")end
 end end
 end)
-
 -- SPATIAL STATE
 local function ph()if not prec.isX then return"NABOR"end;if prec.nR then return"REFRESH"end;return"X10"end
 local function scPh()if aB.SS.st>0 then return"INSIDE"end;return"OUTSIDE"end
@@ -220,11 +214,11 @@ if field~=cachedField then refreshFieldCache(field)end
 local p=r.Position
 local px,pz=p.X,p.Z
 local dx,dz=px-lastX,pz-lastZ
-if dx*dx+dz*dz<MOVE_EPS_SQ then return cachedState end
+if dxdx+dzdz<MOVE_EPS_SQ then return cachedState end
 lastX,lastZ=px,pz
 if not(fInvHX and fInvHZ)then cachedState="M";return"M"end
-local rx=abs(px-fCX)*fInvHX
-local rz=abs(pz-fCZ)*fInvHZ
+local rx=abs(px-fCX)fInvHX
+local rz=abs(pz-fCZ)fInvHZ
 if rx>EDGE_T or rz>EDGE_T then cachedState="E"
 elseif rx<CENTER_T and rz<CENTER_T then cachedState="C"
 else cachedState="M"end
@@ -244,7 +238,6 @@ end
 return ckCache
 end
 end
-
 -- FIELD DETECTION
 local function fldHashF()if not curF or not curF.part then return"unknown"end;return string.format("%.0f%.0f",curF.part.Position.X/50,curF.part.Position.Z/50)end
 local function swFld()local nh=fldHashF();if nh==fldHash then return end;if fldHash then qTables[fldHash]=QT end;fldHash=nh;QT=qTables[fldHash]or{}end
@@ -262,7 +255,7 @@ end
 end
 if be then curF={part=be};swFld();return curF end
 end
-if aR then curF={part={Position=aR.Position,Size=Vector3.new(aRR*3,1,aRR*3)} };swFld();return curF end
+if aR then curF={part={Position=aR.Position,Size=Vector3.new(aRR3,1,aRR3)} };swFld();return curF end
 local fls2=W:FindFirstChild("Flowers");if fls2 then local minX,maxX,minZ,maxZ=math.huge,-math.huge,math.huge,-math.huge;for _,f2 in ipairs(fls2:GetChildren())do if f2:IsA("BasePart")then local p2=f2.Position;if p2.X<minX then minX=p2.X end;if p2.X>maxX then maxX=p2.X end;if p2.Z<minZ then minZ=p2.Z end;if p2.Z>maxZ then maxZ=p2.Z end end end;if maxX>minX then local cx2=(minX+maxX)/2;local cz2=(minZ+maxZ)/2;curF={part={Position=Vector3.new(cx2,0,cz2),Size=Vector3.new(maxX-minX+20,1,maxX-minX+20)}};swFld();return curF end end
 return curF
 end
@@ -273,7 +266,7 @@ if not fixedXFC then local fls3=W:FindFirstChild("Flowers");local fp3=fls3 and f
 if fixedXFC then return fixedXFC end
 end
 if curF and curF.part then return curF.part.Position end;local r=h();return r and r.Position or ZERO end
-local function gAS()local p=ph();local b=SB[p]or 70;if hbF%30==0 then local base=b+(math.random()*2-1)*SJ;if math.abs(base-cS)>1 then cS=base end end;return cS end
+local function gAS()local p=ph();local b=SB[p]or 70;if hbF%30==0 then local base=b+(math.random()2-1)SJ;if math.abs(base-cS)>1 then cS=base end end;return cS end
 local function cP(pos,sk)
 if sk then return pos end
 if not curF then return pos end
@@ -282,10 +275,10 @@ local mx=math.max(s.X/2-FM,1);local mz=math.max(s.Z/2-FM,1)
 local cl=Vector3.new(math.clamp(pos.X,c.X-mx,c.X+mx),pos.Y,math.clamp(pos.Z,c.Z-mz,c.Z+mz))
 if aB.XF.st>=19 then
 local dx=cl.X-c.X;local dz=cl.Z-c.Z
-local dSq=dx*dx+dz*dz
+local dSq=dxdx+dzdz
 if dSq>0 then
 local invD=1/math.sqrt(dSq)
-cl=Vector3.new(c.X+dx*invD*XCR,cl.Y,c.Z+dz*invD*XCR)
+cl=Vector3.new(c.X+dxinvDXCR,cl.Y,c.Z+dzinvDXCR)
 end
 end
 return cl
@@ -294,7 +287,7 @@ W.DescendantAdded:Connect(function(o)if o.Name=="AreaRing"and o:IsA("BasePart")t
 local function fAR()local p=W:FindFirstChild("Particles");if p then for _,o in ipairs(p:GetChildren())do if o.Name=="AreaRing"and o:IsA("BasePart")then aR=o;aRR=(o.Size.X+o.Size.Z)/4;if aRR<5 then aRR=ARR end;return end end end;aR=W:FindFirstChild("AreaRing");if aR and aR:IsA("BasePart")then aRR=(aR.Size.X+aR.Size.Z)/4;if aRR<5 then aRR=ARR end else aR=nil;aRR=ARR end end
 task.spawn(function()local hap=W:FindFirstChild("Happenings");if not hap then hap=W:WaitForChild("Happenings",10)end;if not hap then return end;local ppf=hap:FindFirstChild("PoppablePlants");if not ppf then ppf=hap:WaitForChild("PoppablePlants",5)end;if not ppf then return end;for _,b in ipairs(ppf:GetChildren())do if b:IsA("BasePart")then activeBlooms[b]=true end end;ppf.ChildAdded:Connect(function(b)if b:IsA("BasePart")then activeBlooms[b]=true end end);ppf.ChildRemoved:Connect(function(b)activeBlooms[b]=nil end);print("MarmotZ: Bloom tracking active, initial blooms="..#ppf:GetChildren())end)
 local Pt=W:FindFirstChild("Particles");if not Pt then Pt=workspace:WaitForChild("Particles",10)end
-local function iCl(a,b,tl)tl=tl or PTOL;return math.abs(a.R*255-b.R*255)<=tl and math.abs(a.G*255-b.G*255)<=tl and math.abs(a.B*255-b.B*255)<=tl end
+local function iCl(a,b,tl)tl=tl or PTOL;return math.abs(a.R255-b.R255)<=tl and math.abs(a.G255-b.G255)<=tl and math.abs(a.B255-b.B255)<=tl end
 local function iP(p)local ok1,c1=pcall(function()return p.Color end);if ok1 and c1 and iCl(c1,PURP,20)then return true end;local ok2,bc=pcall(function()return p.BrickColor end);if ok2 and bc then local bn=bc.Name:lower();if bn:find("lavender")or bn:find("violet")or bn:find("purple")or bn:find("lilac")or bn:find("magenta")then return true end end;return false end
 local rcp=RaycastParams.new();rcp.FilterType=Enum.RaycastFilterType.Whitelist
 local function predictLandingPos(chPart)
@@ -350,15 +343,15 @@ if #activeComboCocos==0 then comboCycle=0 end
 for i=#activeShowers,1,-1 do if activeShowers[i].part==o then table.remove(activeShowers,i);break end end
 if #activeShowers==0 then showerCycle=0 end
 end)
- for _,o in ipairs(Pt:GetDescendants())do
- aCH(o)
- if o.Name=="WarningDisk"and o:IsA("BasePart")then
- local sx=o.Size.X
- if math.abs(sx-23.4)<2 then table.insert(activeCocos,{part=o,spawnTime=os.clock(),collected=false})
- elseif math.abs(sx-8.0)<1 then table.insert(activeShowers,{part=o,spawnTime=os.clock(),collected=false})end
- end
- end
- for _,o in ipairs(Pt:GetDescendants())do if o.Name=="WarningDisk"and o:IsA("BasePart")then addComboDisk(o)end end
+for _,o in ipairs(Pt:GetDescendants())do
+aCH(o)
+if o.Name=="WarningDisk"and o:IsA("BasePart")then
+local sx=o.Size.X
+if math.abs(sx-23.4)<2 then table.insert(activeCocos,{part=o,spawnTime=os.clock(),collected=false})
+elseif math.abs(sx-8.0)<1 then table.insert(activeShowers,{part=o,spawnTime=os.clock(),collected=false})end
+end
+end
+for _,o in ipairs(Pt:GetDescendants())do if o.Name=="WarningDisk"and o:IsA("BasePart")then addComboDisk(o)end end
 end
 local function clnCH()for i=#cQ,1,-1 do local ch=cQ[i];if not ch.part or not ch.part.Parent or ch.col then table.remove(cQ,i)end end end
 local function gCH(op,oR,purpFirst)
@@ -413,7 +406,6 @@ if d3(cp,c.center)>FLAME_PATH_STEP then table.insert(path,c.center);cp=c.center 
 end
 return #path>0 and path or nil
 end
-
 -- CROSSHAIR AVOIDANCE
 local cATCache={};local cATFrame=0
 local function gRCT(mP,dP,tp)
@@ -431,13 +423,13 @@ if not ch.col and ch.part.Parent and not ch.isP and d2Sq(df,ch.part.Position)>(t
 local cf=Vector3.new(ch.part.Position.X,0,ch.part.Position.Z)
 local dSq=d2Sq(mf,cf)
 local sz=math.max(ch.part.Size.X,ch.part.Size.Z,4)
-local effR=sz*0.5+(tp and 7 or 13)
-if isScActive then effR=math.min(effR,sz*0.5+10) end
+local effR=sz0.5+(tp and 7 or 13)
+if isScActive then effR=math.min(effR,sz0.5+10) end
 if isGrnCH and isGrnCH(ch)then effR=effR+3 end
-if dSq<((effR+5)*(effR+5))and dSq>0.04 then
+if dSq<((effR+5)(effR+5))and dSq>0.04 then
 local toCh=cf-mf
 if toCh.Unit:Dot(tD)>-0.25 then
-local cross=math.abs(toCh.X*tD.Z-toCh.Z*tD.X)
+local cross=math.abs(toCh.XtD.Z-toCh.ZtD.X)
 if cross<effR then table.insert(th,{ch=ch,pos=cf,dist=math.sqrt(dSq),cross=cross,sz=sz})end
 end
 end
@@ -447,23 +439,24 @@ cATCache[mP]={tp=tp,th=th};return th
 end
 -- FIX #1: deterministic 8-way tangent bypass; no frame-to-frame side switching.
 local function cAT(mP,dP,targetIsPurple)
+-- FIX #19: A*-планировщик; старый 8-way обход ниже остаётся запасным
+if cfg.pa_astar~=false and MZ.plan then local okP,wpP,hdP=pcall(MZ.plan,mP,dP,targetIsPurple);if okP and hdP then return wpP end end
 local th=gRCT(mP,dP,targetIsPurple);if #th==0 then return nil end
 local mf=Vector3.new(mP.X,0,mP.Z);local df=Vector3.new(dP.X,0,dP.Z);local b=th[1]
 local r0=b.sz*.5+(targetIsPurple and 10 or 8);local best,bestScore=nil,math.huge
 local function clear(a,z)
-for _,q in ipairs(cQ)do if not q.col and q.part.Parent and not q.isP then
-local rr=math.max(q.part.Size.X,q.part.Size.Z)*.5+5;local v=z-a;local w=Vector3.new(q.part.Position.X,0,q.part.Position.Z)-a;local u=v.Magnitude>0 and v.Unit or ZERO
-local along=w:Dot(u);local side=(w-u*math.clamp(along,0,v.Magnitude)).Magnitude
+for ,q in ipairs(cQ)do if not q.col and q.part.Parent and not q.isP then
+local rr=math.max(q.part.Size.X,q.part.Size.Z).5+5;local v=z-a;local w=Vector3.new(q.part.Position.X,0,q.part.Position.Z)-a;local u=v.Magnitude>0 and v.Unit or ZERO
+local along=w:Dot(u);local side=(w-umath.clamp(along,0,v.Magnitude)).Magnitude
 if along>0 and along<v.Magnitude and side<rr then return false end
 end end;return true end
-for i=0,7 do local ang=i*math.pi/4;local wp=b.pos+Vector3.new(math.cos(ang)*r0,0,math.sin(ang)*r0);if clear(mf,wp)and clear(wp,df)then local s=(wp-mf).Magnitude+(df-wp).Magnitude;if s<bestScore then bestScore=s;best=wp end end end
+for i=0,7 do local ang=i*math.pi/4;local wp=b.pos+Vector3.new(math.cos(ang)r0,0,math.sin(ang)r0);if clear(mf,wp)and clear(wp,df)then local s=(wp-mf).Magnitude+(df-wp).Magnitude;if s<bestScore then bestScore=s;best=wp end end end
 st.chA=st.chA+1
 return best and cP(Vector3.new(best.X,mP.Y,best.Z))or cP(Vector3.new(b.pos.X,mP.Y,b.pos.Z+r0))
 end
-
 -- GREEN CH
 local GREEN_RGB={R=17/255,G=134/255,B=19/255};local GREEN_TOL=8
-local function isGreenCH(ch)if not ch.part.Parent then return false end;local ok,c=pcall(function()return ch.part.Color end);if ok and c then return math.abs(c.R-GREEN_RGB.R)*255<=GREEN_TOL and math.abs(c.G-GREEN_RGB.G)*255<=GREEN_TOL and math.abs(c.B-GREEN_RGB.B)*255<=GREEN_TOL end;return false end
+local function isGreenCH(ch)if not ch.part.Parent then return false end;local ok,c=pcall(function()return ch.part.Color end);if ok and c then return math.abs(c.R-GREEN_RGB.R)255<=GREEN_TOL and math.abs(c.G-GREEN_RGB.G)255<=GREEN_TOL and math.abs(c.B-GREEN_RGB.B)255<=GREEN_TOL end;return false end
 function isGrnCH(ch)return isGreenCH(ch)end
 function grnBad(ch)return prec and prec.isX and not prec.nR and not ch.isP and isGreenCH(ch)end
 function moHold(t)if not(t and t.mo and t.dp)then return false end;local nH=os.clock();if(t.l-(nH-t.s))<6 then return false end;if aB.SS.st>0 and scorchStartT>0 and(nH-scorchStartT)>=15 then return false end;return true end
@@ -495,12 +488,12 @@ local bg=r:FindFirstChild("BG_S")or Instance.new("BodyGyro");bg.Name="BG_S";bg.M
 local dir=fl.Position-r.Position;dir=Vector3.new(dir.X,0,dir.Z);if dir.Magnitude>0.1 then bg.CFrame=cfLookAt(r.Position,r.Position+dir)end
 local ev=RS:FindFirstChild("Events");local tce=ev and ev:FindFirstChild("ToolCollect");if tce then tcFires=tcFires+1;pcall(function()tce:FireServer()end)else pcall(function()V:SendMouseButtonEvent(0,0,0,true,game,1);task.wait(0.05);V:SendMouseButtonEvent(0,0,0,false,game,1)end)end;D:AddItem(bg,0.15);if not allFlames then break end end
 else scytheParts[fl]=nil;flameCD[fl]=nil end end end
-
 -- GOTO with Momentum Strafing
 local function collectPassingLoot(r)
-if cfg.coco_on then for _,coco in ipairs(activeCocos)do if not coco.collected and coco.part and coco.part.Parent then
+-- FIX #18: при умных кокосах пролёт через диск НЕ считается лутом (кокос ещё не упал)
+if cfg.coco_on and cfg.coco_smart==false then for _,coco in ipairs(activeCocos)do if not coco.collected and coco.part and coco.part.Parent then
 local rad=math.max(coco.part.Size.X,coco.part.Size.Z)/2
-if d2Sq(r.Position,coco.part.Position)<=(rad+1.5)*(rad+1.5)then coco.collected=true;cocoCnt=cocoCnt+1;cocoCycle=cocoCycle+1 end
+if d2Sq(r.Position,coco.part.Position)<=(rad+1.5)(rad+1.5)then coco.collected=true;cocoCnt=cocoCnt+1;cocoCycle=cocoCycle+1 end
 end end end
 for _,petal in ipairs(fP)do if petal.part and petal.part.Parent and not stP[petal.part]and d2Sq(r.Position,petal.part.Position)<=49 then
 stP[petal.part]=os.clock()+5;st.pt=st.pt+1
@@ -524,14 +517,14 @@ local function check(pos,score)
 local toP=pos-rPos;toP=Vector3.new(toP.X,0,toP.Z)
 local proj=toP:Dot(fUnit)
 if proj>0 and proj<18 then
-local side=toP-fUnit*proj
+local side=toP-fUnitproj
 local sideMag=side.Magnitude
 if sideMag<10 and score>bestScore then bestScore=score;bestOff=side end
 end
 end
 for p,t in pairs(aT)do
 if not t.col and p.Parent and not tokenBL[p]and not moHold(t)and not btBlocked(p,t)then
-local sc=t.p*(t.dp and 1.5 or 1)
+local sc=t.p(t.dp and 1.5 or 1)
 check(p.Position,sc)
 end
 end
@@ -547,7 +540,7 @@ if not coco.collected and coco.part and coco.part.Parent then check(coco.part.Po
 end
 end
 if bestOff then
-local off=bestOff.Unit*math.min(6,bestOff.Magnitude*0.6)
+local off=bestOff.Unitmath.min(6,bestOff.Magnitude0.6)
 return Vector3.new(off.X,0,off.Z)
 end
 return ZERO
@@ -555,7 +548,7 @@ end
 local function goTo(tP,rad,to,sk)
 rad=math.min(rad or 1.5,2.5);to=to or MT
 if to>12 then to=12 end;if tP==ZERO then return false end
-local r=h();local hm_=hm();if not r or not hm_ then return false end
+local r=h();local hm=hm();if not r or not hm_ then return false end;MZ.blkT=nil
 tP=cP(tP,sk);local oT=Vector3.new(tP.X,r.Position.Y,tP.Z)
 local cM=oT;local committedSide=nil
 local av=cAT(r.Position,oT,sk)
@@ -570,36 +563,36 @@ local tl=tL or ""
 local isCHTarget=sk or tl:find("go_crosshair")or tl:find("go_purple")or tl:find("P ")or tl=="C-CH"or tl=="RefAll"
 if isCHTarget then hm_:MoveTo(cM)return end
 local magnet=pathMagnet(r,oT)
+if magnet~=ZERO and MZ.moveOK and not MZ.moveOK(r.Position,cM+magnet,sk)then magnet=ZERO end -- FIX #19: магнит не тянет в кросхейр
 if dist<6 then hm_:MoveTo(cM+magnet)return end
 local dir=dv.Unit
 local vel=r.AssemblyLinearVelocity
 local flatVel=Vector3.new(vel.X,0,vel.Z)
 if flatVel.Magnitude>10 and dir:Dot(flatVel.Unit)>0.7 then
-local strafeDir=(dir+flatVel.Unit*0.25).Unit
-hm_:MoveTo(cM+Vector3.new(strafeDir.X*1.5+magnet.X,0,strafeDir.Z*1.5+magnet.Z))
+local strafeDir=(dir+flatVel.Unit0.25).Unit
+hm_:MoveTo(cM+Vector3.new(strafeDir.X1.5+magnet.X,0,strafeDir.Z1.5+magnet.Z))
 else
-hm_:MoveTo(cM+Vector3.new(dir.X*1+magnet.X,0,dir.Z*1+magnet.Z))
+hm_:MoveTo(cM+Vector3.new(dir.X1+magnet.X,0,dir.Z1+magnet.Z))
 end
 end
 moveFast()
 local t0=os.clock();local lA=os.clock();local hb0=hbF
-while os.clock()-t0<to do
-if hbF-hb0>to*60 then return false end
+while os.clock()-t0to60 then return false end
 task.wait(0.03)
 if not ENABLED or INT then return false end
 if tL~="Combo Coco"and hasComboDiskReady()then return false end
 r=h();if not r then return false end
 pcall(hitBloom);pcall(hitFlames)
 collectPassingLoot(r)
-if d2Sq(r.Position,oT)<=(rad*rad)then for p,_ in pairs(aT)do if p and p.Position and d2Sq(r.Position,p.Position)<=4 then tokenBL[p]=os.clock()+1.2 end end;return true end
+if MZ.blkT and os.clock()-MZ.blkT>(cfg.pa_wait or 1.5)then MZ.blkT=nil;return false end -- FIX #19: цель в кросхейре -> подождали и отдаём другой цели
+if d2Sq(r.Position,oT)<=(radrad)then for p,_ in pairs(aT)do if p and p.Position and d2Sq(r.Position,p.Position)<=4 then tokenBL[p]=os.clock()+1.2 end end;return true end
 if os.clock()-lA>=0.05 then lA=os.clock();local na=cAT(r.Position,oT,sk);cM=na and Vector3.new(na.X,r.Position.Y,na.Z)or oT;moveFast()end
 end
 return false
 end
-
 -- STAND ON PURPLE
 local function standOnPurple(ch,timeout)local r=h();local hm_=hm();if not r or not hm_ or not ch.part.Parent then return false end;tL="P Stand";INT=false
-local approachTime=math.min(3.5,math.max(2,timeout*0.4));local holdTime=math.min(6,math.max(2,timeout-approachTime))
+local approachTime=math.min(3.5,math.max(2,timeout0.4));local holdTime=math.min(6,math.max(2,timeout-approachTime))
 goTo(ch.part.Position,3,approachTime,true)
 r=h();if not r or not ch.part.Parent then return false end;local t0=os.clock();local bestD=math.huge;local stuckT=os.clock()
 while os.clock()-t0<holdTime do task.wait(0.03);r=h();if not r or not ch.part.Parent then break end;if INT or not ENABLED then return false end;pcall(hitBloom);pcall(hitFlames)
@@ -607,14 +600,13 @@ local dNow=d2Sq(r.Position,ch.part.Position)
 if dNow<=9 then hm_:MoveTo(ch.part.Position)
 else
 if dNow<bestD-1 then bestD=dNow;stuckT=os.clock()end
-if os.clock()-stuckT>1.0 then local toP=ch.part.Position-r.Position;toP=Vector3.new(toP.X,0,toP.Z);if toP.Magnitude>0.1 then local u=toP.Unit;hm_:MoveTo(cP(r.Position+Vector3.new(-u.Z,0,u.X)*12+u*4))end;stuckT=os.clock();bestD=math.huge else local dir=(ch.part.Position-r.Position).Unit;hm_:MoveTo(ch.part.Position+Vector3.new(dir.X*1.5,0,dir.Z*1.5))end
+if os.clock()-stuckT>1.0 then local toP=ch.part.Position-r.Position;toP=Vector3.new(toP.X,0,toP.Z);if toP.Magnitude>0.1 then local u=toP.Unit;hm_:MoveTo(cP(r.Position+Vector3.new(-u.Z,0,u.X)12+u4))end;stuckT=os.clock();bestD=math.huge else local dir=(ch.part.Position-r.Position).Unit;hm_:MoveTo(ch.part.Position+Vector3.new(dir.X1.5,0,dir.Z1.5))end
 end
 end
 if not ch.part.Parent then ch.col=true;st.pr=st.pr+1;lP=ch.part;st.chP=st.chP+1;return true end;return false end
-
 -- TOKEN REG
 local function cT(part,id,tl,dp,df)if activeTG[part]then return end;local gui=Instance.new("BillboardGui");gui.Adornee=part;gui.Size=dp and UDim2.new(0,100,0,30)or UDim2.new(0,80,0,24);gui.StudsOffset=Vector3.new(0,2,0);gui.AlwaysOnTop=true;gui.Parent=part;local lb=Instance.new("TextLabel",gui);lb.Size=UDim2.new(1,0,1,0);lb.BackgroundTransparency=0.2;lb.BackgroundColor3=df.bg or Color3.new(0,0,0);lb.TextColor3=dp and(df.dc or df.nc or Color3.new(1,1,1))or(df.nc or Color3.new(1,1,1));lb.TextScaled=true;lb.Font=Enum.Font.SourceSansBold;lb.TextStrokeTransparency=0;lb.TextStrokeColor3=Color3.new(0,0,0);lb.Text=(df.pre or"")..string.format("%.1f",tl);activeTG[part]={gui=gui,label=lb,startTime=os.clock(),totalLifetime=tl,prefix=df.pre or""}end
-local function rT(o)if o.Name~="C"or not o:IsA("BasePart")or aT[o]or tokenBL[o]then return end;local fr=o:FindFirstChild("FrontDecal");if not fr or not fr:IsA("Decal")then return end;local id=ti(fr.Texture);if not id or AV[id]then return end;local df=TKS[id];if not df then return end;local r=h();local dp=false;if r then dp=(o.Position.Y-r.Position.Y)>5 end;local lf=df.base*AM;if dp then lf=lf*(2+0.05*(DGL-1));dupCnt=dupCnt+1 end;aT[o]={id=id,n=df.n,p=df.p,mo=df.mo or false,bt=df.bt or false,s=os.clock(),l=lf,dp=dp,col=false};tokenVerify[o]=(os.clock()+0.5);pcall(cT,o,id,lf,dp,df)end
+local function rT(o)if o.Name~="C"or not o:IsA("BasePart")or aT[o]or tokenBL[o]then return end;local fr=o:FindFirstChild("FrontDecal");if not fr or not fr:IsA("Decal")then return end;local id=ti(fr.Texture);if not id or AV[id]then return end;local df=TKS[id];if not df then return end;local r=h();local dp=false;if r then dp=(o.Position.Y-r.Position.Y)>5 end;local lf=df.baseAM;if dp then lf=lf(2+0.05*(DGL-1));dupCnt=dupCnt+1 end;aT[o]={id=id,n=df.n,p=df.p,mo=df.mo or false,bt=df.bt or false,s=os.clock(),l=lf,dp=dp,col=false};tokenVerify[o]=(os.clock()+0.5);pcall(cT,o,id,lf,dp,df)end
 local tokParents={}
 local function remTokParent(par)if par then tokParents[par]=true end end
 W.DescendantAdded:Connect(function(o)if o.Name=="C"then task.spawn(function()pcall(rT,o);if not aT[o]then task.wait(0.2);pcall(rT,o);if not aT[o]then task.wait(0.5);pcall(rT,o)end end;if aT[o]then remTokParent(o.Parent)end end)end end)
@@ -634,7 +626,7 @@ R.Heartbeat:Connect(function()local now=os.clock();for p,d in pairs(activeTG)do 
 local rps=nil;local PAE=nil
 do local e=RS:FindFirstChild("Events");if e then cachedEvents=e;cachedRPS=e:FindFirstChild("RetrievePlayerStats");cachedToolCollect=e:FindFirstChild("ToolCollect");PAE=e:FindFirstChild("PlayerAbilityEvent")rps=cachedRPS end end
 if PAE then PAE.OnClientEvent:Connect(function(data)if type(data)~="table"then return end;for tag,info in pairs(data)do if type(tag)=="string"and type(info)=="table"and info.Action=="Update"and info.Values then local sts=info.Values[1];if sts then local lower=tag:lower();if lower:find("flame")then xfP=sts elseif lower:find("scorching")then scP=sts end end end end end)end
-local function fb(t,d)if type(t)~="table"then return end;local bid=rawget(t,"BuffID");if bid then d[bid]=t end;local src=rawget(t,"Src");if src then d[src]=t end;for _,val in pairs(t)do if type(val)=="table"then fb(val,d)end end end
+local function fb(t,d)if type(t)~="table"then return end;local bid=rawget(t,"BuffID");if bid then d[bid]=t end;local src=rawget(t,"Src");if src then d[src]=t end;for ,val in pairs(t)do if type(val)=="table"then fb(val,d)end end end
 local function pAB()
 if not rps then return end
 pabCalls=pabCalls+1
@@ -711,7 +703,7 @@ if scorchRecording and scorchStartT>0 then
 local gained=curH-scorchStartH
 local dur=(os.clock()-scorchStartT)/60
 if gained>0 then
-table.insert(scorchSessions,{honeyGained=gained,honeyGainedFmt=fmtH(gained),durationMin=math.floor(dur*10)/10,time=os.clock(),ssCombo=prevSS,ctx=getCK(),actions=scorchActions,purpleTotal=scorchPurpleTotal})
+table.insert(scorchSessions,{honeyGained=gained,honeyGainedFmt=fmtH(gained),durationMin=math.floor(dur10)/10,time=os.clock(),ssCombo=prevSS,ctx=getCK(),actions=scorchActions,purpleTotal=scorchPurpleTotal})
 if gained>bestSH then bestSH=gained end
 end
 pcall(sSS);pcall(sPat)
@@ -719,7 +711,6 @@ scorchRecording=false;scorchActions={}
 end
 end
 end
-
 -- SCANNERS
 local function gPC(p)for nxt,co in pairs(PC)do if(co.R-p.Color.R)^2+(co.G-p.Color.G)^2+(co.B-p.Color.B)^2<0.002 then return nxt end end;return nil end
 local function sPt()
@@ -741,12 +732,12 @@ table.sort(fP,function(a,b)local n5=os.clock();local la=(n5-(ptSeen[a.part]or 0)
 end
 local function sSm()local n=os.clock();smT=nil;smTR=math.huge;local r=h();if not r then return end;if dupCnt<6 then return end
 local bestInRing,bestInRem=nil,math.huge;local bestOut,bestOutRem=nil,math.huge
-for p,t in pairs(aT)do if not t.col and p.Parent and t.id==SMI and not tokenBL[p]then local rem=t.l-(n-t.s);if rem>0 then local inRing=(aR and aR.Parent and d2Sq(p.Position,aR.Position)<=aRR*aRR*1.2);if inRing and rem<bestInRem then bestInRem=rem;bestInRing=p elseif not inRing and rem<bestOutRem then bestOutRem=rem;bestOut=p end end end end
+for p,t in pairs(aT)do if not t.col and p.Parent and t.id==SMI and not tokenBL[p]then local rem=t.l-(n-t.s);if rem>0 then local inRing=(aR and aR.Parent and d2Sq(p.Position,aR.Position)<=aRRaRR*1.2);if inRing and rem<bestInRem then bestInRem=rem;bestInRing=p elseif not inRing and rem<bestOutRem then bestOutRem=rem;bestOut=p end end end end
 if bestInRing then smT=bestInRing;smTR=bestInRem elseif bestOut then smT=bestOut;smTR=bestOutRem end;if smT and not isCS and not chBusy then INT=true end end
-local function scS()local pf=W:FindFirstChild("PlayerFlames");if not pf then return end;for fl,_ in pairs(scytheParts)do if not fl.Parent then scytheParts[fl]=nil;flameCD[fl]=nil end end;for _,f in ipairs(pf:GetChildren())do local nm=f.Name or"";if nm:sub(1,3)=="Flm"or nm:find("Scythe")or nm:find("Flame")then if not scytheParts[f]then scytheParts[f]={sT=os.clock(),hit=false}end end end end
+local function scS()local pf=W:FindFirstChild("PlayerFlames");if not pf then return end;for fl, in pairs(scytheParts)do if not fl.Parent then scytheParts[fl]=nil;flameCD[fl]=nil end end;for _,f in ipairs(pf:GetChildren())do local nm=f.Name or"";if nm:sub(1,3)=="Flm"or nm:find("Scythe")or nm:find("Flame")then if not scytheParts[f]then scytheParts[f]={sT=os.clock(),hit=false}end end end end
 local PETAL_CLUSTER_R=12;local PETAL_CLUSTER_MIN=3
 local function gPetCluster()if #fP<PETAL_CLUSTER_MIN then return nil end;local clusters={};local used={}
-for i=1,#fP do if not used[i]then local cl={fP[i]};used[i]=true;local changed=true;while changed do changed=false;for j=1,#fP do if not used[j]then for _,m in ipairs(cl)do if d3(m.part.Position,fP[j].part.Position)<=PETAL_CLUSTER_R then table.insert(cl,fP[j]);used[j]=true;changed=true;break end end end end end;if #cl>=PETAL_CLUSTER_MIN then local cx,cz=0,0;for _,m in ipairs(cl)do cx=cx+m.part.Position.X;cz=cz+m.part.Position.Z end;table.insert(clusters,{center=Vector3.new(cx/#cl,0,cz/#cl),size=#cl,members=cl})end end end;table.sort(clusters,function(a,b)return a.size>b.size end);return #clusters>0 and clusters or nil end
+for i=1,#fP do if not used[i]then local cl={fP[i]};used[i]=true;local changed=true;while changed do changed=false;for j=1,#fP do if not used[j]then for _,m in ipairs(cl)do if d3(m.part.Position,fP[j].part.Position)<=PETAL_CLUSTER_R then table.insert(cl,fP[j]);used[j]=true;changed=true;break end end end end end;if #cl>=PETAL_CLUSTER_MIN then local cx,cz=0,0;for ,m in ipairs(cl)do cx=cx+m.part.Position.X;cz=cz+m.part.Position.Z end;table.insert(clusters,{center=Vector3.new(cx/#cl,0,cz/#cl),size=#cl,members=cl})end end end;table.sort(clusters,function(a,b)return a.size>b.size end);return #clusters>0 and clusters or nil end
 function cntBT()local n=os.clock();local c=0;for p,t in pairs(aT)do if not t.col and p.Parent and t.bt and(t.l-(n-t.s))>0.3 then c=c+1 end end;return c end
 function btBlocked(p,t)if not t or not t.bt then return false end;if xfP<22 then return false end;local cc=gFC();if cc==ZERO then return false end;if d3(p.Position,cc)<=XCR*2 then return false end;if xfP+cntBT()>=24 then return false end;return true end
 local function hTL(dupedOnly)local n=os.clock();for p,t in pairs(aT)do if not t.col and p.Parent and t.p>=90 and(not dupedOnly or t.dp)and not tokenBL[p]and(t.l-(n-t.s))>0.3 and not btBlocked(p,t)then return true end end;return false end
@@ -758,9 +749,9 @@ end
 local function activeTokenCount()local n=os.clock();local c=0;for p,t in pairs(aT)do if not t.col and p.Parent and(t.l-(n-t.s))>0.3 then c=c+1 end end;return c end
 local function isDupMark(t)local nm=string.lower(tostring(t and t.n or""));return nm:find("mark surge",1,true)or nm:find("pollen mark",1,true)or nm:find("honey mark",1,true)end
 local function eS()local r=h();if not r then return"dead"end;return string.format("PH:%s|CH:%d|PR:%d|XF:%d|SS:%d",ph(),#cQ,st.pr,xfP,scP)end
-local function gSC()local cx,cz,ct=0,0,0;local dw=5;for fl,_ in pairs(scytheParts)do if fl and fl.Parent then local nm=fl.Name or"";local bn=sBC(fl);local isD=(nm:find("Dark")or bn=="Really black");local w=isD and dw or 1;cx=cx+fl.Position.X*w;cz=cz+fl.Position.Z*w;ct=ct+w end end;if ct>0 then return Vector3.new(cx/ct,0,cz/ct),true,0 end;if curF and curF.part then return curF.part.Position,false,0 end;local r2=h();if r2 then return r2.Position,false,0 end;return ZERO,false,0 end
+local function gSC()local cx,cz,ct=0,0,0;local dw=5;for fl, in pairs(scytheParts)do if fl and fl.Parent then local nm=fl.Name or"";local bn=sBC(fl);local isD=(nm:find("Dark")or bn=="Really black");local w=isD and dw or 1;cx=cx+fl.Position.Xw;cz=cz+fl.Position.Zw;ct=ct+w end end;if ct>0 then return Vector3.new(cx/ct,0,cz/ct),true,0 end;if curF and curF.part then return curF.part.Position,false,0 end;local r2=h();if r2 then return r2.Position,false,0 end;return ZERO,false,0 end
 -- ACTION BUILDER
-local function gAWB()local ba={};local p_=ph();local n=os.clock();local isSc=(aB.SS.st>0);local isSS=(isSc and prec.isX and aB.PoM.m>=3 and pollMS>=3)
+local function gAWB()local ba={};local p=ph();local n=os.clock();local isSc=(aB.SS.st>0);local isSS=(isSc and prec.isX and aB.PoM.m>=3 and pollMS>=3)
 if not isSc and n>=prPauseNext then prPauseUntil=n+30;prPauseNext=n+900;pcall(klog,"PREC PAUSE: 30s без прецов (цикл 15 мин)")end
 if scorchAllCHMode and(os.clock()-scorchAllCHT0)>45 then scorchAllCHMode=false;scorchPurpleCount=0 end
 local hdm=false;for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.mo then hdm=true;break end end;local isSO=(not isSc)and prec.isX and hdm
@@ -776,7 +767,7 @@ if n>=(precisePredictCd or 0)and scanPreciseBee()then return{"go_precise_predict
 end
 for _,combo in ipairs(activeComboCocos)do if not combo.collected and comboDiskReady(combo.disk)and os.clock()-(combo.spawnTime or os.clock())>=2.0 and cfg.combo_on and(cfg.combo_lim==0 or comboCycle<cfg.combo_lim)then return{"go_combo_coconut"}end end
 -- FIX #12: keep farming while the coconut is falling; commit only near landing.
-if cfg.coco_on and(cfg.coco_lim==0 or cocoCycle<cfg.coco_lim)then local r2=h();if r2 then for _,coco in ipairs(activeCocos)do if not coco.collected and coco.part and coco.part.Parent and d3(r2.Position,coco.part.Position)<90 and os.clock()-(coco.spawnTime or os.clock())>=1.8 then return{"go_coconut"}end end end end
+if cfg.coco_on and(cfg.coco_lim==0 or cocoCycle<cfg.coco_lim)then local r2=h();if r2 then for _,coco in ipairs(activeCocos)do if not coco.collected and coco.part and coco.part.Parent and d3(r2.Position,coco.part.Position)<90 and MZ.cocoGo(coco,r2)then return{"go_coconut"}end end end end
 if not isSc and not prec.nR then local pc=gPetCluster();if pc then return{"go_petal_cluster"}end;if #fP>=2 then return{"go_petal"}end end
 if isSc and scorchStartT>0 and(n-scorchStartT)>=15 and not scorchDupedMorphDone then for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.mo then return{"go_duped_morph_scorch"}end end end
 for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.mo and(t.l-(n-t.s))>0 and(t.l-(n-t.s))<5 then return{"go_duped_morph"}end end
@@ -824,9 +815,9 @@ elseif prec.isX and not prec.nR and xfP<19 and scorchPurpleCount<3 then local pp
 end
 if xfE then
 local ccX=gFC()
-if ccX~=ZERO then local bCX=gCH_nc();if bCX and d3(bCX.part.Position,ccX)<=XCR*2 then return{"go_center_ch"}end end
+if ccX~=ZERO then local bCX=gCH_nc();if bCX and d3(bCX.part.Position,ccX)<=XCR2 then return{"go_center_ch"}end end
 if isSc then if n-xfStartTime<=4.0 then return{"go_xflame_center_camp"}end;if scorchAllCHMode then local all=gCH(false,false,true);if #all>0 then return{"go_crosshair_all"}end end;return{"go_xflame_center_camp"}else return{"go_xflame_center_camp"}end end
-if xfP>=22 and scP>=20 and not isSS then local cc=gFC();if cc~=ZERO and d3(r.Position,cc)>XCR*2 then return{"go_xflame_center"}end end
+if xfP>=22 and scP>=20 and not isSS then local cc=gFC();if cc~=ZERO and d3(r.Position,cc)>XCR2 then return{"go_xflame_center"}end end
 if isSS then
 if scorchActive and scorchStartT>0 and(n-scorchStartT)>=35 and scorchAllCHMode then local all=gCH(false,false,true);if #all>0 then return{"go_crosshair_all"}end;local path=gFCPath(r.Position);if path then return{"go_flame_path"}end;return{"patrol_scorch_flames"}end
 for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.id==4519549299 then return{"go_duped_inferno_scorch"}end end
@@ -848,9 +839,9 @@ if isSO then
 if n-lastSOTime>=10 then return{"go_super_outside"}end;local nearCH=gCH_n();if nearCH and not smT and not xfE then return{"go_crosshair"}end
 if hTL()then return{"go_tokenlink"}end
 for _,combo in ipairs(activeComboCocos)do if not combo.collected and comboDiskReady(combo.disk)and cfg.combo_on and(cfg.combo_lim==0 or comboCycle<cfg.combo_lim)then return{"go_combo_coconut"}end end
-if p_=="REFRESH"then local all=gCH(false,false,true);if #all>0 then return{"go_crosshair_refresh_all"}end;return{"patrol_ring"}end
-if p_=="X10"then return{"patrol_ring"}end;table.insert(ba,"patrol_ring");return ba end
-if xfP>=19 and not isSS and not isSO then local cc=gFC();if cc~=ZERO then local bC=gCH_nc();if bC and d3(bC.part.Position,cc)<=XCR*2 then return{"go_center_ch"}end end;if(p_=="X10"or p_=="REFRESH")and os.clock()>=xfcCd then return{"go_xflame_center"}end end
+if p=="REFRESH"then local all=gCH(false,false,true);if #all>0 then return{"go_crosshair_refresh_all"}end;return{"patrol_ring"}end
+if p=="X10"then return{"patrol_ring"}end;table.insert(ba,"patrol_ring");return ba end
+if xfP>=19 and not isSS and not isSO then local cc=gFC();if cc~=ZERO then local bC=gCH_nc();if bC and d3(bC.part.Position,cc)<=XCR2 then return{"go_center_ch"}end end;if(p=="X10"or p=="REFRESH")and os.clock()>=xfcCd then return{"go_xflame_center"}end end
 if ndMorph and not isSc and not isSO then local hasSmiles=false;for p,t in pairs(aT)do if not t.col and p.Parent and t.id==SMI then hasSmiles=true;break end end;if hasSmiles then return{"go_smile_stand"}end;return{"go_noduped_morph"}end
 if isSc then
 for p,t in pairs(aT)do if not t.col and p.Parent and not t.dp and(t.id==TPI or t.id==1629547638)and(n-t.s)<2.5 and not btBlocked(p,t)then return{"go_scorch_token"}end end
@@ -862,30 +853,436 @@ if #gCH(false,false,true)==0 then for p,t in pairs(aT)do if not t.col and p.Pare
 if dupCnt>=9 then local hasMark=false;for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and isDupMark(t)then hasMark=true;break end end;if hasMark then return{"go_duped_marks"}end end
 if activeTokenCount()>=6 and hTL(true)then return{"go_duped_tokenlink"}end
 if dupCnt>=9 then local hasDpri=false;for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and DPRI[t.id]then hasDpri=true;break end end;if hasDpri then return{"go_duped_pri"}end end
-if p_=="REFRESH"and not isSc and not isSS then local allR=gCH(false,false,true);if #allR>0 then return{"go_crosshair_refresh_all"}end end
-if p_=="X10"and not isSO and xfP<19 then local pp=gCH(true,false,false);if #pp>0 and n>=prPauseUntil and cfg.purple_on and(cfg.purple_lim==0 or purpleMarkCnt<cfg.purple_lim)then return{"go_purple"}end end
+if p=="REFRESH"and not isSc and not isSS then local allR=gCH(false,false,true);if #allR>0 then return{"go_crosshair_refresh_all"}end end
+if p=="X10"and not isSO and xfP<19 then local pp=gCH(true,false,false);if #pp>0 and n>=prPauseUntil and cfg.purple_on and(cfg.purple_lim==0 or purpleMarkCnt<cfg.purple_lim)then return{"go_purple"}end end
 local ptCl=gPetCluster();if ptCl and #ptCl>0 then return{"go_petal_cluster"}end
 if #fP>=2 and not isSS then return{"go_petal"}end
-local allForDiag=gCH(false,false,true);if #allForDiag>=6 and p_~="X10"and xfP<19 and not isSc and not isSS and not isSO then return{"go_diagonal_loot"}end
+local allForDiag=gCH(false,false,true);if #allForDiag>=6 and p~="X10"and xfP<19 and not isSc and not isSS and not isSO then return{"go_diagonal_loot"}end
 for _i2=1,#cQ do local _ch2=cQ[_i2];if not _ch2.col and _ch2.pPos and _ch2.part.Position.Y>20 then return{"go_predictive_ch"}end end
 if hTL()then return{"go_tokenlink"}end
 for _,combo in ipairs(activeComboCocos)do if not combo.collected and comboDiskReady(combo.disk)and cfg.combo_on and(cfg.combo_lim==0 or comboCycle<cfg.combo_lim)then return{"go_combo_coconut"}end end
 if smT and dupCnt>=6 and not isSO and os.clock()>=(smCd or 0)then return{"go_smile"}end
 if not isSc and n>=prPauseUntil and n>=(precisePredictCd or 0)then local predPos=scanPreciseBee();if predPos then return{"go_precise_predict"}end end
-if p_=="REFRESH"then local all=gCH(false,false,true);if #all>0 then return{"go_crosshair_refresh_all"}end;return{"patrol_ring"}end
-if p_=="X10"then return{"patrol_ring"}end
-if p_=="NABOR"then
+if p=="REFRESH"then local all=gCH(false,false,true);if #all>0 then return{"go_crosshair_refresh_all"}end;return{"patrol_ring"}end
+if p=="X10"then return{"patrol_ring"}end
+if p=="NABOR"then
 local r3=h();if r3 then local bt3,bd3=nil,math.huge;for p,t in pairs(aT)do if not t.col and p.Parent and not tokenBL[p]and t.p>=7 and(t.l-(n-t.s))>0.3 and not btBlocked(p,t)and not moHold(t)then local d=d3(r3.Position,p.Position);if d<bd3 then bd3=d;bt3=p end end end;if bt3 and bd3<25 then return{"go_token_near"}end end
 if hTL()then return{"go_tokenlink"}end;table.insert(ba,"patrol_ring");return ba end
 return{"patrol_ring"}end
-
 -- (Q-learning / UCB удалён: действие выбирается напрямую по приоритетам gAWB)
-
 -- EXECUTE
 -- FIX #7: ordinary morphs are collected by passing through them.
 local function stToken(p)if not p or not p.Parent then return end;collectPassingLoot(h()or ZERO);task.wait(0.08)end
 -- FIX #16
 local function stDupToken(p,limit)if not p or not p.Parent then return end;local t0=os.clock();while p.Parent and os.clock()-t0<(limit or 12) do local rr=h();local hh=hm();if rr and hh then hh:MoveTo(Vector3.new(p.Position.X,rr.Position.Y,p.Position.Z))end;collectPassingLoot(rr or ZERO);task.wait(0.05)end end
+-- =====================================================================
+-- MZ MODULE v5.3.0 (FIX #17 – #21). Всё новое живёт в одной таблице MZ,
+-- чтобы не превысить лимит Luau в 200 локальных переменных на чанк.
+-- =====================================================================
+do
+local V3=Vector3.new
+local sqrt,abs,max,min,huge,cos,sin,pi,floor=math.sqrt,math.abs,math.max,math.min,math.huge,math.cos,math.sin,math.pi,math.floor
+local function now()return os.clock()end
+local function spd()local hh=hm();local w=hh and hh.WalkSpeed or 0;if not w or w<16 then w=(cS and cS>16)and cS or 60 end;return w end
+local function fd(ax,az,bx,bz)local dx,dz=ax-bx,az-bz;return sqrt(dxdx+dzdz)end
+MZ.inField=function(p,pad)
+if not curF or not curF.part then return true end
+local c=curF.part.Position;local s=curF.part.Size;pad=pad or 0
+return abs(p.X-c.X)<=s.X0.5-(FM or 0)+pad and abs(p.Z-c.Z)<=s.Z*0.5-(FM or 0)+pad
+end
+
+-- FIX #19: планировщик пути вокруг кросхейров (граф касательных + A*)
+
+local K=8 -- точек на окружность
+local KF=1/cos(pi/K) -- чтобы хорды не резали круг
+MZ.path=nil;MZ.obsLast={};MZ.blkT=nil;MZ.lastPlanT=0
+MZ.avoidOn=function(tp)
+if cfg.pa_always then return true end
+return (prec.isX and not prec.nR) or tp and true or false
+end
+local oF,oTp,oGX,oGZ,oList,oSig=-1,nil,0,0,{},0
+local function getObs(gx,gz,tp)
+if oF==hbF and oTp==tp and abs(oGX-gx)<0.5 and abs(oGZ-gz)<0.5 then return oList,oSig end
+local lst,sig={},0
+local mg=tp and (cfg.pa_margin_t or 2.5) or (cfg.pa_margin or 3.5)
+if aB.SS.st>0 then mg=min(mg,2.5)end
+for i=1,#cQ do local ch=cQ[i]
+if ch and not ch.col and not ch.isP and ch.part and ch.part.Parent then
+local pos=ch.part.Position
+if pos.Y>20 then pos=ch.pPos end -- падающий кросхейр: обходим точку приземления
+if pos then
+local dx,dz=pos.X-gx,pos.Z-gz
+if dxdx+dzdz>(tp and 4 or 16)then -- цель-кросхейр не считаем препятствием (как в gRCT)
+local sz=max(ch.part.Size.X,ch.part.Size.Z,4)
+local r=sz0.5+mg;if isGrnCH and isGrnCH(ch)then r=r+2 end
+lst[#lst+1]={x=pos.X,z=pos.Z,r=r,ch=ch}
+sig=sig+floor(pos.X)3+floor(pos.Z)7+floor(r)
+end end end end
+sig=sig+#lst100003
+oF,oTp,oGX,oGZ,oList,oSig=hbF,tp,gx,gz,lst,sig
+MZ.obsLast=lst
+return lst,sig
+end
+MZ.getObs=getObs
+local function segHit(ax,az,bx,bz,cx,cz,r)
+local vx,vz=bx-ax,bz-az;local wx,wz=cx-ax,cz-az;local L2=vxvx+vzvz
+local t=L2>0 and (wxvx+wzvz)/L2 or 0;if t<0 then t=0 elseif t>1 then t=1 end
+local dx,dz=ax+vxt-cx,az+vzt-cz;return dxdx+dzdz<rr
+end
+local function segClear(ax,az,bx,bz,obs,skip)
+for i=1,#obs do if i~=skip then local o=obs[i];if segHit(ax,az,bx,bz,o.x,o.z,o.r)then return false end end end
+return true
+end
+MZ.segClear=segClear
+local function inObs(x,z,obs,skip)
+for i=1,#obs do if i~=skip then local o=obs[i];local dx,dz=x-o.x,z-o.z;if dxdx+dzdz<o.ro.r then return i end end end
+return nil
+end
+MZ.inObs=inObs
+-- ближайшая безопасная точка к (x,z)
+local function safeNear(x,z,obs,fromX,fromZ)
+local bx,bz,bs=nil,nil,huge
+for i=1,#obs do local o=obs[i];local dx,dz=x-o.x,z-o.z
+if dxdx+dzdz<o.ro.r then
+for k=0,15 do local a=kpi/8;local px,pz=o.x+cos(a)(o.r+0.8),o.z+sin(a)(o.r+0.8)
+if not inObs(px,pz,obs)and MZ.inField(V3(px,0,pz),1)then
+local s=fd(px,pz,x,z)+(fromX and fd(px,pz,fromX,fromZ)0.35 or 0)
+if s<bs then bs,bx,bz=s,px,pz end end end end end
+if bx then return bx,bz end
+-- запасной вариант: спираль вокруг точки
+for rr=3,24,3 do for k=0,11 do local a=kpi/6;local px,pz=x+cos(a)rr,z+sin(a)rr
+if not inObs(px,pz,obs)and MZ.inField(V3(px,0,pz),1)then return px,pz end end end
+return x,z
+end
+MZ.safeNear=function(p,tp)local obs=getObs(p.X,p.Z,tp);local x,z=safeNear(p.X,p.Z,obs);return V3(x,p.Y,z)end
+MZ.ptSafe=function(p,tp)if not MZ.avoidOn(tp)then return true end;local obs=getObs(p.X,p.Z,tp);return inObs(p.X,p.Z,obs)==nil end
+-- A по графу касательных точек
+local function astar(ax,az,gx,gz,obs)
+local nx,nz={ax,gx},{az,gz}
+local sel={}
+for i=1,#obs do local o=obs[i]
+local sx,sz,ex,ez=ax,az,gx,gz
+local vx,vz=ex-sx,ez-sz;local L2=vxvx+vzvz;local t=L2>0 and ((o.x-sx)vx+(o.z-sz)vz)/L2 or 0;if t<0 then t=0 elseif t>1 then t=1 end
+local d=fd(sx+vxt,sz+vzt,o.x,o.z)-o.r
+if d<30 then sel[#sel+1]={i=i,d=d}end end
+table.sort(sel,function(a,b)return a.d<b.d end)
+for s=1,min(#sel,10)do local o=obs[sel[s].i];local rr=o.rKF+0.6
+for k=0,K-1 do local a=k2pi/K+0.19;local px,pz=o.x+cos(a)rr,o.z+sin(a)rr
+if not inObs(px,pz,obs)and MZ.inField(V3(px,0,pz),0.5)then nx[#nx+1]=px;nz[#nz+1]=pz end end end
+local N=#nx;local g,f,prev,closed={},{},{},{}
+for i=1,N do g[i]=huge;f[i]=huge end
+g[1]=0;f[1]=fd(ax,az,gx,gz)
+for _=1,N do
+local u,bf=nil,huge
+for i=1,N do if not closed[i]and f[i]<bf then bf=f[i];u=i end end
+if not u then break end
+if u==2 then break end
+closed[u]=true
+for v=2,N do if not closed[v]then
+local c=fd(nx[u],nz[u],nx[v],nz[v])
+if g[u]+c<g[v]and segClear(nx[u],nz[u],nx[v],nz[v],obs)then
+g[v]=g[u]+c;prev[v]=u;f[v]=g[v]+fd(nx[v],nz[v],gx,gz)end end end
+end
+if g[2]==huge then return nil end
+local pts={};local v=2
+while v and v~=1 do table.insert(pts,1,{x=nx[v],z=nz[v]});v=prev[v]end
+return pts,g[2]
+end
+local function pathCost(ax,az,pts,from)
+local c,px,pz=0,ax,az;for i=from or 1,#pts do c=c+fd(px,pz,pts[i].x,pts[i].z);px,pz=pts[i].x,pts[i].z end;return c end
+local function pathValid(ax,az,pts,from,obs)
+local px,pz=ax,az;for i=from,#pts do if not segClear(px,pz,pts[i].x,pts[i].z,obs)then return false end;px,pz=pts[i].x,pts[i].z end;return true end
+-- string pulling: самая дальняя видимая точка пути
+local function pull(ax,az,p,obs)
+for j=#p.pts,p.idx,-1 do if segClear(ax,az,p.pts[j].x,p.pts[j].z,obs)then p.idx=j;return p.pts[j]end end
+return nil
+end
+-- возвращает (waypoint|nil, handled)
+MZ.plan=function(mP,dP,tp)
+if not MZ.avoidOn(tp)then MZ.path=nil;MZ.blkT=nil;return nil,true end
+local obs,sig=getObs(dP.X,dP.Z,tp)
+if #obs==0 then MZ.path=nil;MZ.blkT=nil;return nil,true end
+local ax,az,gx,gz=mP.X,mP.Z,dP.X,dP.Z
+-- 1) стоим внутри кросхейра — выходим кратчайшим путём (с учётом цели)
+local ins=inObs(ax,az,obs)
+if ins then local o=obs[ins];local bx,bz,bs=nil,nil,huge
+for k=0,15 do local a=kpi/8;local px,pz=o.x+cos(a)(o.r+1),o.z+sin(a)*(o.r+1)
+if not inObs(px,pz,obs)then local s=fd(px,pz,ax,az)+fd(px,pz,gx,gz)0.4;if s<bs then bs,bx,bz=s,px,pz end end end
+if bx then MZ.path={pts={{x=bx,z=bz}},idx=1,gx=gx,gz=gz,sig=sig,t=now(),exit=true};return V3(bx,mP.Y,bz),true end
+end
+-- 2) цель внутри кросхейра — идём в ближайшую безопасную точку и ждём
+local blocked=inObs(gx,gz,obs)~=nil
+if blocked then gx,gz=safeNear(gx,gz,obs,ax,az)
+if fd(ax,az,gx,gz)<3 then MZ.blkT=MZ.blkT or now()end
+else MZ.blkT=nil end
+-- 3) прямой путь свободен
+if segClear(ax,az,gx,gz,obs)then MZ.path=nil;return blocked and V3(gx,mP.Y,gz)or nil,true end
+-- 4) кэш: тот же набор кросхейров и та же цель -> не перестраиваем (без дёрганья сторон)
+local p=MZ.path
+if p and not p.exit and p.sig==sig and abs(p.gx-gx)<2 and abs(p.gz-gz)<2 then
+local wp=pull(ax,az,p,obs);if wp then return V3(wp.x,mP.Y,wp.z),true end end
+-- 5) новый путь
+local pts,cost=astar(ax,az,gx,gz,obs)
+if not pts then return nil,false end -- пути нет -> старый обход FIX #1
+-- гистерезис: старый путь остаётся, если он ещё валиден и новый не лучше на 15%
+if p and not p.exit and abs(p.gx-gx)<2 and abs(p.gz-gz)<2 and p.idx<=#p.pts and pathValid(ax,az,p.pts,p.idx,obs)then
+local oc=pathCost(ax,az,p.pts,p.idx);if oc<=cost1.15 then p.sig=sig;local wp=pull(ax,az,p,obs)or p.pts[p.idx];return V3(wp.x,mP.Y,wp.z),true end end
+MZ.path={pts=pts,idx=1,gx=gx,gz=gz,sig=sig,t=now()};st.chA=st.chA+1
+local wp=pull(ax,az,MZ.path,obs)or pts[1]
+return V3(wp.x,mP.Y,wp.z),true
+end
+-- магнит pathMagnet не должен тянуть в кросхейр
+MZ.moveOK=function(from,to,tp)
+if not MZ.avoidOn(tp)then return true end
+local obs=getObs(to.X,to.Z,tp);if #obs==0 then return true end
+if inObs(to.X,to.Z,obs)then return false end
+local skip=inObs(from.X,from.Z,obs)
+return segClear(from.X,from.Z,to.X,to.Z,obs,skip)
+end
+
+-- FIX #20: дебаг-отрисовка пути и кросхейров (Settings -> Debug путь)
+
+MZ.dbgF=nil;MZ.dbgPool={}
+local function dbgPart(i,ball)
+local p=MZ.dbgPool[i]
+if not p or not p.Parent then p=Instance.new("Part");p.Anchored=true;p.CanCollide=false;pcall(function()p.CanQuery=false;p.CanTouch=false end)
+p.Material=Enum.Material.Neon;p.Parent=MZ.dbgF;MZ.dbgPool[i]=p end
+p.Shape=ball and Enum.PartType.Ball or Enum.PartType.Cylinder
+return p
+end
+task.spawn(function()while true do task.wait(0.1)
+pcall(function()
+if not cfg.pa_dbg or not ENABLED then if MZ.dbgF then MZ.dbgF:Destroy();MZ.dbgF=nil;MZ.dbgPool={}end;return end
+if not MZ.dbgF or not MZ.dbgF.Parent then MZ.dbgF=Instance.new("Folder");MZ.dbgF.Name="MZ_Debug";MZ.dbgF.Parent=W;MZ.dbgPool={}end
+local r=h();if not r then return end;local y=r.Position.Y-2.8;local n=0
+for _,o in ipairs(MZ.obsLast or{})do n=n+1;local p=dbgPart(n,false)
+p.Size=V3(0.15,o.r2,o.r2);p.CFrame=CFrame.new(o.x,y,o.z)*CFrame.Angles(0,0,pi/2);p.Color=Color3.fromRGB(255,60,60);p.Transparency=0.72 end
+local pa=MZ.path
+if pa and pa.pts then local px,pz=r.Position.X,r.Position.Z
+for i=pa.idx or 1,#pa.pts do local q=pa.pts[i];local segs=max(1,floor(fd(px,pz,q.x,q.z)/2.5))
+for s=1,segs do n=n+1;local p=dbgPart(n,true);local t=s/segs
+p.Size=V3(0.6,0.6,0.6);p.Position=V3(px+(q.x-px)*t,y+0.4,pz+(q.z-pz)*t);p.Color=Color3.fromRGB(0,230,255);p.Transparency=0.15 end
+px,pz=q.x,q.z end end
+for i=n+1,#MZ.dbgPool do local p=MZ.dbgPool[i];if p then p.Transparency=1;p.Position=V3(0,-5000,0)end end
+end)
+end end)
+
+-- FIX #17: Go Smile — сначала Pink Petal в поле, потом смайл строго в AreaRing
+
+MZ.rings={}
+MZ.scanRings=function()
+local out,seen={},{}
+local function add(o)if o and not seen[o]and o.Name=="AreaRing"and o:IsA("BasePart")and o.Parent then seen[o]=true;out[#out+1]=o end end
+pcall(function()if Pt then for _,o in ipairs(Pt:GetChildren())do add(o)end end end)
+pcall(function()for ,o in ipairs(W:GetChildren())do add(o)end end)
+add(aR);MZ.rings=out;return out
+end
+local function ringR(o)local rr=(o.Size.X+o.Size.Z)/4;if rr<5 then rr=ARR end;return rr end
+-- точка, где стоять при луте смайла: внутри ринга или на его краю
+MZ.smStand=function(smPos,rPos)
+local rings=MZ.scanRings();if #rings==0 then return nil,"noring"end
+local mg=cfg.sm_margin or 1.2;local reach=cfg.sm_reach or 4.5
+local best,bestC,bestRing=nil,huge,nil
+for ,o in ipairs(rings)do local c=o.Position;local R=ringR(o)
+local dx,dz=smPos.X-c.X,smPos.Z-c.Z;local d=sqrt(dxdx+dzdz)
+local stand,gap
+if d<=R-mg then stand=V3(smPos.X,rPos.Y,smPos.Z);gap=0
+else local k=(R-mg)/max(d,0.001);stand=V3(c.X+dxk,rPos.Y,c.Z+dzk);gap=d-(R-mg)end
+if gap<=reach then
+if not MZ.ptSafe(stand,false)then -- точка в кросхейре: сдвигаем вдоль края/внутрь ринга
+local sp=MZ.safeNear(stand,false);if fd(sp.X,sp.Z,c.X,c.Z)<=R-mg0.5 and fd(sp.X,sp.Z,smPos.X,smPos.Z)<=reach+1 then stand=sp else stand=nil end end
+if stand then local cost=fd(rPos.X,rPos.Z,stand.X,stand.Z)+gap0.5
+if cost<bestC then bestC,best,bestRing=cost,stand,o end end end end
+return best,bestRing
+end
+local function clampRing(p,o,mg)local c=o.Position;local R=ringR(o)-(mg or 1.2);local dx,dz=p.X-c.X,p.Z-c.Z;local d=sqrt(dxdx+dzdz)
+if d<=R then return p end;local k=R/max(d,0.001);return V3(c.X+dxk,p.Y,c.Z+dzk)end
+-- план лута Pink Petal с проверкой времени
+local function pinkPlan(r,stand)
+if cfg.sm_petal==false then return nil end
+local sp=spd();local rem=(smTR or 0)-0.25
+local pinks={}
+for ,fp in ipairs(fP)do if fp.cn=="Pink"and fp.part and fp.part.Parent and not stP[fp.part]and MZ.inField(fp.part.Position,2)then pinks[#pinks+1]=fp end end
+if #pinks==0 then return nil end
+local function tt(ax,az,bx,bz)return fd(ax,az,bx,bz)1.15/sp+0.12 end
+-- вариант 1: кластер лепестков, в котором есть розовый
+local cl=gPetCluster()
+if cl then for _,c in ipairs(cl)do local hasPink=false;for _,m in ipairs(c.members)do if m.cn=="Pink"then hasPink=true break end end
+if hasPink then local route,px,pz,t={},r.Position.X,r.Position.Z,0
+local left={};for _,m in ipairs(c.members)do if m.part.Parent and not stP[m.part]then left[#left+1]=m end end
+while #left>0 do local bi,bd=1,huge;for i,m in ipairs(left)do local d=fd(px,pz,m.part.Position.X,m.part.Position.Z);if d<bd then bd,bi=d,i end end
+local m=table.remove(left,bi);t=t+tt(px,pz,m.part.Position.X,m.part.Position.Z);px,pz=m.part.Position.X,m.part.Position.Z;route[#route+1]=m end
+t=t+tt(px,pz,stand.X,stand.Z)+(cfg.sm_safety or 0.6)
+if t<rem then return route end end end end
+-- вариант 2: один ближайший розовый
+local bp,bd=nil,huge;for _,fp in ipairs(pinks)do local d=fd(r.Position.X,r.Position.Z,fp.part.Position.X,fp.part.Position.Z);if d<bd then bd,bp=d,fp end end
+if bp then local t=tt(r.Position.X,r.Position.Z,bp.part.Position.X,bp.part.Position.Z)+tt(bp.part.Position.X,bp.part.Position.Z,stand.X,stand.Z)+(cfg.sm_safety or 0.6)
+if t<rem then return{bp}end end
+return nil
+end
+local function lootPetal(m)
+local rr=h();if not rr or not m.part.Parent then return false end
+local pv=m.part.Position-rr.Position;pv=V3(pv.X,0,pv.Z)
+local pass=m.part.Position+(pv.Magnitude>0.1 and pv.Unit2 or V3(2,0,0))
+local tmo=min(1.6,pv.Magnitude*1.3/spd()+0.4)
+if goTo(V3(pass.X,0,pass.Z),PCD,tmo)then st.pt=st.pt+1;stP[m.part]=now()+5;if m.cn=="Red"then redPT=now()end;return true end
+stP[m.part]=now()+5;return false
+end
+-- возвращает награду, либо nil = использовать старый обработчик
+MZ.doSmile=function(r,action)
+if cfg.sm_ring==false then return nil end
+local sm=smT;if not sm or not sm.Parent then smT=nil;return-1 end
+local td=aT[sm];if not td or td.col then smT=nil;return-1 end
+local stand,ring=MZ.smStand(sm.Position,r.Position)
+if not stand then
+if ring=="noring"then return nil end -- ринга нет вообще: старая логика
+if cfg.sm_ring_fb then return nil end
+tokenBL[sm]=now()+1.0;smT=nil;smCd=now()+0.5;return-3 -- смайл вне досягаемости из ринга: не выходим из ринга
+end
+isCS=true;goSm=true;INT=false;tL="Sm/R";local hh=hm();local origSp=cS
+if hh then hh.WalkSpeed=cS+10 end
+local function fin(v)goSm=false;isCS=false;if hh then hh.WalkSpeed=origSp end;return v end
+-- 1) Pink Petal (или кластер с розовым) — только если успеваем
+local route=pinkPlan(r,stand)
+if route then for i,m in ipairs(route)do
+if not sm.Parent then break end
+local remNow=td.l-(now()-td.s);local rr=h()or r
+local need=fd(rr.Position.X,rr.Position.Z,stand.X,stand.Z)*1.15/spd()+(cfg.sm_safety or 0.6)
+if remNow-need<0.35 then break end -- время кончается — сразу к смайлу
+tL="Sm+Pk"..i;INT=false;lootPetal(m)end end
+if not sm.Parent then smT=nil;return fin(-2)end
+-- 2) пересчёт точки (игрок сдвинулся) и выход на неё
+local rr=h()or r;stand,ring=MZ.smStand(sm.Position,rr.Position)
+if not stand then smT=nil;return fin(-3)end
+tL="Sm/R go";INT=false
+local remNow=td.l-(now()-td.s)
+local ok=goTo(V3(stand.X,rr.Position.Y,stand.Z),2,max(0.5,min(3.5,remNow-0.1)))
+-- 3) держимся внутри ринга, пока смайл не залутан
+local hold=td.dp and (TSD or 1.5) or 0.7;local t0=now()
+while sm.Parent and now()-t0<hold and ENABLED do
+task.wait(0.05);rr=h();if not rr then break end
+local tgt=ring and ring.Parent and clampRing(V3(sm.Position.X,rr.Position.Y,sm.Position.Z),ring,cfg.sm_margin or 1.2)or stand
+local h=hm();if h then h:MoveTo(tgt)end;collectPassingLoot(rr)
+end
+local got=(not sm.Parent)or ok
+if got then td.col=true;smT=nil;st.sm=st.sm+1;dupCnt=0;smCd=now()+12;return fin(action=="go_smile_area"and 50 or 45)end
+smT=nil;return fin(-10)
+end
+
+-- FIX #18: умный лут обычных кокосов
+
+MZ.cocoLife=3.9;MZ.cocoT={};MZ.fall={}
+local function isCocoDisk(o)return o and o.Name=="WarningDisk"and o:IsA("BasePart")and abs(o.Size.X-23.4)<2 end
+if Pt then
+Pt.DescendantAdded:Connect(function(o)if isCocoDisk(o)then MZ.cocoT[o]=now()end end)
+Pt.DescendantRemoving:Connect(function(o)local t=MZ.cocoT[o];if t then local life=now()-t
+if life>1.2 and life<10 then MZ.cocoLife=MZ.cocoLife0.75+life0.25 end;MZ.cocoT[o]=nil end end)
+end
+-- падающий кокос (если игра его показывает): скорость падения -> ETA
+task.spawn(function()while true do task.wait(0.1)
+if cfg.coco_smart~=false and #activeCocos>0 then pcall(function()
+local seen={}
+local function chk(o)if o:IsA("BasePart")and o.Name~="WarningDisk"and string.find(string.lower(o.Name),"coconut",1,true)then
+local f=MZ.fall[o];local y=o.Position.Y;local t=now()
+if f then local dt=t-f.t;if dt>0 then local vy=(f.y-y)/dt;if vy>0.5 then f.vy=f.vy and (f.vy0.6+vy0.4)or vy end end;f.y=y;f.t=t;f.pos=o.Position
+else MZ.fall[o]={y=y,t=t,pos=o.Position}end;seen[o]=true end end
+for ,o in ipairs(W:GetChildren())do chk(o);if o:IsA("Model")and string.find(string.lower(o.Name),"coconut",1,true)then for ,c in ipairs(o:GetChildren())do chk(c)end end end
+if Pt then for ,o in ipairs(Pt:GetChildren())do chk(o)end end
+for o, in pairs(MZ.fall)do if not seen[o]then MZ.fall[o]=nil end end
+end)end end end)
+-- сколько секунд до приземления
+MZ.cocoLeft=function(coco)
+local p=coco.part;local sp=MZ.cocoT[p]or coco.spawnTime or now()
+local left=sp+MZ.cocoLife-now()
+for ,f in pairs(MZ.fall)do if f.vy and f.pos and fd(f.pos.X,f.pos.Z,p.Position.X,p.Position.Z)<8 then
+local eta=(f.pos.Y-p.Position.Y)/f.vy;if eta>=0 and eta<8 then left=eta end end end
+return max(0,left)
+end
+-- замена условия FIX #12 в gAWB: идём так, чтобы прийти за ~1 c до падения
+MZ.cocoGo=function(coco,r)
+if cfg.coco_smart==false then return now()-(coco.spawnTime or now())>=1.8 end
+local age=now()-(MZ.cocoT[coco.part]or coco.spawnTime or now());if age<0.3 then return false end
+local tr=fd(r.Position.X,r.Position.Z,coco.part.Position.X,coco.part.Position.Z)1.15/spd()+0.35
+return MZ.cocoLeft(coco)-tr<=(cfg.coco_early or 1.1)
+end
+-- общая безопасная точка для одного/нескольких кокосов
+MZ.cocoPoint=function(list,main,r)
+local cands={}
+local function add(x,z)cands[#cands+1]=V3(x,r.Position.Y,z)end
+for _,c in ipairs(list)do add(c.part.Position.X,c.part.Position.Z)end
+for i=1,#list do for j=i+1,#list do local a,b=list[i].part.Position,list[j].part.Position;add((a.X+b.X)0.5,(a.Z+b.Z)0.5)end end
+if #list>2 then local sx,sz=0,0;for _,c in ipairs(list)do sx=sx+c.part.Position.X;sz=sz+c.part.Position.Z end;add(sx/#list,sz/#list)end
+local mp=main.part.Position;local mR=max(main.part.Size.X,main.part.Size.Z)0.5
+local best,bs=nil,-huge
+for _,p in ipairs(cands)do
+if fd(p.X,p.Z,mp.X,mp.Z)<=mR0.6 then
+local s=0;for _,c in ipairs(list)do local R=max(c.part.Size.X,c.part.Size.Z)0.5;local d=fd(p.X,p.Z,c.part.Position.X,c.part.Position.Z)
+if d<=R0.65 then s=s+10-min(5,MZ.cocoLeft(c))end end
+s=s-fd(p.X,p.Z,mp.X,mp.Z)0.15
+if not MZ.ptSafe(p,false)then s=s-100 end
+if s>bs then bs,best=s,p end end end
+best=best or V3(mp.X,r.Position.Y,mp.Z)
+if not MZ.ptSafe(best,false)then -- центр в кросхейре: ищем безопасное место внутри диска
+for rr=mR0.2,mR0.6,mR0.2 do for k=0,11 do local a=kpi/6;local p=V3(mp.X+cos(a)*rr,best.Y,mp.Z+sin(a)*rr)
+if MZ.ptSafe(p,false)then return p end end end end
+return best
+end
+local function cocoValid(c)return c and not c.collected and c.part and c.part.Parent end
+MZ.doCoco=function(r)
+if cfg.coco_smart==false then return nil end
+local main,bs=nil,huge;local sp=spd()
+for ,c in ipairs(activeCocos)do if cocoValid(c)then
+local left=MZ.cocoLeft(c);local tr=fd(r.Position.X,r.Position.Z,c.part.Position.X,c.part.Position.Z)*1.15/sp
+local s=left+(tr>left+0.3 and 50 or 0) -- раньше падает и успеваем = лучше
+if s<bs then bs,main=s,c end end end
+if not main then return-1 end
+tL="Coco+";INT=false
+local function group()local g={main};local ml=MZ.cocoLeft(main)
+for ,c in ipairs(activeCocos)do if c~=main and cocoValid(c)and abs(MZ.cocoLeft(c)-ml)<2.5 then
+local R=max(c.part.Size.X,c.part.Size.Z)*0.5+max(main.part.Size.X,main.part.Size.Z)0.5
+if fd(c.part.Position.X,c.part.Position.Z,main.part.Position.X,main.part.Position.Z)<R0.65 then g[#g+1]=c end end end;return g end
+local g=group();local pt=MZ.cocoPoint(g,main,r)
+local hh=hm();local origSp=cS;if hh then hh.WalkSpeed=cS+10 end
+local function fin(v)if hh then hh.WalkSpeed=origSp end;return v end
+goTo(pt,2,min(4,MZ.cocoLeft(main)+0.8))
+-- удержание: не уходим с диска; в последние 1.5 c игнорируем всё, кроме кокоса
+local t0=now();local lastPt=0;local wasIn=false;local mp=main.part.Position
+local mR=max(main.part.Size.X,main.part.Size.Z)0.5
+while now()-t0<7 and ENABLED do
+task.wait(0.05)
+local rr=h();if not rr then return fin(-2)end
+if not main.part.Parent then break end
+local left=MZ.cocoLeft(main)
+if left>1.5 and hasComboDiskReady()then return fin(-2)end -- FIX #4: комбо важнее, пока время есть
+if left<=1.5 then INT=false elseif left>2.5 and INT then return fin(-2)end -- смайл/срочное может перебить, пока до падения >2.5 c
+if now()-lastPt>0.2 then lastPt=now();g=group();pt=MZ.cocoPoint(g,main,rr)end
+local tgt=pt
+if left>1.5 then -- время есть: подбираем мелкие токены, но только внутри диска
+local bt,bd=nil,huge
+for p,t in pairs(aT)do if not t.col and p.Parent and not tokenBL[p]and not moHold(t)and not btBlocked(p,t)then
+if fd(p.Position.X,p.Position.Z,mp.X,mp.Z)<=mR0.6 then local d=fd(rr.Position.X,rr.Position.Z,p.Position.X,p.Position.Z);if d<bd then bd,bt=d,p end end end end
+if bt and bd<9 then tgt=V3(bt.Position.X,rr.Position.Y,bt.Position.Z)end end
+local h=hm();if h then h:MoveTo(V3(tgt.X,rr.Position.Y,tgt.Z))end
+wasIn=fd(rr.Position.X,rr.Position.Z,mp.X,mp.Z)<=mR0.8
+pcall(hitBloom);pcall(hitFlames);collectPassingLoot(rr)
+end
+if main.part.Parent then return fin(-2)end
+main.collected=true
+if not wasIn then return fin(-2)end
+cocoCnt=cocoCnt+1;cocoCycle=cocoCycle+1
+-- после падения: быстро собираем выпавшие токены вокруг
+tL="Coco loot";local t1=now()
+while now()-t1<(cfg.coco_loot_t or 1.6)and ENABLED do
+local rr=h();if not rr then break end
+local bt,bd=nil,huge
+for p,t in pairs(aT)do if not t.col and p.Parent and not tokenBL[p]and not moHold(t)and not btBlocked(p,t)then
+local d=fd(p.Position.X,p.Position.Z,mp.X,mp.Z);if d<=16 then local dd=fd(rr.Position.X,rr.Position.Z,p.Position.X,p.Position.Z);if dd<bd then bd,bt=dd,p end end end end
+if not bt then break end
+if goTo(bt.Position,2,0.7)and aT[bt]then aT[bt].col=true;st.tk=st.tk+1 else tokenBL[bt]=now()+1.2 end
+end
+return fin(30)
+end
+end
 local function eA(action)
 local r=h();if not r then return-1 end
 actionStarted=os.clock();tL=action;pcall(hitBloom);pcall(hitFlames)
@@ -896,14 +1293,14 @@ tL="XF Camp";INT=false
 local hh=hm()
 if hh then
 local dir=(cc-Vector3.new(r.Position.X,0,r.Position.Z)).Unit
-if dir.Magnitude>0 then hh:MoveTo(cc+Vector3.new(dir.X*1,0,dir.Z*1))else hh:MoveTo(cc)end end
+if dir.Magnitude>0 then hh:MoveTo(cc+Vector3.new(dir.X1,0,dir.Z1))else hh:MoveTo(cc)end end
 -- FIX #3: center camp also drains nearby tokens and ends on the nearest crosshair.
 for p,t in pairs(aT)do
 if not t.col and p.Parent and not tokenBL[p] and d3(r.Position,p.Position)<=25 and not btBlocked(p,t) then
 t.col=true;tokenBL[p]=os.clock()+1.2;st.tk=st.tk+1
 end end
 local nch=gCH_n()
-if nch and d3(r.Position,nch.part.Position)<=XCR*2 then
+if nch and d3(r.Position,nch.part.Position)<=XCR2 then
 goTo(nch.part.Position,4,2,true)
 if nch.part.Parent then nch.col=true;st.ch=st.ch+1 end
 end
@@ -920,8 +1317,8 @@ rw=rw+5
 local gp,gk=nil,math.huge
 for p,t in pairs(aT)do if not t.col and p.Parent and not tokenBL[p]and not btBlocked(p,t)and not moHold(t)then local rem=t.l-(os.clock()-t.s);if rem>0 and d2Sq(r.Position,p.Position)<=2500 and(t.p>=90 or rem<3.0)then local key=(t.p>=90 and-1000 or 0)+rem;if key<gk then gk=key;gp=p end end end end
 if gp and aT[gp]then tL="FPth+tk";if goTo(Vector3.new(gp.Position.X,r.Position.Y,gp.Position.Z),3,2)and gp.Parent then aT[gp].col=true;tokenBL[gp]=os.clock()+1.5;st.tk=st.tk+1;rw=rw+8 end;r=h()or r end
-local st_=os.clock()
-while os.clock()-st_<0.5 do task.wait(0.05);pcall(hitFlames);pcall(hitBloom)end
+local st=os.clock()
+while os.clock()-st<0.5 do task.wait(0.05);pcall(hitFlames);pcall(hitBloom)end
 else break end end
 if rw>0 then
 local sc=gSC()
@@ -977,22 +1374,22 @@ if goTo(bp.Position,4,4)and bp.Parent then
 stToken(bp)
 if aT[bp]then aT[bp].col=true;st.sm=st.sm+1 end
 return 20 end end;return-2 end
-if action=="go_noduped_morph"then if not ndMorph or not ndMorph.Parent then return-1 end;local t=aT[ndMorph];if not t then return-1 end;tL="MO(gnd)";INT=false;local v=ndMorph.Position-r.Position;v=Vector3.new(v.X,0,v.Z);local pass=ndMorph.Position+(v.Magnitude>0.1 and v.Unit*2.5 or Vector3.new(2.5,0,0));if goTo(pass,4,4)and ndMorph.Parent then stToken(ndMorph);t.col=true;return 20 end;return-2 end
+if action=="go_noduped_morph"then if not ndMorph or not ndMorph.Parent then return-1 end;local t=aT[ndMorph];if not t then return-1 end;tL="MO(gnd)";INT=false;local v=ndMorph.Position-r.Position;v=Vector3.new(v.X,0,v.Z);local pass=ndMorph.Position+(v.Magnitude>0.1 and v.Unit2.5 or Vector3.new(2.5,0,0));if goTo(pass,4,4)and ndMorph.Parent then stToken(ndMorph);t.col=true;return 20 end;return-2 end
 if action=="go_duped_morph"then
 local n=os.clock()
 for p,t in pairs(aT)do
 if not t.col and p.Parent and t.dp and t.mo and(t.l-(n-t.s))<6.0 then
 tL="Morph(D)";INT=false
-local v=p.Position-r.Position;v=Vector3.new(v.X,0,v.Z);local pass=p.Position+(v.Magnitude>0.1 and v.Unit*2.5 or Vector3.new(2.5,0,0))
+local v=p.Position-r.Position;v=Vector3.new(v.X,0,v.Z);local pass=p.Position+(v.Magnitude>0.1 and v.Unit2.5 or Vector3.new(2.5,0,0))
 if goTo(pass,3,3)and p.Parent then
 local t0=os.clock()
 while os.clock()-t0<1.2 do
- task.wait(0.05)
- if not p.Parent then break end
- local h__=hm()
- if h__ then h__:MoveTo(Vector3.new(p.Position.X,p.Position.Y,p.Position.Z))end end
+task.wait(0.05)
+if not p.Parent then break end
+local h__=hm()
+if h__ then h__:MoveTo(Vector3.new(p.Position.X,p.Position.Y,p.Position.Z))end end
 t.col=true;return 25 end end end;return-2 end
-if action=="go_duped_morph_scorch"then local bp=nil;for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.mo then bp=p;break end end;if bp then tL="MO(Sc)";INT=false;local v=bp.Position-r.Position;v=Vector3.new(v.X,0,v.Z);local pass=bp.Position+(v.Magnitude>0.1 and v.Unit*2.5 or Vector3.new(2.5,0,0));if goTo(pass,4,3)and bp.Parent then stToken(bp);if aT[bp]then aT[bp].col=true;scorchDupedMorphDone=true end;return 30 end end;return-2 end
+if action=="go_duped_morph_scorch"then local bp=nil;for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.mo then bp=p;break end end;if bp then tL="MO(Sc)";INT=false;local v=bp.Position-r.Position;v=Vector3.new(v.X,0,v.Z);local pass=bp.Position+(v.Magnitude>0.1 and v.Unit2.5 or Vector3.new(2.5,0,0));if goTo(pass,4,3)and bp.Parent then stToken(bp);if aT[bp]then aT[bp].col=true;scorchDupedMorphDone=true end;return 30 end end;return-2 end
 if action=="go_purple_scorch"then
 if not(prec.isX and not prec.nR and xfP<19)then return-1 end
 local pp=gCH(true,false,false);if #pp==0 then return-1 end
@@ -1017,8 +1414,8 @@ tL="Shower";INT=false
 r.CFrame=CFrame.new(sh.part.Position.X,sh.part.Position.Y+3,sh.part.Position.Z);r.AssemblyLinearVelocity=ZERO
 local t0=os.clock()
 while os.clock()-t0<2.0 do
- task.wait(0.05);pcall(hitBloom);pcall(hitFlames)
- if not sh.part.Parent then break end
+task.wait(0.05);pcall(hitBloom);pcall(hitFlames)
+if not sh.part.Parent then break end
 end
 sh.collected=true;showerCnt=showerCnt+1;showerCycle=showerCycle+1
 local nf=true
@@ -1046,32 +1443,32 @@ if after then tL="Sh->Tk";goTo(after.Position,4,3);if after.Parent and aT[after]
 local nch=gCH_n()
 if nch and nch.isP then tL="Sh->P";goTo(nch.part.Position,4,3,true);if nch.part.Parent then nch.col=true;st.pr=st.pr+1 end
 elseif nch then tL="Sh->CH";goTo(nch.part.Position,4,3);if nch.part.Parent then nch.col=true;st.ch=st.ch+1 end end
-return 10+math.min(40,#activeShowers*10)
+return 10+math.min(40,#activeShowers10)
 end
 end;return-1
 end
 if action=="go_combo_coconut"then
 local best,bestD=nil,math.huge
-for _,combo in ipairs(activeComboCocos)do if not combo.collected and comboDiskReady(combo.disk)then local dd=d3(r.Position,combo.disk.Position);if dd<bestD then best,bestD=combo,dd end end end
+for ,combo in ipairs(activeComboCocos)do if not combo.collected and comboDiskReady(combo.disk)then local dd=d3(r.Position,combo.disk.Position);if dd<bestD then best,bestD=combo,dd end end end
 if best then
 tL="Combo Coco";INT=false
 -- FIX #4: combo coconuts are lootable only after the spawn settle window.
-local waitFor=math.random()*1.0+2.0
+local waitFor=math.random()1.0+2.0
 local age=os.clock()-(best.spawnTime or os.clock())
 if age<waitFor then task.wait(waitFor-age)end
 -- FIX #11: choose a shared safe zone when a normal coconut is adjacent.
 local pos=Vector3.new(best.disk.Position.X,r.Position.Y,best.disk.Position.Z)
 local nearCoco,nearD=nil,math.huge
 for _,co in ipairs(activeCocos)do if not co.collected and co.part and co.part.Parent then local dd=d3(best.disk.Position,co.part.Position);if dd<nearD then nearD=dd;nearCoco=co end end end
-if nearCoco and nearD<=math.max(best.disk.Size.X,nearCoco.part.Size.X)*0.75+4 then
-local a,b=best.disk.Position,nearCoco.part.Position;pos=Vector3.new((a.X+b.X)*0.5,r.Position.Y,(a.Z+b.Z)*0.5)
+if nearCoco and nearD<=math.max(best.disk.Size.X,nearCoco.part.Size.X)0.75+4 then
+local a,b=best.disk.Position,nearCoco.part.Position;pos=Vector3.new((a.X+b.X)0.5,r.Position.Y,(a.Z+b.Z)0.5)
 end
 if goTo(pos,2.5,4)then
 local holdT=os.clock();local hh=hm()
 while best.disk.Parent and os.clock()-holdT<20 do
- task.wait(0.05);local rr=h();if not rr or not ENABLED then return-2 end
- if hh then hh:MoveTo(Vector3.new(best.disk.Position.X,rr.Position.Y,best.disk.Position.Z))end
- pcall(hitBloom);pcall(hitFlames)
+task.wait(0.05);local rr=h();if not rr or not ENABLED then return-2 end
+if hh then hh:MoveTo(Vector3.new(best.disk.Position.X,rr.Position.Y,best.disk.Position.Z))end
+pcall(hitBloom);pcall(hitFlames)
 end
 if not best.disk.Parent then best.collected=true;comboCycle=comboCycle+1;return 50 end
 return-2
@@ -1079,6 +1476,8 @@ end
 end
 return-2
 end
+-- FIX #18
+if action=="go_coconut"then local mzC=MZ.doCoco(r);if mzC~=nil then return mzC end end
 if action=="go_coconut"then
 local n=os.clock()
 local bestCo,bestCoD=nil,math.huge
@@ -1089,7 +1488,7 @@ tL="Coco";INT=false
 local hh=hm();local origSp=cS
 if hh then hh.WalkSpeed=cS+10 end
 -- FIX #12: collect when inside the WarningDisk-sized landing zone.
-local cRad=math.max(coco.part.Size.X,coco.part.Size.Z)*0.5
+local cRad=math.max(coco.part.Size.X,coco.part.Size.Z)0.5
 local edgePos=Vector3.new(coco.part.Position.X,r.Position.Y,coco.part.Position.Z)
 if goTo(edgePos,cRad,2.5)then
 if hh then hh.WalkSpeed=origSp end
@@ -1116,7 +1515,7 @@ if t.part.Parent and not t.col then
 local sk=false
 if xfE then
 local cc=gFC()
-if cc~=ZERO and d3(t.part.Position,cc)>XCR*1.5 then sk=true end
+if cc~=ZERO and d3(t.part.Position,cc)>XCR1.5 then sk=true end
 end
 if not sk and hasNearPurpleCH()and not t.isP then sk=true end
 if not sk then
@@ -1154,11 +1553,11 @@ end
 end;return rw>0 and rw or-2
 end
 if action=="go_tokenlink"or action=="go_duped_tokenlink"then
-local tl={};local n_=os.clock()
+local tl={};local n=os.clock()
 for p,t in pairs(aT)do
 if not t.col and p.Parent and t.p>=90 and(action~="go_duped_tokenlink"or t.dp)and not tokenBL[p]and not btBlocked(p,t)then
-local rem=t.l-(n_-t.s)
-if rem>0.3 then table.insert(tl,{p=p,t=t,rem=rem})else tokenBL[p]=n_+10 end
+local rem=t.l-(n-t.s)
+if rem>0.3 then table.insert(tl,{p=p,t=t,rem=rem})else tokenBL[p]=n+10 end
 end
 end
 if #tl==0 then return-2 end
@@ -1186,7 +1585,7 @@ if not t.col and p.Parent and not tokenBL[p]then
 local rem=t.l-(n-t.s)
 if rem>0.5 and not btBlocked(p,t)and not moHold(t)then
 local dTk=d3(r.Position,p.Position)
-table.insert(cand,{p=p,score=t.p*(rem/t.l)*(t.dp and 1.3 or 1)*math.clamp(40/math.max(dTk,1),0.3,1.5)})
+table.insert(cand,{p=p,score=t.p(rem/t.l)(t.dp and 1.3 or 1)math.clamp(40/math.max(dTk,1),0.3,1.5)})
 end
 end
 end
@@ -1197,25 +1596,27 @@ if be then
 tL=aT[be].n;INT=false
 if goTo(be.Position,5,5)and be.Parent then
 aT[be].col=true;tokenBL[be]=os.clock()+1.2
-return 5+aT[be].p*0.3
+return 5+aT[be].p0.3
 end;return-3
 end;return-1
 end
+-- FIX #17
+if action=="go_smile"or action=="go_smile_area"then local mzS=MZ.doSmile(r,action);if mzS~=nil then return mzS end end
 if action=="go_smile"then local sm=smT;if not sm or not sm.Parent then smT=nil;return-1 end;local td=aT[sm];if not td or td.col then smT=nil;return-1 end;isCS=true;tL="Sm";INT=false;goSm=true;local hh=hm();local origSp=cS
 for _,fp in ipairs(fP)do if fp.cn=="Pink"and fp.part.Parent then if hh then hh.WalkSpeed=cS+10 end;tL="Sm+10";if goTo(Vector3.new(fp.part.Position.X,0,fp.part.Position.Z),PCD,1.5)then st.pt=st.pt+1 end;break end end
 local smTarget=sm.Position
 if aR and aR.Parent then
 local toSm=sm.Position-aR.Position
 toSm=Vector3.new(toSm.X,0,toSm.Z)
-if toSm.X*toSm.X+toSm.Z*toSm.Z>aRR*aRR then
-smTarget=aR.Position+toSm.Unit*aRR*0.92
+if toSm.XtoSm.X+toSm.ZtoSm.Z>aRRaRR then
+smTarget=aR.Position+toSm.UnitaRR*0.92
 end
 goTo(aR.Position,5,2)
 local wt=os.clock()
 while os.clock()-wt<0.3 do
- task.wait(0.05)
- local h__=hm()
- if h__ then h__:MoveTo(Vector3.new(aR.Position.X,aR.Position.Y,aR.Position.Z))end
+task.wait(0.05)
+local h_=hm()
+if h__ then h__:MoveTo(Vector3.new(aR.Position.X,aR.Position.Y,aR.Position.Z))end
 end
 end
 local toVal=math.max(0.5,math.min(3,smTR-0.3))
@@ -1227,10 +1628,10 @@ td.col=true;smT=nil;st.sm=st.sm+1;isCS=false;dupCnt=0;smCd=os.clock()+12;return 
 end
 local st_=os.clock()
 while os.clock()-st_<TSD do
- task.wait(0.1)
- if not sm.Parent then break end
- local h__=hm()
- if h__ then h__:MoveTo(Vector3.new(smTarget.X,smTarget.Y,smTarget.Z))end
+task.wait(0.1)
+if not sm.Parent then break end
+local h__=hm()
+if h__ then h__:MoveTo(Vector3.new(smTarget.X,smTarget.Y,smTarget.Z))end
 end
 td.col=true;smT=nil;st.sm=st.sm+1;isCS=false;dupCnt=0;smCd=os.clock()+12;return 45
 end
@@ -1244,9 +1645,9 @@ local hh=hm();local origSp=cS
 if hh then hh.WalkSpeed=cS+10 end
 if goTo(c.center,10,3)then
 local rw=0
-for _,m in ipairs(c.members)do
+for ,m in ipairs(c.members)do
 if m.part.Parent then
-local rr=h()or r;local pv=m.part.Position-rr.Position;pv=Vector3.new(pv.X,0,pv.Z);local pass=m.part.Position+(pv.Magnitude>0.1 and pv.Unit*2 or Vector3.new(2,0,0))
+local rr=h()or r;local pv=m.part.Position-rr.Position;pv=Vector3.new(pv.X,0,pv.Z);local pass=m.part.Position+(pv.Magnitude>0.1 and pv.Unit2 or Vector3.new(2,0,0))
 if goTo(Vector3.new(pass.X,0,pass.Z),PCD,1.2)then
 st.pt=st.pt+1;rw=rw+6+(14-m.pr)
 if m.cn=="Red"then redPT=os.clock()end
@@ -1255,6 +1656,7 @@ end
 end
 if hh then hh.WalkSpeed=origSp end;return rw>0 and rw or 3
 end
+local isSc=(aB.SS.st>0) -- FIX #22: isSc was an undefined global here
 if isSc then local sc=gSC();if sc~=ZERO then local rr=h();if rr then goTo(Vector3.new(sc.X,rr.Position.Y,sc.Z),8,2)end end end
 if hh then hh.WalkSpeed=origSp end;return-2
 end
@@ -1267,17 +1669,17 @@ if not pt.part.Parent then table.remove(fP,i)
 elseif stP[pt.part]then table.remove(fP,i)
 else
 tL=pt.cn;INT=false
-local rr=h()or r;local pv=pt.part.Position-rr.Position;pv=Vector3.new(pv.X,0,pv.Z);local pass=pt.part.Position+(pv.Magnitude>0.1 and pv.Unit*2 or Vector3.new(2,0,0))
+local rr=h()or r;local pv=pt.part.Position-rr.Position;pv=Vector3.new(pv.X,0,pv.Z);local pass=pt.part.Position+(pv.Magnitude>0.1 and pv.Unit2 or Vector3.new(2,0,0))
 if goTo(Vector3.new(pass.X,0,pass.Z),3,1.5)then
 st.pt=st.pt+1;tr=tr+8+(14-pt.pr);ca=true
 if pt.cn=="Red"then redPT=os.clock()end
- task.wait(0.05);i=i+1
+task.wait(0.05);i=i+1
 else stP[pt.part]=os.clock()+5;table.remove(fP,i)end
 end
 end;return ca and tr or-1
 end
 if action=="patrol_ring"then
-local bt=nil;local bs2=-1;local n_=os.clock()
+local bt=nil;local bs2=-1;local n=os.clock()
 for p,td in pairs(aT)do
 if not td.col and p.Parent and not tokenBL[p]then
 local d=d3(r.Position,p.Position)
@@ -1293,8 +1695,8 @@ goTo(bt.Position,4,4)
 if bt.Parent and aT[bt]then aT[bt].col=true;st.tk=st.tk+1 end
 end
 if aR and aR.Parent then
-local ang=math.random()*2*math.pi
-goTo(Vector3.new(aR.Position.X+math.cos(ang)*aRR*0.5*math.random(),r.Position.Y,aR.Position.Z+math.sin(ang)*aRR*0.5*math.random()),6,PT)
+local ang=math.random()2math.pi
+goTo(Vector3.new(aR.Position.X+math.cos(ang)aRR0.5math.random(),r.Position.Y,aR.Position.Z+math.sin(ang)aRR0.5math.random()),6,PT)
 end
 tL="R->AR";INT=false;task.wait(0.03);return 0
 end
@@ -1302,8 +1704,8 @@ if action=="go_xflame_center"then local c=gFC();if c==ZERO then return-1 end;tL=
 if action=="patrol_scorch_flames"then
 local sc=gSC();tL="SS Patrol";INT=false
 if sc~=ZERO then
-local ang=math.random()*2*math.pi
-local tp=Vector3.new(sc.X+math.cos(ang)*math.random()*aRR*0.4,r.Position.Y,sc.Z+math.sin(ang)*math.random()*aRR*0.4)
+local ang=math.random()2math.pi
+local tp=Vector3.new(sc.X+math.cos(ang)math.random()aRR0.4,r.Position.Y,sc.Z+math.sin(ang)math.random()aRR0.4)
 goTo(tp,5,PT)
 end
 task.wait(0.03);return 0
@@ -1349,13 +1751,13 @@ lastSOTime=os.clock();tL="SO";INT=false
 local bp,bd=nil,math.huge
 for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and t.mo and not tokenBL[p]then local d=d3(r.Position,p.Position);if d<bd then bd=d;bp=p end end end
 if bp then local off=r.Position-bp.Position;off=Vector3.new(off.X,0,off.Z);local dir=off.Magnitude>0.5 and off.Unit or Vector3.new(1,0,0)
-if goTo(bp.Position+dir*5,2.5,4)then return 10 end;return-2 end
+if goTo(bp.Position+dir5,2.5,4)then return 10 end;return-2 end
 return-1 end
 if action=="go_diagonal_loot"then
 if ph()=="X10"or xfP>=19 then return-1 end
 local all=gCH(false,false,true);if #all<6 then return-1 end
 local sumX,sumZ,sumXX,sumZZ,ct2=0,0,0,0,0
-for _,ch in ipairs(all)do local p2=ch.part.Position;sumX=sumX+p2.X;sumZ=sumZ+p2.Z;sumXX=sumXX+p2.X*p2.X;sumZZ=sumZZ+p2.Z*p2.Z;ct2=ct2+1 end
+for _,ch in ipairs(all)do local p2=ch.part.Position;sumX=sumX+p2.X;sumZ=sumZ+p2.Z;sumXX=sumXX+p2.Xp2.X;sumZZ=sumZZ+p2.Zp2.Z;ct2=ct2+1 end
 local varX=ct2>0 and(sumXX/ct2-(sumX/ct2)^2)or 0;local varZ=ct2>0 and(sumZZ/ct2-(sumZ/ct2)^2)or 0
 local useX=varX>varZ
 table.sort(all,function(a,b)return(useX and a.part.Position.X or a.part.Position.Z)<(useX and b.part.Position.X or b.part.Position.Z)end)
@@ -1371,7 +1773,7 @@ if action=="go_token_near"then
 local r4=h();if not r4 then return-1 end;local bt4,bd4=nil,math.huge;local n4=os.clock()
 for p,t in pairs(aT)do if not t.col and p.Parent and not tokenBL[p]and t.p>=7 and(t.l-(n4-t.s))>0.3 and not btBlocked(p,t)and not moHold(t)then local d=d3(r4.Position,p.Position);if d<bd4 then bd4=d;bt4=p end end end
 if not bt4 then return-1 end;tL=aT[bt4].n;INT=false
-if goTo(bt4.Position,4,4)and bt4.Parent then aT[bt4].col=true;tokenBL[bt4]=os.clock()+1.2;return 3+aT[bt4].p*0.2 end;tokenBL[bt4]=os.clock()+3;return-2 end
+if goTo(bt4.Position,4,4)and bt4.Parent then aT[bt4].col=true;tokenBL[bt4]=os.clock()+1.2;return 3+aT[bt4].p0.2 end;tokenBL[bt4]=os.clock()+3;return-2 end
 if action=="go_urgent_token"then
 local p=urgentToken();if not p or not p.Parent then return-1 end
 tL="Urgent token";INT=false
@@ -1388,7 +1790,7 @@ if action=="go_duped_pri"then
 local n2=os.clock();local cand={};for p,t in pairs(aT)do if not t.col and p.Parent and t.dp and DPRI[t.id]then table.insert(cand,{p=p,t=t,rem=t.l-(n2-t.s)})end end
 if #cand==0 then return-1 end;table.sort(cand,function(a,b)return a.t.p>b.t.p end)
 tL="DupPri";INT=false;local rw=0
-for _,e in ipairs(cand)do if e.p.Parent and not e.t.col and e.rem>0 then if goTo(e.p.Position,3,3)and e.p.Parent then stToken(e.p);e.t.col=true;rw=rw+30 end end end
+for ,e in ipairs(cand)do if e.p.Parent and not e.t.col and e.rem>0 then if goTo(e.p.Position,3,3)and e.p.Parent then stToken(e.p);e.t.col=true;rw=rw+30 end end end
 return rw>0 and rw or-2 end
 if action=="go_smile_area"then
 local sm2=smT;if not sm2 or not sm2.Parent then smT=nil;return-1 end
@@ -1396,7 +1798,7 @@ if not aR or not aR.Parent then return-1 end
 tL="SmArea";INT=false;isCS=true
 local toSm=sm2.Position-aR.Position;toSm=Vector3.new(toSm.X,0,toSm.Z)
 -- FIX #5
-local edgePos=aR.Position+toSm.Unit*(aRR*0.96)
+local edgePos=aR.Position+toSm.Unit*(aRR0.96)
 goTo(edgePos,3,2)
 local ok3=goTo(Vector3.new(sm2.Position.X,r.Position.Y,sm2.Position.Z),4,5)
 isCS=false
@@ -1418,10 +1820,10 @@ tL="C-CH";local hmC=hm();if not hmC then return-1 end
 local t0c=os.clock();local xfE0=xfE
 -- FIX #15: remain on the center-nearest crosshair until it disappears.
 while os.clock()-t0c<18 and ch.part.Parent and not ch.col do
- task.wait(0.05);pcall(hitBloom);pcall(hitFlames)
- if not ENABLED then return-2 end
- if xfE and not xfE0 then break end
- local av=cAT((h()or r).Position,Vector3.new(ch.part.Position.X,r.Position.Y,ch.part.Position.Z),true);hmC:MoveTo(av or ch.part.Position)
+task.wait(0.05);pcall(hitBloom);pcall(hitFlames)
+if not ENABLED then return-2 end
+if xfE and not xfE0 then break end
+local av=cAT((h()or r).Position,Vector3.new(ch.part.Position.X,r.Position.Y,ch.part.Position.Z),true);hmC:MoveTo(av or ch.part.Position)
 end
 if xfE and not xfE0 then ch.col=true;st.ch=st.ch+1;return 15 end
 if not ch.part.Parent then ch.col=true;if ch.isP then st.pr=st.pr+1;if aB.SS.st>0 then scorchPurpleCount=scorchPurpleCount+1;scorchPurpleTotal=scorchPurpleTotal+1;scorchPurpleTime=os.clock()end else st.ch=st.ch+1 end;return 15 end
@@ -1437,7 +1839,6 @@ local rw=0;INT=false;tL="RefAll"
 for i=1,#all do local ch=all[i];if ch.part.Parent and not ch.col then if goTo(ch.part.Position,4,3,(ch.isP or nil))and ch.part.Parent then ch.col=true;if ch.isP then st.pr=st.pr+1;rw=rw+15 else st.ch=st.ch+1;rw=rw+8 end end end end
 return rw>0 and rw or-2 end
 return 0 end
-
 -- HEATMAP (crosshair repulsion)
 R.RenderStepped:Connect(function()
 if not ENABLED then return end
@@ -1454,7 +1855,7 @@ for _,t in ipairs(th)do
 if t.pos then
 local toCh=r.Position-t.pos
 local dist=toCh.Magnitude
-if dist<(t.sz*0.5+8)and dist>0.1 and dist<nearD then nearD=dist;refV=toCh.Unit*75 end
+if dist<(t.sz0.5+8)and dist>0.1 and dist<nearD then nearD=dist;refV=toCh.Unit75 end
 end
 end
 end
@@ -1463,11 +1864,10 @@ end
 if refV.Magnitude>0.1 then
 local v=r.AssemblyLinearVelocity
 local nv=Vector3.new(v.X+refV.X,0,v.Z+refV.Z)
-if nv.Magnitude>75 then nv=nv.Unit*75 end
+if nv.Magnitude>75 then nv=nv.Unit75 end
 r.AssemblyLinearVelocity=Vector3.new(nv.X,v.Y,nv.Z)
 end
 end)
-
 -- WATCHDOG (независимый анти-стак)
 STK_T=os.clock()
 task.spawn(function()while true do task.wait(0.5)
@@ -1479,7 +1879,7 @@ local r9=h();if not r9 then STK_T=os.clock()return end
 if isA and actionStarted>0 and os.clock()-actionStarted>12 then
 le("WATCHDOG: action timeout '"..lbl.."' — hard cancel")
 INT=true;isCS=false;goSm=false;chBusy=false;tL="unstuck";STK_T=os.clock()
-local h9=hm();if h9 then local ang=math.random()*2*math.pi;h9:MoveTo(r9.Position+Vector3.new(math.cos(ang)*8,0,math.sin(ang)*8))end
+local h9=hm();if h9 then local ang=math.random()2math.pi;h9:MoveTo(r9.Position+Vector3.new(math.cos(ang)*8,0,math.sin(ang)*8))end
 task.delay(0.35,function()if tL=="unstuck"then INT=false end end);return
 end
 local v9=r9.AssemblyLinearVelocity
@@ -1490,16 +1890,15 @@ le("WATCHDOG: застрял на '"..lbl.."' — блэклист целей р
 for p,t in pairs(aT)do if not t.col and p.Parent and d3(r9.Position,p.Position)<10 then tokenBL[p]=os.clock()+8 end end
 for i=1,#cQ do local ch=cQ[i];if not ch.col and ch.part.Parent and d3(r9.Position,ch.part.Position)<10 then ch.col=true end end
 INT=true;tL="unstuck"
-local h9=hm();if h9 then local ang=math.random()*2*math.pi;h9:MoveTo(r9.Position+Vector3.new(math.cos(ang)*8,0,math.sin(ang)*8))end
+local h9=hm();if h9 then local ang=math.random()2math.pi;h9:MoveTo(r9.Position+Vector3.new(math.cos(ang)*8,0,math.sin(ang)*8))end
 task.delay(0.35,function()if tL=="unstuck"then INT=false end end)
 end
 end)
 end end)
-
 -- ANTI LAG
 if ELA then task.spawn(function()
 local tg={"Flowers","Bees","FieldDecos","Collectibles","NPCs"}
-for _,n in pairs(tg)do
+for ,n in pairs(tg)do
 local f=W:FindFirstChild(n)
 if f then
 local d=f:GetDescendants()
@@ -1517,7 +1916,6 @@ end
 local lt=W:FindFirstChild("Lighting")
 if lt then lt.GlobalShadows=false;lt.Brightness=2 end
 end)end
-
 -- ANTI LAG FFlag pack
 task.spawn(function()if not setfflag then return end
 local FF={
@@ -1535,9 +1933,8 @@ local FF={
 {"DFIntSecondsBetweenDynamicVariableReloading","99999"},{"FFlagAdServiceEnabled","false"},{"FFlagDebugDisplayFPS","true"},{"FFlagDebugForceFutureIsBrightPhase3","false"},{"FIntTerrainOTAUpdatesPerFrame","0"},{"FFlagDebugSimDefaultPrimalSolver","true"},
 {"DFIntTaskSchedulerTargetFps","360"},{"DFFlagTextureQualityOverrideEnabled","true"},{"FIntRenderLocalLightUpdatesMax","0"},{"FIntRenderLocalLightUpdatesMin","0"},{"FFlagDebugForceFutureIsBrightPhase2","false"}
 }
-local ok_=0;for _,f in ipairs(FF)do if pcall(setfflag,f[1],f[2])then ok_=ok_+1 end end;if lo then pcall(lo,"AntiLag FFlags: "..ok_.."/"..#FF)end
+local ok=0;for ,f in ipairs(FF)do if pcall(setfflag,f[1],f[2])then ok=ok+1 end end;if lo then pcall(lo,"AntiLag FFlags: "..ok_.."/"..#FF)end
 end)
-
 -- PRECISE BEE
 local function findPreciseBees()local bees=W:FindFirstChild("Bees");if not bees then return{}end;local res={};for _,b in ipairs(bees:GetChildren())do local nm=b.Name or"";if nm:find("Precise")or nm:find("precise")then if b:IsA("BasePart")then table.insert(res,b)elseif b:IsA("Model")then local hrp2=b:FindFirstChild("HumanoidRootPart")or b:FindFirstChildWhichIsA("BasePart");if hrp2 then table.insert(res,hrp2)end end end end;return res end
 pbCacheRes,pbCacheT=nil,-1
@@ -1564,8 +1961,8 @@ local look
 if ft and(ft:IsA("Decal")or ft:IsA("Texture"))then look=bp.CFrame:VectorToWorldSpace(Vector3.FromNormalId(ft.Face))else look=bp.CFrame.LookVector end
 local key=string.format("%.0f,%.0f,%.1f,%.1f",bp.Position.X/3,bp.Position.Z/3,look.X,look.Z)
 if preciseLearn[key]then local rec=preciseLearn[key];if os.clock()-rec.t<60 and d2Sq(r.Position,rec.pos)>36 then pbCacheRes=rec.pos;return pbCacheRes end end
-local res=W:Raycast(bp.Position,look.Unit*300,rp)
-if not res then local flat=Vector3.new(look.X,0,look.Z);if flat.Magnitude>0.05 then res=W:Raycast(bp.Position,(flat.Unit+Vector3.new(0,-1,0)).Unit*300,rp)end end
+local res=W:Raycast(bp.Position,look.Unit300,rp)
+if not res then local flat=Vector3.new(look.X,0,look.Z);if flat.Magnitude>0.05 then res=W:Raycast(bp.Position,(flat.Unit+Vector3.new(0,-1,0)).Unit300,rp)end end
 if res then preciseLearn[key]={pos=res.Position,t=os.clock()};if d2Sq(r.Position,res.Position)>36 then pbCacheRes=res.Position;return pbCacheRes end end
 end
 end;return nil end
@@ -1595,23 +1992,22 @@ end end)
 
 -- INIT
 local mLS=false
-local function sML()if mLS then return end;mLS=true;task.wait(2);refreshServices();scriptStartH=getHoney()or 0;scriptStartT=os.clock();lSS();lPat();fAR();fF();lo("Marmot Z v5.2.6 ready! "..fmtH(scriptStartH));print("Marmot Z v5.2.6 — Complete");tL="init";lMT=os.clock()end
+local function sML()if mLS then return end;mLS=true;task.wait(2);refreshServices();scriptStartH=getHoney()or 0;scriptStartT=os.clock();lSS();lPat();fAR();fF();lo("Marmot Z v5.3.0 ready! "..fmtH(scriptStartH));print("Marmot Z v5.3.0 — Complete");tL="init";lMT=os.clock()end
 task.spawn(function()
-	while true do
-		task.wait(5)
-		pcall(refreshServices)
-	end
+while true do
+task.wait(5)
+pcall(refreshServices)
+end
 end)
 task.spawn(function()while true do task.wait(30);pcall(function()local lt=W:FindFirstChild("Lighting");if lt then lt.GlobalShadows=false;lt.Brightness=2 end end)end end)
 task.spawn(function()while true do task.wait(scorchActive and 1.0 or 1.5);if mLS then pcall(pAB)end end end)
 task.spawn(function()while true do task.wait(0.25)pcall(function()local h_=hm();if h_ then local ts=gAS();if math.abs(h_.WalkSpeed-ts)>0.5 then h_.WalkSpeed=ts end end end)end end)
-
 -- HEARTBEAT
-local genv=(getgenv and getgenv())or _G
+local genv=(getgenv and getgenv())or G
 if genv.MarmotZ_HB then pcall(function()genv.MarmotZ_HB:Disconnect()end)end
 genv.MarmotZ_HB=R.Heartbeat:Connect(function()
 hbF=hbF+1;if not ENABLED then return end;if not mLS then sML();return end;local n=os.clock();if hbF%15==0 then fAR()end
-if hbF%9==0 then sPt();scS();verifyTokens();local h_=hm();if h_ then local ts=gAS();if math.abs(h_.WalkSpeed-ts)>0.5 then h_.WalkSpeed=ts end end end
+if hbF%9==0 then sPt();scS();verifyTokens();local h=hm();if h_ then local ts=gAS();if math.abs(h_.WalkSpeed-ts)>0.5 then h_.WalkSpeed=ts end end end
 if hbF%3==0 then sSm()end;if hbF%180==0 then fF()end;if hbF%60==0 then clnCH()end
 if prec.isX and not prec.nR then local r=h();if r then for i=1,#cQ do local ch=cQ[i];if ch.part and ch.part.Parent and not ch.col and not ch.isP and d3(r.Position,ch.part.Position)<4 then if isGreenCH(ch)then if n-lPT>1.5 then lPT=n;st.chA=st.chA+1;xGCH=xGCH+1;le("GREEN CH -80! total:"..xGCH);local gck=string.format("%.0f,%.0f",ch.part.Position.X,ch.part.Position.Z);greenCH_cache[gck]=os.clock()+10 end end;break end end end end
 local nowBL=os.clock();for p,exp in pairs(tokenBL)do if type(exp)=="number"and nowBL>exp then tokenBL[p]=nil end end
@@ -1630,10 +2026,10 @@ local ns=eS()
 lastActA=a_;lastActRw=rw
 local rs=routeStats[a_]or{success=0,failure=0,last=0};if rw and rw>0 then rs.success=rs.success+1 else rs.failure=rs.failure+1 end;rs.last=math.floor(os.clock()-(scriptStartT or os.clock()));routeStats[a_]=rs
 local le9=actLog[#actLog]
-if le9 and le9.a==a_ and rw<=0 and(tonumber(le9.rw)or 0)<=0 then le9.n2=(le9.n2 or 1)+1;le9.t=math.floor((os.clock()-(scriptStartT or 0))*10)/10
-else table.insert(actLog,{a=a_,rw=rw,t=math.floor((os.clock()-(scriptStartT or 0))*10)/10,ctx=s_})end
+if le9 and le9.a==a_ and rw<=0 and(tonumber(le9.rw)or 0)<=0 then le9.n2=(le9.n2 or 1)+1;le9.t=math.floor((os.clock()-(scriptStartT or 0))10)/10
+else table.insert(actLog,{a=a_,rw=rw,t=math.floor((os.clock()-(scriptStartT or 0))10)/10,ctx=s_})end
 while #actLog>PAT_WINDOW do table.remove(actLog,1)end
-if scorchRecording then table.insert(scorchActions,{a=a_,rw=rw,t=math.floor((os.clock()-scorchStartT)*10)/10})end
+if scorchRecording then table.insert(scorchActions,{a=a_,rw=rw,t=math.floor((os.clock()-scorchStartT)10)/10})end
 end
 isA=false;chBusy=false;isCS=false;goSm=false;actionStarted=0
 local prevXfE=xfE;xfE=(aB.XF.st>=19 and xfP>=10);if xfE and not prevXfE then xfStartTime=os.clock()end;if xfE then INT=false end
@@ -1645,7 +2041,6 @@ smT=nil;isCS=false;INT=true;tL="unstuck"
 end end
 if INT and not smT and not prec.nR and not xfE then INT=false end
 end)
-
 -- SAVE/LOAD (scorch + patterns; Q-table load удалён)
 function sSS()if not writefile then return end;pcall(function()writefile("marmot_z_scorch.json",H:JSONEncode({sessions=scorchSessions,best=bestSH}))end)end
 function lSS()if not readfile then return end;local ok,raw=pcall(readfile,"marmot_z_scorch.json");if ok and raw then local ok2,d=pcall(H.JSONDecode,H,raw);if ok2 and type(d)=="table"then if type(d.sessions)=="table"then scorchSessions=d.sessions;print("MarmotZ: loaded "..#scorchSessions.." scorch sessions")end;if type(d.best)=="number"then bestSH=d.best end end end end
@@ -1664,12 +2059,12 @@ local t0p=tonumber(actLog[1].t)or 0;local t1p=tonumber(actLog[#actLog].t)or 0;lo
 local totRw=0;for i=1,#actLog do totRw=totRw+(tonumber(actLog[i].rw)or 0)end
 local out={string.format("=== ПАТТЕРНЫ: %d действий | %.1f мин | награда %.0f (%.1f/мин) ===",#actLog,durM,totRw,totRw/durM)}
 table.insert(out,"— ТОП действий по сумме награды:")
-for i=1,math.min(PAT_TOP,#rows)do local rr=rows[i];table.insert(out,string.format("%2d. %s  n=%d  avg=%.1f  sum=%.0f",i,rr.a,rr.n,rr.avg,rr.sum))end
+for i=1,math.min(PAT_TOP,#rows)do local rr=rows[i];table.insert(out,string.format("%2d. %s n=%d avg=%.1f sum=%.0f",i,rr.a,rr.n,rr.avg,rr.sum))end
 table.insert(out,"— Лучшие связки A > B (n>=3):")
-for i=1,math.min(5,#brow)do local rr=brow[i];table.insert(out,string.format("+ %s  n=%d  avg=%.1f",rr.k,rr.n,rr.avg))end
+for i=1,math.min(5,#brow)do local rr=brow[i];table.insert(out,string.format("+ %s n=%d avg=%.1f",rr.k,rr.n,rr.avg))end
 if #brow>5 then
 table.insert(out,"— Худшие связки:")
-for i=math.max(6,#brow-4),#brow do local rr=brow[i];table.insert(out,string.format("- %s  n=%d  avg=%.1f",rr.k,rr.n,rr.avg))end
+for i=math.max(6,#brow-4),#brow do local rr=brow[i];table.insert(out,string.format("- %s n=%d avg=%.1f",rr.k,rr.n,rr.avg))end
 end
 return table.concat(out,"\n")
 end
@@ -1688,7 +2083,7 @@ local sgV4=Instance.new("ScreenGui",G);sgV4.Name="MarmotZ_V4"
 local frV4=Instance.new("Frame",sgV4);frV4.Size=UDim2.new(0,440,0,390);frV4.Position=UDim2.new(0,10,0,10)
 frV4.BackgroundColor3=Color3.fromRGB(20,20,30);frV4.BorderSizePixel=0;frV4.Active=true;frV4.Draggable=true;Instance.new("UICorner",frV4).CornerRadius=UDim.new(0,8)
 local titleV4=Instance.new("TextLabel",frV4);titleV4.Size=UDim2.new(1,0,0,28);titleV4.BackgroundTransparency=1;titleV4.Position=UDim2.new(0,0,0,2)
-titleV4.Text="  Marmot Z v5.2.5";titleV4.TextColor3=Color3.fromRGB(150,200,255);titleV4.Font=Enum.Font.GothamBold;titleV4.TextSize=15;titleV4.TextXAlignment=Enum.TextXAlignment.Left
+titleV4.Text=" Marmot Z v5.3.0";titleV4.TextColor3=Color3.fromRGB(150,200,255);titleV4.Font=Enum.Font.GothamBold;titleV4.TextSize=15;titleV4.TextXAlignment=Enum.TextXAlignment.Left
 local sideBar=Instance.new("Frame",frV4);sideBar.Size=UDim2.new(0,110,1,-34);sideBar.Position=UDim2.new(0,0,0,32);sideBar.BackgroundColor3=Color3.fromRGB(15,15,22);sideBar.BorderSizePixel=0;Instance.new("UICorner",sideBar).CornerRadius=UDim.new(0,6)
 local tMain=Instance.new("Frame",frV4);tMain.Size=UDim2.new(1,-120,1,-40);tMain.Position=UDim2.new(0,115,0,35);tMain.BackgroundTransparency=1;tMain.Visible=true
 local tBoost=Instance.new("Frame",frV4);tBoost.Size=UDim2.new(1,-120,1,-40);tBoost.Position=UDim2.new(0,115,0,35);tBoost.BackgroundTransparency=1;tBoost.Visible=false
@@ -1698,8 +2093,69 @@ local tFarm=Instance.new("Frame",frV4);tFarm.Size=UDim2.new(1,-120,1,-40);tFarm.
 local tPlant=Instance.new("Frame",frV4);tPlant.Size=UDim2.new(1,-120,1,-40);tPlant.Position=UDim2.new(0,115,0,35);tPlant.BackgroundTransparency=1;tPlant.Visible=false
 tPat=Instance.new("Frame",frV4);tPat.Size=UDim2.new(1,-120,1,-40);tPat.Position=UDim2.new(0,115,0,35);tPat.BackgroundTransparency=1;tPat.Visible=false
 local selectedTab=nil
-local function selectTab(btn,panel)if selectedTab then selectedTab.BackgroundColor3=Color3.fromRGB(30,30,45)end;btn.BackgroundColor3=Color3.fromRGB(55,55,75);selectedTab=btn;for _,p in ipairs({tMain,tBoost,tSet,tAuto,tFarm,tPlant,tPat})do p.Visible=(p==panel)end end
-local function mkSideBtn(y,name,panel)local b=Instance.new("TextButton",sideBar);b.Size=UDim2.new(1,-8,0,32);b.Position=UDim2.new(0,4,0,y);b.Text="  "..name;b.BackgroundColor3=Color3.fromRGB(30,30,45);b.TextColor3=Color3.fromRGB(200,200,200);b.Font=Enum.Font.GothamSemibold;b.TextSize=11;b.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",b).CornerRadius=UDim.new(0,4);b.MouseButton1Click:Connect(function()selectTab(b,panel)end);return b end
+-- FIX #21: плавное переключение вкладок в стиле iOS (скользящая «капсула» + slide/fade панелей)
+local function selectTab(btn,panel)
+local TS=game:GetService("TweenService")
+local panels={tMain,tAuto,tBoost,tFarm,tPlant,tSet,tPat} -- порядок как в сайдбаре
+local function idx(p)for i,q in ipairs(panels)do if q==p then return i end end;return 0 end
+MZ.home=MZ.home or{}
+for _,p in ipairs(panels)do if p and not MZ.home[p]then MZ.home[p]=p.Position end end
+local anim=cfg.ui_anim~=false
+local ez=TweenInfo.new(0.36,Enum.EasingStyle.Quint,Enum.EasingDirection.Out)
+local ezF=TweenInfo.new(0.2,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
+local function tw(o,info,props)local ok,t=pcall(function()return TS:Create(o,info,props)end);if ok and t then t:Play();MZ.tabTw[#MZ.tabTw+1]=t;return t end end
+-- завершаем прошлую анимацию, если кликают быстро
+MZ.tabTw=MZ.tabTw or{}
+for _,t in ipairs(MZ.tabTw)do pcall(function()t:Cancel()end)end;MZ.tabTw={}
+for _,p in ipairs(panels)do if p and p.Parent~=frV4 then p.Parent=frV4 end;if p then p.Position=MZ.home[p];p.Visible=(p==MZ.curPanel)end end
+-- кнопки сайдбара: прозрачные, под ними едет капсула
+if not MZ.pill then pcall(function()
+for _,b in ipairs(sideBar:GetChildren())do if b:IsA("TextButton")then b.BackgroundTransparency=1;b.ZIndex=3 end end
+local pl=Instance.new("Frame");pl.Name="MZ_Pill";pl.BackgroundColor3=Color3.fromRGB(70,90,140);pl.BackgroundTransparency=0.35;pl.BorderSizePixel=0;pl.ZIndex=2
+pl.Size=UDim2.new(1,-8,0,32);pl.Position=btn.Position;pl.Parent=sideBar
+Instance.new("UICorner",pl).CornerRadius=UDim.new(0,9)
+local sk=Instance.new("UIStroke",pl);sk.Color=Color3.fromRGB(170,200,255);sk.Transparency=0.55;sk.Thickness=1
+local gr=Instance.new("UIGradient",pl);gr.Rotation=90;gr.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(1,0.35)})
+MZ.pill=pl end)end
+for _,b in ipairs(sideBar:GetChildren())do if b:IsA("TextButton")and b~=btn then
+if anim then tw(b,ezF,{TextColor3=Color3.fromRGB(170,170,185)})else b.TextColor3=Color3.fromRGB(170,170,185)end end end
+if anim then tw(btn,ezF,{TextColor3=Color3.new(1,1,1)})else btn.TextColor3=Color3.new(1,1,1)end
+if MZ.pill then
+if anim and selectedTab then
+-- «жидкая» капсула: едет с растяжением и возвращает форму
+local up=btn.Position.Y.Offset<MZ.pill.Position.Y.Offset
+tw(MZ.pill,ez,{Position=btn.Position})
+tw(MZ.pill,TweenInfo.new(0.14,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Size=UDim2.new(1,-8,0,40)})
+task.delay(0.12,function()if MZ.pill then tw(MZ.pill,TweenInfo.new(0.3,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Size=UDim2.new(1,-8,0,32)})end end)
+else MZ.pill.Position=btn.Position;MZ.pill.Size=UDim2.new(1,-8,0,32)end
+end
+local prev=MZ.curPanel;selectedTab=btn;MZ.curPanel=panel
+if not anim or not prev or prev==panel then for _,p in ipairs(panels)do if p then p.Visible=(p==panel)end end;return end
+local dir=(idx(panel)>idx(prev))and 1 or-1
+local home=MZ.home[panel];local homeP=MZ.home[prev]
+-- CanvasGroup даёт настоящее затухание всей панели; если его нет — только slide
+local okCG=pcall(function()
+if not MZ.cgIn then
+MZ.cgIn=Instance.new("CanvasGroup");MZ.cgOut=Instance.new("CanvasGroup")
+for _,cg in ipairs({MZ.cgIn,MZ.cgOut})do cg.BackgroundTransparency=1;cg.BorderSizePixel=0;cg.Size=panel.Size;cg.Parent=frV4 end
+end end)
+local tok=(MZ.tabTok or 0)+1;MZ.tabTok=tok
+if okCG and MZ.cgIn then
+local ci,co=MZ.cgIn,MZ.cgOut
+co.Position=homeP;co.GroupTransparency=0;co.Visible=true;prev.Parent=co;prev.Position=UDim2.new(0,0,0,0);prev.Visible=true
+ci.Position=home+UDim2.new(0,0,0,dir26);ci.GroupTransparency=1;ci.Visible=true;panel.Parent=ci;panel.Position=UDim2.new(0,0,0,0);panel.Visible=true
+tw(co,ezF,{GroupTransparency=1,Position=homeP+UDim2.new(0,0,0,-dir14)})
+local t=tw(ci,ez,{GroupTransparency=0,Position=home})
+task.delay(0.38,function()if MZ.tabTok~=tok then return end
+prev.Parent=frV4;prev.Position=homeP;prev.Visible=false
+panel.Parent=frV4;panel.Position=home;panel.Visible=true
+ci.Visible=false;co.Visible=false end)
+else
+prev.Visible=false;panel.Visible=true;panel.Position=home+UDim2.new(0,0,0,dir26)
+tw(panel,ez,{Position=home})
+end
+end
+local function mkSideBtn(y,name,panel)local b=Instance.new("TextButton",sideBar);b.Size=UDim2.new(1,-8,0,32);b.Position=UDim2.new(0,4,0,y);b.Text=" "..name;b.BackgroundColor3=Color3.fromRGB(30,30,45);b.TextColor3=Color3.fromRGB(200,200,200);b.Font=Enum.Font.GothamSemibold;b.TextSize=11;b.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",b).CornerRadius=UDim.new(0,4);b.MouseButton1Click:Connect(function()selectTab(b,panel)end);return b end
 local btnStats=mkSideBtn(2,"Stats",tMain);local btnAuto=mkSideBtn(38,"Autofarm",tAuto);local btnBoost=mkSideBtn(74,"Boosts",tBoost);local btnFarm=mkSideBtn(110,"Farm pattern",tFarm);local btnPlant=mkSideBtn(146,"Planters",tPlant);local btnSet=mkSideBtn(182,"Settings",tSet);btnPat=mkSideBtn(218,"Patterns",tPat);selectTab(btnStats,tMain)
 -- Stats
 local function mkStat(y,color)local l=Instance.new("TextLabel",tMain);l.Size=UDim2.new(1,0,0,17);l.Position=UDim2.new(0,4,0,y);l.BackgroundTransparency=1;l.Font=Enum.Font.Gotham;l.TextSize=11;l.TextXAlignment=Enum.TextXAlignment.Left;l.TextColor3=color or Color3.new(1,1,1);return l end
@@ -1709,7 +2165,7 @@ local scScroll=Instance.new("ScrollingFrame",frV4);scScroll.Size=UDim2.new(1,-12
 local scList=Instance.new("UIListLayout",scScroll);scList.SortOrder=Enum.SortOrder.LayoutOrder;scList.Padding=UDim.new(0,2)
 local scClose=Instance.new("TextButton",scScroll);scClose.Size=UDim2.new(1,-8,0,18);scClose.BackgroundTransparency=1;scClose.Font=Enum.Font.GothamBold;scClose.TextSize=11;scClose.TextXAlignment=Enum.TextXAlignment.Left;scClose.TextColor3=Color3.fromRGB(255,180,80);scClose.Text="< Top-24 Scorch (клик — закрыть)";scClose.LayoutOrder=0;scClose.ZIndex=6;scClose.MouseButton1Click:Connect(function()scScroll.Visible=false end)
 local function refreshScTop()
-for _,c in ipairs(scScroll:GetChildren())do if c:IsA("TextLabel")then c:Destroy()end end
+for ,c in ipairs(scScroll:GetChildren())do if c:IsA("TextLabel")then c:Destroy()end end
 local tmp={};for i=1,#scorchSessions do table.insert(tmp,scorchSessions[i])end
 table.sort(tmp,function(a,b)return a.honeyGained>b.honeyGained end)
 local cnt=math.min(24,#tmp)
@@ -1721,19 +2177,19 @@ if type(s.actions)=="table"and #s.actions>0 then
 local cA={};for j=1,#s.actions do local a3=tostring(s.actions[j].a or"?");cA[a3]=(cA[a3]or 0)+1 end
 local ar={};for a3,n3 in pairs(cA)do table.insert(ar,{a=a3,n=n3})end
 table.sort(ar,function(x,y)return x.n>y.n end)
-local pieces={};for j=1,math.min(3,#ar)do table.insert(pieces,(ar[j].a:gsub("^go_","")).." x"..ar[j].n)end
+local pieces={};for j=1,math.min(3,#ar)do table.insert(pieces,(ar[j].a:gsub("^go","")).." x"..ar[j].n)end
 acts=" | "..table.concat(pieces,", ")
 end
 row.Text=string.format("#%d +%s %.1fm SSx%d%s",i,s.honeyGainedFmt or fmtH(s.honeyGained),s.durationMin or 0,s.ssCombo or 0,acts)
 end
 if cnt==0 then local row=Instance.new("TextLabel",scScroll);row.Size=UDim2.new(1,-8,0,16);row.BackgroundTransparency=1;row.Font=Enum.Font.Code;row.TextSize=11;row.TextXAlignment=Enum.TextXAlignment.Left;row.TextColor3=Color3.fromRGB(150,150,150);row.Text="No scorch sessions yet";row.LayoutOrder=1;row.ZIndex=6 end
-scScroll.CanvasSize=UDim2.new(0,0,0,math.max(cnt,1)*18+30)
+scScroll.CanvasSize=UDim2.new(0,0,0,math.max(cnt,1)18+30)
 end
 scLab.MouseButton1Click:Connect(function()scScroll.Visible=not scScroll.Visible;if scScroll.Visible then refreshScTop()end end)
 local sb=Instance.new("TextButton",tMain);sb.Size=UDim2.new(1,-8,0,30);sb.Position=UDim2.new(0,4,1,-30);sb.BackgroundColor3=Color3.fromRGB(180,40,40);sb.Text="STOP";sb.TextColor3=Color3.new(1,1,1);sb.Font=Enum.Font.GothamBold;sb.TextSize=13;Instance.new("UICorner",sb).CornerRadius=UDim.new(0,5);sb.MouseButton1Click:Connect(function()ENABLED=not ENABLED;sb.Text=ENABLED and"STOP"or"RESUME";sb.BackgroundColor3=ENABLED and Color3.fromRGB(180,40,40)or Color3.fromRGB(40,180,40)end)
 -- Boosts
 local bTitle=Instance.new("TextLabel",tBoost);bTitle.Size=UDim2.new(1,0,0,22);bTitle.Position=UDim2.new(0,4,0,2);bTitle.BackgroundTransparency=1;bTitle.Text="Auto Use Materials";bTitle.TextColor3=Color3.new(1,1,1);bTitle.Font=Enum.Font.GothamBold;bTitle.TextSize=13;bTitle.TextXAlignment=Enum.TextXAlignment.Left
-local function mkToggle(y,name,key)local b=Instance.new("TextButton",tBoost);b.Size=UDim2.new(1,-8,0,30);b.Position=UDim2.new(0,4,0,y);b.BackgroundColor3=Color3.fromRGB(35,35,50);b.TextColor3=Color3.fromRGB(200,200,200);b.Font=Enum.Font.Gotham;b.TextSize=12;b.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",b).CornerRadius=UDim.new(0,4);b.MouseButton1Click:Connect(function()cfg[key]=not cfg[key];b.Text=(cfg[key]and"[X] "or"[ ] ")..name;b.TextColor3=cfg[key]and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200);saveCfg()end);b.Text=(cfg[key]and"[X] "or"[ ] ")..name;b.TextColor3=cfg[key]and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200);return b end
+local function mkToggle(y,name,key)local b=Instance.new("TextButton",tBoost);b.Size=UDim2.new(1,-8,0,30);b.Position=UDim2.new(0,4,0,y);b.BackgroundColor3=Color3.fromRGB(35,35,50);b.TextColor3=Color3.fromRGB(200,200,200);b.Font=Enum.Font.Gotham;b.TextSize=12;b.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",b).CornerRadius=UDim.new(0,4);b.MouseButton1Click:Connect(function()cfg[key]=not cfg[key];b.Text=(cfg[key]and"[X] "or"")..name;b.TextColor3=cfg[key]and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200);saveCfg()end);b.Text=(cfg[key]and"[X] "or"")..name;b.TextColor3=cfg[key]and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200);return b end
 local ssBtn=mkToggle(28,"Super Smoothie (20m)","ss_on")
 local purplePotionBtn=mkToggle(62,"Purple Potion (15m)","boost_purple_potion")
 local glueBtn=mkToggle(96,"Glue (10m)","boost_glue")
@@ -1746,7 +2202,7 @@ local pepperX4Btn=mkToggle(266,"Pepper Patch x4 (Hachapuri)","pepper_x4")
 local faTitle=Instance.new("TextLabel",tAuto);faTitle.Size=UDim2.new(1,0,0,22);faTitle.Position=UDim2.new(0,4,0,2);faTitle.BackgroundTransparency=1;faTitle.Text="Autofarm Limits (0=unlimited)";faTitle.TextColor3=Color3.new(1,1,1);faTitle.Font=Enum.Font.GothamBold;faTitle.TextSize=12;faTitle.TextXAlignment=Enum.TextXAlignment.Left
 local function mkLimit(y,name,onKey,limKey,maxVal)local row=Instance.new("Frame",tAuto);row.Size=UDim2.new(1,-4,0,30);row.Position=UDim2.new(0,4,0,y);row.BackgroundTransparency=1
 local tg=Instance.new("TextButton",row);tg.Size=UDim2.new(0,165,1,0);tg.BackgroundColor3=Color3.fromRGB(35,35,50);tg.TextColor3=Color3.fromRGB(200,200,200);tg.Font=Enum.Font.Gotham;tg.TextSize=11;tg.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",tg).CornerRadius=UDim.new(0,4)
-tg.Text=(cfg[onKey]and"[X] "or"[ ] ")..name;tg.TextColor3=cfg[onKey]and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200);tg.MouseButton1Click:Connect(function()cfg[onKey]=not cfg[onKey];tg.Text=(cfg[onKey]and"[X] "or"[ ] ")..name;tg.TextColor3=cfg[onKey]and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200);saveCfg()end)
+tg.Text=(cfg[onKey]and"[X] "or"")..name;tg.TextColor3=cfg[onKey]and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200);tg.MouseButton1Click:Connect(function()cfg[onKey]=not cfg[onKey];tg.Text=(cfg[onKey]and"[X] "or"")..name;tg.TextColor3=cfg[onKey]and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200);saveCfg()end)
 local bx=Instance.new("TextBox",row);bx.Size=UDim2.new(0,55,1,0);bx.Position=UDim2.new(1,-60,0,0);bx.BackgroundColor3=Color3.fromRGB(35,35,45);bx.TextColor3=Color3.new(1,1,1);bx.Text=tostring(cfg[limKey]);bx.Font=Enum.Font.Code;bx.TextSize=12;bx.TextXAlignment=Enum.TextXAlignment.Center;Instance.new("UICorner",bx).CornerRadius=UDim.new(0,4)
 bx.FocusLost:Connect(function()local n=tonumber(bx.Text);if n and n>=0 and n<=(maxVal or 999)then cfg[limKey]=n;bx.Text=tostring(n)else bx.Text=tostring(cfg[limKey])end;saveCfg()end);return tg,bx end
 local cocoTg,cocoBx=mkLimit(28,"Farm Coconuts","coco_on","coco_lim",11)
@@ -1761,15 +2217,27 @@ bx.FocusLost:Connect(function()local n=tonumber(bx.Text);if n then cfg[key]=n;SB
 mkSpd(30,"Speed X10","sp_x10");mkSpd(58,"Speed NABOR","sp_nab");mkSpd(86,"Speed REFRESH","sp_ref")
 mvTitle=Instance.new("TextLabel",tSet);mvTitle.Size=UDim2.new(1,0,0,22);mvTitle.Position=UDim2.new(0,4,0,118);mvTitle.BackgroundTransparency=1;mvTitle.Text="Movement (planters / farm pattern)";mvTitle.TextColor3=Color3.new(1,1,1);mvTitle.Font=Enum.Font.GothamBold;mvTitle.TextSize=13;mvTitle.TextXAlignment=Enum.TextXAlignment.Left
 mvBtn=Instance.new("TextButton",tSet);mvBtn.Size=UDim2.new(0,159,0,26);mvBtn.Position=UDim2.new(0,4,0,144);mvBtn.BackgroundColor3=Color3.fromRGB(35,35,50);mvBtn.Font=Enum.Font.Gotham;mvBtn.TextSize=12;mvBtn.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",mvBtn).CornerRadius=UDim.new(0,4)
-function updMvBtn()mvBtn.Text=(cfg.mv_mode=="tween")and"  Mode: Tween (fly)"or"  Mode: Teleport";mvBtn.TextColor3=(cfg.mv_mode=="tween")and Color3.fromRGB(120,200,255)or Color3.fromRGB(100,255,100)end
+function updMvBtn()mvBtn.Text=(cfg.mv_mode=="tween")and" Mode: Tween (fly)"or" Mode: Teleport";mvBtn.TextColor3=(cfg.mv_mode=="tween")and Color3.fromRGB(120,200,255)or Color3.fromRGB(100,255,100)end
 mvBtn.MouseButton1Click:Connect(function()cfg.mv_mode=(cfg.mv_mode=="tween")and"tp"or"tween";updMvBtn();saveCfg()end);updMvBtn()
 twLbl=Instance.new("TextLabel",tSet);twLbl.Size=UDim2.new(0,100,0,22);twLbl.Position=UDim2.new(0,4,0,176);twLbl.BackgroundTransparency=1;twLbl.Text="Tween speed";twLbl.TextColor3=Color3.new(1,1,1);twLbl.Font=Enum.Font.Gotham;twLbl.TextSize=11;twLbl.TextXAlignment=Enum.TextXAlignment.Left
 twBx=Instance.new("TextBox",tSet);twBx.Size=UDim2.new(0,55,0,22);twBx.Position=UDim2.new(0,108,0,176);twBx.BackgroundColor3=Color3.fromRGB(35,35,45);twBx.TextColor3=Color3.new(1,1,1);twBx.Text=tostring(cfg.tw_speed);twBx.Font=Enum.Font.Code;twBx.TextSize=12;Instance.new("UICorner",twBx).CornerRadius=UDim.new(0,4)
 twBx.FocusLost:Connect(function()local n=tonumber(twBx.Text);if n and n>=10 and n<=1000 then cfg.tw_speed=math.floor(n)end;twBx.Text=tostring(cfg.tw_speed);saveCfg()end)
+-- FIX #20: новые переключатели v5.3.0 (Settings)
+do
+local t=Instance.new("TextLabel",tSet);t.Size=UDim2.new(1,0,0,22);t.Position=UDim2.new(0,4,0,206);t.BackgroundTransparency=1;t.Text="Pathing / Smile / Coco (v5.3.0)";t.TextColor3=Color3.new(1,1,1);t.Font=Enum.Font.GothamBold;t.TextSize=13;t.TextXAlignment=Enum.TextXAlignment.Left
+local function mk(col,y,name,key)
+local b=Instance.new("TextButton",tSet);b.Size=UDim2.new(0.5,-6,0,24);b.Position=UDim2.new(col0.5,4,0,y);b.BackgroundColor3=Color3.fromRGB(35,35,50);b.Font=Enum.Font.Gotham;b.TextSize=11;b.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",b).CornerRadius=UDim.new(0,4)
+local function upd()b.Text=(cfg[key]and" [X] "or" [ ] ")..name;b.TextColor3=cfg[key]and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200)end
+b.MouseButton1Click:Connect(function()cfg[key]=not cfg[key];upd();saveCfg()end);upd();return b end
+mk(0,232,"A* обход прецов","pa_astar");mk(1,232,"Debug путь","pa_dbg")
+mk(0,260,"Pink Petal -> Smile","sm_petal");mk(1,260,"Smile в AreaRing","sm_ring")
+mk(0,288,"Умные кокосы","coco_smart");mk(1,288,"Обход всегда","pa_always")
+mk(0,316,"Анимации UI","ui_anim");mk(1,316,"Smile вне ринга","sm_ring_fb")
+end
 -- FARM PATTERN TAB
 hchTitle=Instance.new("TextLabel",tFarm);hchTitle.Size=UDim2.new(1,0,0,22);hchTitle.Position=UDim2.new(0,4,0,2);hchTitle.BackgroundTransparency=1;hchTitle.Text="Farm pattern";hchTitle.TextColor3=Color3.new(1,1,1);hchTitle.Font=Enum.Font.GothamBold;hchTitle.TextSize=13;hchTitle.TextXAlignment=Enum.TextXAlignment.Left
 hchBtn=Instance.new("TextButton",tFarm);hchBtn.Size=UDim2.new(1,-8,0,30);hchBtn.Position=UDim2.new(0,4,0,28);hchBtn.BackgroundColor3=Color3.fromRGB(35,35,50);hchBtn.Font=Enum.Font.Gotham;hchBtn.TextSize=12;hchBtn.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",hchBtn).CornerRadius=UDim.new(0,4)
-function updHch()hchBtn.Text=(cfg.hachapuri and"[X] "or"[ ] ").."Hachapuri method";hchBtn.TextColor3=cfg.hachapuri and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200)end
+function updHch()hchBtn.Text=(cfg.hachapuri and"[X] "or"").."Hachapuri method";hchBtn.TextColor3=cfg.hachapuri and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200)end
 hchBtn.MouseButton1Click:Connect(function()cfg.hachapuri=not cfg.hachapuri;updHch();saveCfg()end);updHch()
 hchStat=Instance.new("TextLabel",tFarm);hchStat.Size=UDim2.new(1,-8,0,150);hchStat.Position=UDim2.new(0,4,0,64);hchStat.BackgroundTransparency=1;hchStat.Font=Enum.Font.Code;hchStat.TextSize=10;hchStat.TextXAlignment=Enum.TextXAlignment.Left;hchStat.TextYAlignment=Enum.TextYAlignment.Top;hchStat.TextColor3=Color3.fromRGB(200,200,200);hchStat.TextWrapped=true
 hchStat.Text=":43 planters (auto plant)\n:50 pollen dump (canvas)\n:58 Tickets + TP FP14-11-21, x10, purple CH\n:00 Mondo Chick dodge 11 studs\nthen: collect token, sprinkler FP18-10-13, smoothie x2"
@@ -1779,30 +2247,30 @@ NNAME={inv="farm inv. nectar",ref="farm ref. nectar",sat="farm sat. nectar",mot=
 NORD={"inv","ref","sat","mot","comf"}
 plBtn=Instance.new("TextButton",tPlant);plBtn.Size=UDim2.new(1,-52,0,26);plBtn.Position=UDim2.new(0,4,0,2);plBtn.BackgroundColor3=Color3.fromRGB(35,35,50);plBtn.Font=Enum.Font.Gotham;plBtn.TextSize=12;plBtn.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",plBtn).CornerRadius=UDim.new(0,4)
 plMinBx=Instance.new("TextBox",tPlant);plMinBx.Size=UDim2.new(0,40,0,26);plMinBx.Position=UDim2.new(1,-46,0,2);plMinBx.BackgroundColor3=Color3.fromRGB(35,35,45);plMinBx.TextColor3=Color3.new(1,1,1);plMinBx.Text=tostring(cfg.pl_min or 43);plMinBx.Font=Enum.Font.Code;plMinBx.TextSize=12;Instance.new("UICorner",plMinBx).CornerRadius=UDim.new(0,4)
-function updPlBtn()plBtn.Text=(cfg.pl_auto and"[X] "or"[ ] ")..string.format("auto plant planters (:%02d)",tonumber(cfg.pl_min)or 43);plBtn.TextColor3=cfg.pl_auto and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200)end
+function updPlBtn()plBtn.Text=(cfg.pl_auto and"[X] "or"")..string.format("auto plant planters (:%02d)",tonumber(cfg.pl_min)or 43);plBtn.TextColor3=cfg.pl_auto and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200)end
 plMinBx.FocusLost:Connect(function()local n2=tonumber(plMinBx.Text);if n2 and n2>=0 and n2<=59 then cfg.pl_min=math.floor(n2)end;plMinBx.Text=tostring(cfg.pl_min or 43);updPlBtn();saveCfg()end)
 plBtn.MouseButton1Click:Connect(function()cfg.pl_auto=not cfg.pl_auto;updPlBtn();saveCfg()end);updPlBtn()
 plRows={}
 for i,k in ipairs(NORD)do
 local y=32+(i-1)*42
 local tg=Instance.new("TextButton",tPlant);tg.Size=UDim2.new(0,158,0,20);tg.Position=UDim2.new(0,4,0,y);tg.BackgroundColor3=Color3.fromRGB(35,35,50);tg.Font=Enum.Font.Gotham;tg.TextSize=11;tg.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",tg).CornerRadius=UDim.new(0,4)
-local bx=Instance.new("TextBox",tPlant);bx.Size=UDim2.new(0,34,0,20);bx.Position=UDim2.new(0,166,0,y);bx.BackgroundColor3=Color3.fromRGB(35,35,45);bx.TextColor3=Color3.new(1,1,1);bx.Text=tostring(cfg["pl_"..k.."_h"]);bx.Font=Enum.Font.Code;bx.TextSize=11;Instance.new("UICorner",bx).CornerRadius=UDim.new(0,4)
+local bx=Instance.new("TextBox",tPlant);bx.Size=UDim2.new(0,34,0,20);bx.Position=UDim2.new(0,166,0,y);bx.BackgroundColor3=Color3.fromRGB(35,35,45);bx.TextColor3=Color3.new(1,1,1);bx.Text=tostring(cfg["pl"..k.."h"]);bx.Font=Enum.Font.Code;bx.TextSize=11;Instance.new("UICorner",bx).CornerRadius=UDim.new(0,4)
 local remL=Instance.new("TextLabel",tPlant);remL.Size=UDim2.new(0,90,0,20);remL.Position=UDim2.new(0,206,0,y);remL.BackgroundTransparency=1;remL.Font=Enum.Font.Code;remL.TextSize=10;remL.TextXAlignment=Enum.TextXAlignment.Left;remL.TextColor3=NCOL[k];remL.Text="0h 00m"
 local barBg=Instance.new("Frame",tPlant);barBg.Size=UDim2.new(0,290,0,6);barBg.Position=UDim2.new(0,4,0,y+22);barBg.BackgroundColor3=Color3.fromRGB(25,25,35);barBg.BorderSizePixel=0;Instance.new("UICorner",barBg).CornerRadius=UDim.new(0,3)
 local barFill=Instance.new("Frame",barBg);barFill.Size=UDim2.new(0,0,1,0);barFill.BackgroundColor3=NCOL[k];barFill.BorderSizePixel=0;Instance.new("UICorner",barFill).CornerRadius=UDim.new(0,3)
-local function updTg()tg.Text=(cfg["pl_"..k]and"[X] "or"[ ] ")..NNAME[k];tg.TextColor3=cfg["pl_"..k]and NCOL[k]or Color3.fromRGB(140,140,140)end
+local function updTg()tg.Text=(cfg["pl"..k]and"[X] "or"")..NNAME[k];tg.TextColor3=cfg["pl_"..k]and NCOL[k]or Color3.fromRGB(140,140,140)end
 tg.MouseButton1Click:Connect(function()cfg["pl_"..k]=not cfg["pl_"..k];updTg();saveCfg()end);updTg()
-bx.FocusLost:Connect(function()local n2=tonumber(bx.Text);if n2 and n2>=1 and n2<=22 then cfg["pl_"..k.."_h"]=math.floor(n2)end;bx.Text=tostring(cfg["pl_"..k.."_h"]);saveCfg()end)
+bx.FocusLost:Connect(function()local n2=tonumber(bx.Text);if n2 and n2>=1 and n2<=22 then cfg["pl_"..k.."h"]=math.floor(n2)end;bx.Text=tostring(cfg["pl"..k.."_h"]);saveCfg()end)
 plRows[k]={remL=remL,bar=barFill,k=k}
 end
- local allowedTitle=Instance.new("TextLabel",tPlant);allowedTitle.Size=UDim2.new(1,-8,0,18);allowedTitle.Position=UDim2.new(0,4,0,238);allowedTitle.BackgroundTransparency=1;allowedTitle.Text="Allowed Planters";allowedTitle.TextColor3=Color3.fromRGB(150,200,255);allowedTitle.Font=Enum.Font.GothamBold;allowedTitle.TextSize=12;allowedTitle.TextXAlignment=Enum.TextXAlignment.Left
+local allowedTitle=Instance.new("TextLabel",tPlant);allowedTitle.Size=UDim2.new(1,-8,0,18);allowedTitle.Position=UDim2.new(0,4,0,238);allowedTitle.BackgroundTransparency=1;allowedTitle.Text="Allowed Planters";allowedTitle.TextColor3=Color3.fromRGB(150,200,255);allowedTitle.Font=Enum.Font.GothamBold;allowedTitle.TextSize=12;allowedTitle.TextXAlignment=Enum.TextXAlignment.Left
 local allowedDefs={{"Pesticide Planter","allow_pesticide"},{"Tacky Planter","allow_tacky"},{"Blue Clay Planter","allow_blue_clay"},{"Red Clay Planter","allow_red_clay"},{"Petal Planter","allow_petal"},{"Hydroponic Planter","allow_hydroponic"},{"Heat-Treated Planter","allow_heat_treated"},{"The Planter Of Plenty","allow_planter_of_plenty"}}
- for i,def in ipairs(allowedDefs)do
- local col=(i-1)%2;local row=math.floor((i-1)/2)
- local b=Instance.new("TextButton",tPlant);b.Size=UDim2.new(0,145,0,20);b.Position=UDim2.new(0,4+col*150,0,258+row*24);b.BackgroundColor3=Color3.fromRGB(35,35,50);b.Font=Enum.Font.Gotham;b.TextSize=10;b.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",b).CornerRadius=UDim.new(0,4)
- local function updAllowed()b.Text=(cfg[def[2]]and"[X] "or"[ ] ")..def[1];b.TextColor3=cfg[def[2]]and Color3.fromRGB(100,255,100)or Color3.fromRGB(180,180,180)end
- b.MouseButton1Click:Connect(function()cfg[def[2]]=not cfg[def[2]];updAllowed();saveCfg()end);updAllowed()
- end
+for i,def in ipairs(allowedDefs)do
+local col=(i-1)%2;local row=math.floor((i-1)/2)
+local b=Instance.new("TextButton",tPlant);b.Size=UDim2.new(0,145,0,20);b.Position=UDim2.new(0,4+col150,0,258+row24);b.BackgroundColor3=Color3.fromRGB(35,35,50);b.Font=Enum.Font.Gotham;b.TextSize=10;b.TextXAlignment=Enum.TextXAlignment.Left;Instance.new("UICorner",b).CornerRadius=UDim.new(0,4)
+local function updAllowed()b.Text=(cfg[def[2]]and"[X] "or"")..def[1];b.TextColor3=cfg[def[2]]and Color3.fromRGB(100,255,100)or Color3.fromRGB(180,180,180)end
+b.MouseButton1Click:Connect(function()cfg[def[2]]=not cfg[def[2]];updAllowed();saveCfg()end);updAllowed()
+end
 -- PATTERNS TAB
 patRefBtn=Instance.new("TextButton",tPat);patRefBtn.Size=UDim2.new(0,90,0,26);patRefBtn.Position=UDim2.new(0,4,0,2);patRefBtn.BackgroundColor3=Color3.fromRGB(35,35,50);patRefBtn.Text="Refresh";patRefBtn.TextColor3=Color3.fromRGB(100,255,100);patRefBtn.Font=Enum.Font.Gotham;patRefBtn.TextSize=11;Instance.new("UICorner",patRefBtn).CornerRadius=UDim.new(0,4)
 patCpyBtn=Instance.new("TextButton",tPat);patCpyBtn.Size=UDim2.new(0,90,0,26);patCpyBtn.Position=UDim2.new(0,100,0,2);patCpyBtn.BackgroundColor3=Color3.fromRGB(35,35,50);patCpyBtn.Text="Copy";patCpyBtn.TextColor3=Color3.fromRGB(200,200,200);patCpyBtn.Font=Enum.Font.Gotham;patCpyBtn.TextSize=11;Instance.new("UICorner",patCpyBtn).CornerRadius=UDim.new(0,4)
@@ -1812,7 +2280,6 @@ patRefBtn.MouseButton1Click:Connect(function()local okA,resA=pcall(analyzePat);p
 patCpyBtn.MouseButton1Click:Connect(function()pcall(setclipboard,patLbl.Text)end)
 patRstBtn=Instance.new("TextButton",tPat);patRstBtn.Size=UDim2.new(0,90,0,26);patRstBtn.Position=UDim2.new(0,196,0,2);patRstBtn.BackgroundColor3=Color3.fromRGB(50,30,30);patRstBtn.Text="Reset";patRstBtn.TextColor3=Color3.fromRGB(255,120,120);patRstBtn.Font=Enum.Font.Gotham;patRstBtn.TextSize=11;Instance.new("UICorner",patRstBtn).CornerRadius=UDim.new(0,4)
 patRstBtn.MouseButton1Click:Connect(function()actLog={};pcall(sPat);patLbl.Text="Лог паттернов сброшен (actLog=0, marmot_z_pat.json перезаписан). Нажми Refresh после пары минут фарма";print("MarmotZ: pattern log reset")end)
-
 -- ===== PLANTER ENGINE =====
 NFIELDS={inv={"Mountain Top Field","Cactus Field","Clover Field"},ref={"Coconut Field","Blue Flower Field","Strawberry Field"},sat={"Pumpkin Patch","Pineapple Patch","Sunflower Field"},mot={"Rose Field","Stump Field","Mushroom Field","Spider Field"},comf={"Pine Tree Forest","Bamboo Field","Dandelion Field"}}
 NPREF={inv={"Red Clay Planter","Pesticide Planter","Tacky Planter","Heat-Treated Planter","The Planter Of Plenty","Hydroponic Planter"},ref={"Blue Clay Planter","Pesticide Planter","Tacky Planter","Hydroponic Planter","The Planter Of Plenty","Petal Planter"},sat={"Tacky Planter","Pesticide Planter","Petal Planter","The Planter Of Plenty","Heat-Treated Planter"},mot={"Red Clay Planter","Pesticide Planter","Tacky Planter","Heat-Treated Planter","The Planter Of Plenty","Petal Planter"},comf={"Blue Clay Planter","Pesticide Planter","Tacky Planter","Petal Planter","Hydroponic Planter","The Planter Of Plenty"}}
@@ -1837,7 +2304,7 @@ task.spawn(function()while true do task.wait(15)pcall(function()local rK=h();loc
 local dpos=0;if rK and lastKPos then dpos=(rK.Position-lastKPos).Magnitude end;if rK then lastKPos=rK.Position end
 local _tcd=tcFires-(_tcPrev or 0);local _pabd=pabCalls-(_pabPrev or 0);_tcPrev=tcFires;_pabPrev=pabCalls
 local _hnow=getHoney();local _hd=_hnow-(_hPrev or _hnow);_hPrev=_hnow;local _tkd=st.tk-(_tkPrev or 0);_tkPrev=st.tk
-ksnap(string.format("snap tL=%s mode=%s ws=%.0f vel=%.0f dpos=%.0f(%.0f/s) xf=%d sc=%d tc=%.1f/s pab=%d/min hd=%s/min col=%d dup=%d pv=%.0f ps=%d",tostring(tL),tostring(cfg.mv_mode),hmK and hmK.WalkSpeed or 0,rK and rK.AssemblyLinearVelocity.Magnitude or 0,dpos,dpos/15,xfP or 0,scP or 0,_tcd/15,_pabd*4,fmtH(_hd*4),_tkd,dupCnt,prec.val or 0,prec.st or 0))end)end end)
+ksnap(string.format("snap tL=%s mode=%s ws=%.0f vel=%.0f dpos=%.0f(%.0f/s) xf=%d sc=%d tc=%.1f/s pab=%d/min hd=%s/min col=%d dup=%d pv=%.0f ps=%d",tostring(tL),tostring(cfg.mv_mode),hmK and hmK.WalkSpeed or 0,rK and rK.AssemblyLinearVelocity.Magnitude or 0,dpos,dpos/15,xfP or 0,scP or 0,_tcd/15,_pabd4,fmtH(_hd4),_tkd,dupCnt,prec.val or 0,prec.st or 0))end)end end)
 TWS=game:GetService("TweenService")
 function tpTo(pos)local r=h();if not r then return false end
 if not pos or pos~=pos or pos.Magnitude>100000 then if klog then klog("TP ABORT bad/NaN pos")end;return false end
@@ -1856,7 +2323,7 @@ while not done and os.clock()-t0<dur+2 do task.wait(0.05);if not h()then pcall(f
 r=h();if r then r.AssemblyLinearVelocity=ZERO;acHold=os.clock()+0.5;local _h=hm();if _h then _h:MoveTo(r.Position)end end
 task.wait(0.1);return true
 end
-r.CFrame=CFrame.new(pos+Vector3.new(0,3,0));acHold=os.clock()+0.5;local _h2=hm();if _h2 then _h2:MoveTo(r.Position)end;local _t=os.clock();while os.clock()-_t<0.35 do r.AssemblyLinearVelocity=ZERO;R.Heartbeat:Wait()end;return true end
+r.CFrame=CFrame.new(pos+Vector3.new(0,3,0));acHold=os.clock()+0.5;local _h2=hm();if _h2 then _h2:MoveTo(r.Position)end;local _t=os.clock();while os.clock()-t<0.35 do r.AssemblyLinearVelocity=ZERO;R.Heartbeat:Wait()end;return true end
 function collectPlanters()
 if not rps then return end
 local ev=RS:FindFirstChild("Events");local pmc=ev and ev:FindFirstChild("PlanterModelCollect");if not pmc then return end
@@ -1884,7 +2351,7 @@ end
 function plantPlanters()
 pcall(pAB)
 local defs={}
-for _,k in ipairs(NORD)do if cfg["pl_"..k]then local target=(cfg["pl_"..k.."_h"]or 22)*3600;local d=target-(nectarRem[k]or 0);if d>0 then table.insert(defs,{k=k,d=d})end end end
+for ,k in ipairs(NORD)do if cfg["pl"..k]then local target=(cfg["pl"..k.."h"]or 22)3600;local d=target-(nectarRem[k]or 0);if d>0 then table.insert(defs,{k=k,d=d})end end end
 table.sort(defs,function(a,b)return a.d>b.d end)
 if #defs==0 then return end
 collectPlanters();task.wait(1)
@@ -1920,13 +2387,12 @@ tpTo(fpC)
 local t0p=os.clock()
 while os.clock()-t0p<5 do
 local rP=h();local hmP=hm();if not rP or not hmP then break end
-local ang=math.random()*2*math.pi
-hmP:MoveTo(Vector3.new(fpC.X+math.cos(ang)*5,rP.Position.Y,fpC.Z+math.sin(ang)*5))
+local ang=math.random()2math.pi
+hmP:MoveTo(Vector3.new(fpC.X+math.cos(ang)5,rP.Position.Y,fpC.Z+math.sin(ang)5))
 task.wait(0.5)
 end
 end
 end
-
 -- ===== HACHAPURI ENGINE =====
 function pressE()pcall(function()V:SendKeyEvent(true,Enum.KeyCode.E,false,game);task.wait(0.1);V:SendKeyEvent(false,Enum.KeyCode.E,false,game)end)end
 function runSprinkler()
@@ -1956,10 +2422,10 @@ local away=Vector3.new(r.Position.X-cpos.X,0,r.Position.Z-cpos.Z)
 local dist=away.Magnitude
 if dist<keep+2 then
 local dir=dist>0.1 and away.Unit or Vector3.new(1,0,0)
-hm2:MoveTo(cP(r.Position+dir*(keep+8-dist)))
+hm2:MoveTo(cP(r.Position+dir(keep+8-dist)))
 else
-local ang=math.random()*2*math.pi
-hm2:MoveTo(cP(Vector3.new(cpos.X+math.cos(ang)*(keep+10),r.Position.Y,cpos.Z+math.sin(ang)*(keep+10))))
+local ang=math.random()2math.pi
+hm2:MoveTo(cP(Vector3.new(cpos.X+math.cos(ang)(keep+10),r.Position.Y,cpos.Z+math.sin(ang)(keep+10))))
 end
 end
 task.wait(0.15)
@@ -2043,7 +2509,6 @@ if hchSmT0>0 and os.clock()-hchSmT0>=1200 then hchSmT0=0;pcall(function()RS.Even
 end)
 end
 end)
-
 -- GUI LOOP
 task.spawn(function()while true do task.wait(0.3)pcall(function()
 lb.Text="Action: "..(tL or"");tmLbl.Text="Time: "..os.date("%H:%M:%S");local curH=getHoney()or 0;local em=(os.clock()-(scriptStartT or 0))/60;local hp40m=em>0 and(curH-(scriptStartH or 0))/em*40 or 0
@@ -2056,23 +2521,22 @@ elseif #scorchSessions>0 then
 local ls=scorchSessions[#scorchSessions]
 scLab.Text="Scorch last: +"..(ls.honeyGainedFmt or fmtH(ls.honeyGained)).." | best: +"..fmtH(bestSH).." | клик = топ-24"
 else scLab.Text="Scorch: --"end
-cocoTg.Text=(cfg.coco_on and"[X] "or"[ ] ").."Farm Coconuts"
+cocoTg.Text=(cfg.coco_on and"[X] "or"").."Farm Coconuts"
 cocoTg.TextColor3=cfg.coco_on and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200)
 cocoBx.Text=tostring(cfg.coco_lim)
-shwTg.Text=(cfg.shower_on and"[X] "or"[ ] ").."Farm Showers"
+shwTg.Text=(cfg.shower_on and"[X] "or"").."Farm Showers"
 shwTg.TextColor3=cfg.shower_on and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200)
 shwBx.Text=tostring(cfg.shower_lim)
-prpTg.Text=(cfg.purple_on and"[X] "or"[ ] ").."Farm Precise Marks"
+prpTg.Text=(cfg.purple_on and"[X] "or"").."Farm Precise Marks"
 prpTg.TextColor3=cfg.purple_on and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200)
 prpBx.Text=tostring(cfg.purple_lim)
-comboTg.Text=(cfg.combo_on and"[X] "or"[ ] ").."Farm Combo Coconuts"
+comboTg.Text=(cfg.combo_on and"[X] "or"").."Farm Combo Coconuts"
 comboTg.TextColor3=cfg.combo_on and Color3.fromRGB(100,255,100)or Color3.fromRGB(200,200,200)
 comboBx.Text=tostring(cfg.combo_lim)
-for k,row in pairs(plRows or{})do local s=nectarRem[k]or 0;if type(row)=="table"then local tgt=(cfg["pl_"..row.k.."_h"]or 22)*3600;local frac=tgt>0 and math.min(1,s/tgt)or 0;row.remL.Text=string.format("%dh %02dm",math.floor(s/3600),math.floor((s%3600)/60));row.bar.Size=UDim2.new(frac,0,1,0)else row.Text=string.format("%dh %02dm",math.floor(s/3600),math.floor((s%3600)/60))end end
+for k,row in pairs(plRows or{})do local s=nectarRem[k]or 0;if type(row)=="table"then local tgt=(cfg["pl"..row.k.."_h"]or 22)*3600;local frac=tgt>0 and math.min(1,s/tgt)or 0;row.remL.Text=string.format("%dh %02dm",math.floor(s/3600),math.floor((s%3600)/60));row.bar.Size=UDim2.new(frac,0,1,0)else row.Text=string.format("%dh %02dm",math.floor(s/3600),math.floor((s%3600)/60))end end
 end)
 end
 end)
-
 -- RESPAWN
 L.CharacterAdded:Connect(function()
 task.wait(2);aT={};cQ={};lP=nil;curF=nil;tL="start";smT=nil;isCS=false;INT=false;cyc={chC=0};fP={};dupCnt=0;pollMS=0;eligibility={};visitCount={};totalSteps=0;replayBuffer={};replayIndex=1
@@ -2080,4 +2544,4 @@ scorchActive=false;scorchRecording=false;scorchActions={};scorchStartH=0;scorchS
 for _,v in pairs(activeTG)do if v.gui then pcall(function()v.gui:Destroy()end)end end;activeShowers={};activeBlooms={};activeCocos={};activeComboCocos={};activeTG={};tokenVerify={};tokenBL=setmetatable({},{__mode="k"});greenCH_cache={}
 for fl in pairs(flameCD)do flameCD[fl]=nil end;for fl in pairs(scytheParts)do scytheParts[fl]=nil end
 end)
-print("Marmot Z v5.2.8 — Full script active.")
+print("Marmot Z v5.3.0 — Full script active.")
